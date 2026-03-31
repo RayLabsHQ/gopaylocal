@@ -1,0 +1,39 @@
+---
+import { Button } from '../ui/button';
+
+interface Props {
+  title: string;
+  subtitle: string;
+  dark?: boolean;
+}
+
+const { title, subtitle, dark = true } = Astro.props;
+---
+
+<section class:list={[
+  "py-16 md:py-24",
+  dark ? "bg-bg-inverted" : "bg-bg border-t border-border"
+]}>
+  <div class="max-w-7xl mx-auto px-6 md:px-20 text-center">
+    <h2 class:list={[
+      "font-display text-3xl md:text-5xl font-bold tracking-tight whitespace-pre-line leading-[1.1] mx-auto max-w-2xl",
+      dark ? "text-white" : "text-text-primary"
+    ]}>
+      {title}
+    </h2>
+    <p class:list={[
+      "mt-6 text-base mx-auto max-w-lg",
+      dark ? "text-text-secondary" : "text-text-secondary"
+    ]}>
+      {subtitle}
+    </p>
+    <div class="mt-8">
+      <Button href="https://app.gopaylocal.com" variant="primary" size="lg" client:load>
+        Start Free
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+        </svg>
+      </Button>
+    </div>
+  </div>
+</section>

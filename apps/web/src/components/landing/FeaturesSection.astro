@@ -1,0 +1,57 @@
+---
+import { FeatureIcon } from '../ui/feature-icon';
+import type { Feature } from '@/lib/landing-data';
+
+interface Props {
+  title: string;
+  items: Feature[];
+}
+
+const { title, items } = Astro.props;
+const row1 = items.slice(0, 3);
+const row2 = items.slice(3, 6);
+---
+
+<section class="bg-bg">
+  <div class="max-w-7xl mx-auto px-6 py-16 md:py-24 md:px-20">
+    <h2 class="font-display text-3xl md:text-4xl font-semibold tracking-tight text-text-primary whitespace-pre-line leading-[1.1]">
+      {title}
+    </h2>
+
+    <div class="mt-12">
+      <!-- Row 1 -->
+      <div class="grid grid-cols-1 md:grid-cols-3 border-b border-border">
+        {row1.map((feature, i) => (
+          <div class:list={[
+            "py-7",
+            i === 0 ? "md:pr-7" : "md:px-7 md:border-l border-border",
+          ]}>
+            <div class="text-accent-500 mb-3">
+              <FeatureIcon name={feature.icon} className="h-5 w-5" client:load />
+            </div>
+            <h3 class="font-display text-base font-semibold text-text-primary">{feature.title}</h3>
+            <p class="mt-2 text-sm text-text-secondary leading-relaxed">{feature.description}</p>
+          </div>
+        ))}
+      </div>
+
+      <!-- Row 2 -->
+      {row2.length > 0 && (
+        <div class="grid grid-cols-1 md:grid-cols-3">
+          {row2.map((feature, i) => (
+            <div class:list={[
+              "py-7",
+              i === 0 ? "md:pr-7" : "md:px-7 md:border-l border-border",
+            ]}>
+              <div class="text-accent-500 mb-3">
+                <FeatureIcon name={feature.icon} className="h-5 w-5" client:load />
+              </div>
+              <h3 class="font-display text-base font-semibold text-text-primary">{feature.title}</h3>
+              <p class="mt-2 text-sm text-text-secondary leading-relaxed">{feature.description}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  </div>
+</section>

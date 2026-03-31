@@ -1,0 +1,76 @@
+---
+import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
+import type { HeroData } from '@/lib/landing-data';
+import { integrations } from '@/lib/landing-data';
+
+interface Props {
+  data: HeroData;
+}
+
+const { data } = Astro.props;
+---
+
+<section class="px-6 pt-20 pb-16 md:px-20 md:pt-32">
+  <div class="max-w-[1280px] mx-auto">
+    <Badge client:load>
+      <span class="h-2 w-2 bg-accent-500 rounded-none inline-block"></span>
+      {data.tag}
+    </Badge>
+
+    <h1 class="mt-6 font-display text-4xl font-bold tracking-[-2px] leading-[1] sm:text-5xl md:text-7xl lg:text-[80px] md:tracking-[-3px] whitespace-pre-line">
+      {data.headline}
+    </h1>
+
+    <p class="mt-6 text-base sm:text-lg text-text-secondary leading-[1.7] max-w-2xl">
+      {data.subline}
+    </p>
+
+    {data.codeSnippet && (
+      <div class="mt-8 max-w-xl rounded-lg bg-[#1A1A1A] px-5 py-5 sm:px-7 sm:py-6 space-y-1 overflow-x-auto">
+        <p class="font-mono text-xs sm:text-[13px] text-text-secondary">{'<!-- Add to your <head> — that\'s it -->'}</p>
+        <p class="font-mono text-xs sm:text-[13px] text-[#E8E8E8]">&lt;script</p>
+        <p class="font-mono text-xs sm:text-[13px] text-accent-500 pl-4">src="https://cdn.gopaylocal.com/v1/ppp.js"</p>
+        <p class="font-mono text-xs sm:text-[13px] text-emerald-500 pl-4">data-key="pk_live_your_key"</p>
+        <p class="font-mono text-xs sm:text-[13px] text-[#E8E8E8]">&gt;&lt;/script&gt;</p>
+      </div>
+    )}
+
+    <div class="mt-8 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+      <Button href={data.primaryCta.href} variant="primary" size="md" client:load>
+        {data.primaryCta.label}
+        {data.primaryCta.icon === 'arrow-right' && (
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+          </svg>
+        )}
+      </Button>
+      <Button href={data.secondaryCta.href} variant="secondary" size="md" client:load>
+        {data.secondaryCta.label}
+      </Button>
+    </div>
+
+    <!-- Stats -->
+    <div class="mt-10 grid grid-cols-2 gap-6 sm:flex sm:gap-16 border-t border-border pt-10">
+      {data.stats.map((stat) => (
+        <div>
+          <div class:list={[
+            "font-display text-3xl sm:text-4xl font-semibold tracking-tight",
+            stat.accent ? "text-accent-500" : "text-text-primary"
+          ]}>
+            {stat.value}
+          </div>
+          <div class="text-[13px] text-text-secondary mt-1">{stat.label}</div>
+        </div>
+      ))}
+    </div>
+
+    <!-- Integrations -->
+    <div class="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2">
+      <span class="text-xs text-text-muted shrink-0">Works with</span>
+      {integrations.map((name) => (
+        <span class="text-sm font-semibold text-text-muted">{name}</span>
+      ))}
+    </div>
+  </div>
+</section>
