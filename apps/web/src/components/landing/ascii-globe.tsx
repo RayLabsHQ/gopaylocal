@@ -3,29 +3,29 @@ import { useRef, useEffect, useCallback } from "react";
 // ── Types ────────────────────────────────────────────────────────────
 
 type Ring = [number, number][];
-type LandPolygon = {
+type LandPoly = {
   rings: Ring[];
   minLat: number; maxLat: number;
   minLon: number; maxLon: number;
 };
 
-// ── GeoJSON parsing ──────────────────────────────────────────────────
+// ── GeoJSON → bitmap (runs once on load) ─────────────────────────────
 
-function parseLand(geo: any): LandPolygon[] {
-  const polys: LandPolygon[] = [];
+function parseLand(geo: any): LandPoly[] {
+  const polys: LandPoly[] = [];
   for (const feat of geo.features) {
-    const geom = feat.geometry;
+    const g = feat.geometry;
     const all: Ring[][] =
-      geom.type === "Polygon" ? [geom.coordinates]
-      : geom.type === "MultiPolygon" ? geom.coordinates : [];
-    for (const polyRings of all) {
+      g.type === "Polygon" ? [g.coordinates]
+      : g.type === "MultiPolygon" ? g.coordinates : [];
+    for (const rings of all) {
       let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
-      for (const ring of polyRings)
+      for (const ring of rings)
         for (const [lon, lat] of ring) {
           if (lat < minLat) minLat = lat; if (lat > maxLat) maxLat = lat;
           if (lon < minLon) minLon = lon; if (lon > maxLon) maxLon = lon;
         }
-      polys.push({ rings: polyRings, minLat, maxLat, minLon, maxLon });
+      polys.push({ rings, minLat, maxLat, minLon, maxLon });
     }
   }
   return polys;
@@ -34,236 +34,226 @@ function parseLand(geo: any): LandPolygon[] {
 function pointInRing(lat: number, lon: number, ring: Ring): boolean {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, yi] = ring[i];
-    const [xj, yj] = ring[j];
-    if ((yi > lat) !== (yj > lat) && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi)
+    const yi = ring[i][1], yj = ring[j][1];
+    if ((yi > lat) !== (yj > lat) &&
+        lon < ((ring[j][0] - ring[i][0]) * (lat - yi)) / (yj - yi) + ring[i][0])
       inside = !inside;
   }
   return inside;
 }
 
-function isLand(lat: number, lon: number, polys: LandPolygon[]): boolean {
-  for (const p of polys) {
-    if (lat < p.minLat || lat > p.maxLat || lon < p.minLon || lon > p.maxLon) continue;
-    if (!pointInRing(lat, lon, p.rings[0])) continue;
-    let inHole = false;
-    for (let h = 1; h < p.rings.length; h++)
-      if (pointInRing(lat, lon, p.rings[h])) { inHole = true; break; }
-    if (!inHole) return true;
-  }
-  return false;
-}
+const BMP_W = 720;
+const BMP_H = 360;
+const LAT_STEP = 180 / BMP_H;
+const LON_STEP = 360 / BMP_W;
 
-// ── Bitmap ───────────────────────────────────────────────────────────
-
-const MAP_W = 720;
-const MAP_H = 360;
-
-function bakeBitmap(polys: LandPolygon[]): Uint8Array {
-  const bmp = new Uint8Array(MAP_W * MAP_H);
-  for (let row = 0; row < MAP_H; row++) {
-    const lat = 90 - row * (180 / MAP_H);
-    for (let col = 0; col < MAP_W; col++) {
-      const lon = -180 + col * (360 / MAP_W);
-      if (isLand(lat, lon, polys)) bmp[row * MAP_W + col] = 1;
+function bakeBitmap(polys: LandPoly[]): Uint8Array {
+  const bmp = new Uint8Array(BMP_W * BMP_H);
+  for (let row = 0; row < BMP_H; row++) {
+    const lat = 90 - row * LAT_STEP;
+    for (let col = 0; col < BMP_W; col++) {
+      const lon = -180 + col * LON_STEP;
+      for (const p of polys) {
+        if (lat < p.minLat || lat > p.maxLat || lon < p.minLon || lon > p.maxLon) continue;
+        if (!pointInRing(lat, lon, p.rings[0])) continue;
+        let hole = false;
+        for (let h = 1; h < p.rings.length; h++)
+          if (pointInRing(lat, lon, p.rings[h])) { hole = true; break; }
+        if (!hole) { bmp[row * BMP_W + col] = 1; break; }
+      }
     }
   }
   return bmp;
 }
 
-function bmpLookup(lat: number, lon: number, bmp: Uint8Array): boolean {
-  const row = Math.floor((90 - lat) / (180 / MAP_H));
-  const col = Math.floor((lon + 180) / (360 / MAP_W));
-  if (row < 0 || row >= MAP_H || col < 0 || col >= MAP_W) return false;
-  return bmp[row * MAP_W + col] === 1;
+// ── Precomputed lookup tables ────────────────────────────────────────
+
+const COLS = 130;
+const ROWS = 72;
+const DEG = 180 / Math.PI;
+const REPEL_R = 60;
+const REPEL_STR = 18;
+
+// Precompute grid coordinates (never changes)
+const gridX = new Float32Array(COLS * ROWS);
+const gridY = new Float32Array(COLS * ROWS);
+const gridR2 = new Float32Array(COLS * ROWS); // x²+y², -1 if outside
+for (let r = 0; r < ROWS; r++) {
+  const y = (2 * r - ROWS + 1) / ROWS;
+  for (let c = 0; c < COLS; c++) {
+    const i = r * COLS + c;
+    const x = (2 * c - COLS + 1) / COLS;
+    const d = x * x + y * y;
+    gridX[i] = x;
+    gridY[i] = y;
+    gridR2[i] = d <= 1 ? d : -1;
+  }
 }
 
-// ── Globe grid computation ───────────────────────────────────────────
+// Char codes
+const LAND_CODE = "#".charCodeAt(0);
+const EARTH_CODE = ".".charCodeAt(0);
 
-const LAND = "#";
-const EARTH = ".";
-const COLS = 80;
-const ROWS = 40;
+// ── Render to typed arrays (zero GC per frame) ──────────────────────
 
-interface Cell {
-  ch: string;
-  isLand: boolean;
-  // base grid position in pixels
-  bx: number;
-  by: number;
-}
+// Reusable buffers
+const cellBx = new Float32Array(COLS * ROWS);
+const cellBy = new Float32Array(COLS * ROWS);
+const cellLand = new Uint8Array(COLS * ROWS);
+const cellActive = new Uint8Array(COLS * ROWS); // 1 = inside sphere
 
-function computeGrid(
-  rotY: number,
-  tilt: number,
-  bmp: Uint8Array | null,
-  charW: number,
-  charH: number,
-): Cell[] {
-  const cosT = Math.cos(tilt);
-  const sinT = Math.sin(tilt);
-  const cosR = Math.cos(rotY);
-  const sinR = Math.sin(rotY);
-  const cells: Cell[] = [];
+function computeFrame(
+  rotY: number, tilt: number, bmp: Uint8Array | null,
+  charW: number, charH: number,
+): number {
+  const cosT = Math.cos(tilt), sinT = Math.sin(tilt);
+  const cosR = Math.cos(rotY), sinR = Math.sin(rotY);
+  let count = 0;
 
-  for (let row = 0; row < ROWS; row++) {
-    for (let col = 0; col < COLS; col++) {
-      const x = (2 * col - COLS + 1) / COLS;
-      const y = (2 * row - ROWS + 1) / ROWS;
-      const bx = col * charW;
-      const by = row * charH;
+  for (let r = 0; r < ROWS; r++) {
+    const byBase = r * charH;
+    for (let c = 0; c < COLS; c++) {
+      const i = r * COLS + c;
+      if (gridR2[i] < 0) { cellActive[i] = 0; continue; }
 
-      if (x * x + y * y > 1) continue;
-
-      const z = Math.sqrt(1 - x * x - y * y);
+      const x = gridX[i], y = gridY[i];
+      const z = Math.sqrt(1 - gridR2[i]);
       const rx = x * cosR + z * sinR;
       const rz = -x * sinR + z * cosR;
       const fy = y * cosT - rz * sinT;
       const fz = y * sinT + rz * cosT;
 
-      const lat = Math.asin(Math.max(-1, Math.min(1, -fy))) * (180 / Math.PI);
-      const lon = Math.atan2(rx, fz) * (180 / Math.PI);
+      const lat = Math.asin(fy > 1 ? 1 : fy < -1 ? -1 : -fy) * DEG;
+      const lon = Math.atan2(rx, fz) * DEG;
 
-      let land: boolean;
+      let land = 0;
       if (bmp) {
-        land = bmpLookup(lat, lon, bmp);
-      } else {
-        land = fallbackIsLand(lat, lon);
+        const br = ((90 - lat) / LAT_STEP) | 0;
+        const bc = ((lon + 180) / LON_STEP) | 0;
+        if (br >= 0 && br < BMP_H && bc >= 0 && bc < BMP_W)
+          land = bmp[br * BMP_W + bc];
       }
 
-      cells.push({ ch: land ? LAND : EARTH, isLand: land, bx, by });
+      cellBx[i] = c * charW;
+      cellBy[i] = byBase;
+      cellLand[i] = land;
+      cellActive[i] = 1;
+      count++;
     }
   }
-  return cells;
+  return count;
 }
 
-// ── Fallback scanline map ────────────────────────────────────────────
-
-const FALLBACK: Record<number, number[]> = {
-  70: [-55,-22, 18,32, 33,180, -170,-145, -140,-120, -100,-80],
-  66: [-54,-30, 14,30, 32,175, -168,-140, -140,-60],
-  62: [-52,-40, 5,32, 33,165, -167,-140, -140,-55],
-  58: [-10,-5, 5,32, 33,162, -165,-135, -135,-52],
-  54: [-10,-1, 6,22, 28,160, -132,-55],
-  50: [-5,2, 3,42, 42,155, -128,-53],
-  46: [-4,7, 7,42, 42,145, -125,-52],
-  42: [-9,3, 10,16, 18,44, 44,145, 130,145, -124,-70],
-  38: [-10,0, 12,17, 20,44, 44,140, 130,141, -124,-75],
-  34: [-8,-1, 3,11, 24,72, 72,136, -120,-76],
-  30: [-10,-5, -2,35, 35,72, 68,78, 80,122, -115,-80],
-  26: [-16,33, 34,56, 66,90, 90,120, -108,-80],
-  22: [-17,33, 36,58, 69,90, 93,115, -108,-87],
-  18: [-17,25, 42,57, 73,85, 95,108, -105,-87],
-  14: [-17,2, 33,48, 74,80, 98,108, -90,-87],
-  10: [-15,10, 42,51, 76,80, 98,107, -85,-79, -75,-62],
-  6: [-11,12, 80,82, 99,106, -77,-55],
-  2: [5,32, 96,105, 109,118, -80,-50],
-  "-2": [12,41, 100,105, 110,117, 132,141, -81,-45],
-  "-8": [13,40, 110,130, 140,148, -79,-35],
-  "-14": [17,41, 44,50, 124,137, -76,-39],
-  "-20": [25,40, 44,48, 119,149, -70,-40],
-  "-26": [17,35, 113,153, -70,-48],
-  "-32": [18,29, 115,152, -72,-52],
-  "-38": [140,150, 175,178, -74,-58],
-  "-44": [145,148, 168,172, -75,-65],
-  "-50": [-76,-69],
-};
-
-function fallbackIsLand(lat: number, lon: number): boolean {
-  let best = 0, bestDist = 999;
-  for (const k of Object.keys(FALLBACK)) {
-    const d = Math.abs(Number(k) - lat);
-    if (d < bestDist) { bestDist = d; best = Number(k); }
-  }
-  if (bestDist > 5) return false;
-  const ranges = FALLBACK[best];
-  if (!ranges) return false;
-  for (let i = 0; i < ranges.length; i += 2)
-    if (lon >= ranges[i] && lon <= ranges[i + 1]) return true;
-  return false;
-}
-
-// ── Canvas-based component ───────────────────────────────────────────
-
-const REPEL_RADIUS = 60; // px
-const REPEL_STRENGTH = 18; // max displacement in px
+// ── Component (desktop only) ─────────────────────────────────────────
 
 export function AsciiGlobe() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef(0);
   const angleRef = useRef(0);
+  const tiltRef = useRef(-0.3);
+  const velRef = useRef({ angle: 0, tilt: 0 });
   const bmpRef = useRef<Uint8Array | null>(null);
   const mouseRef = useRef<{ x: number; y: number } | null>(null);
+  const dragRef = useRef({ active: false, lastX: 0, lastY: 0 });
   const lastRef = useRef(0);
+  // Cache colors so we don't read getComputedStyle every frame
+  const colorsRef = useRef({ land: "#0D0D0D", earth: "#B0B0B0" });
+  const sizeRef = useRef({ w: 0, h: 0, charW: 0, charH: 0, fontSize: 0 });
 
-  // Load GeoJSON and bake bitmap
+  // Load GeoJSON + bake bitmap in background
   useEffect(() => {
     fetch("/globe.json")
-      .then((r) => r.json())
-      .then((geo) => {
-        bmpRef.current = bakeBitmap(parseLand(geo));
-      })
+      .then(r => r.json())
+      .then(geo => { bmpRef.current = bakeBitmap(parseLand(geo)); })
       .catch(() => {});
+  }, []);
+
+  // Read colors once + on theme change
+  useEffect(() => {
+    const read = () => {
+      const s = getComputedStyle(document.documentElement);
+      colorsRef.current = {
+        land: s.getPropertyValue("--text-1").trim() || "#0D0D0D",
+        earth: s.getPropertyValue("--text-3").trim() || "#B0B0B0",
+      };
+    };
+    read();
+    const mo = new MutationObserver(read);
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => mo.disconnect();
   }, []);
 
   const animate = useCallback((t: number) => {
     const canvas = canvasRef.current;
     if (!canvas) { frameRef.current = requestAnimationFrame(animate); return; }
     const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) { frameRef.current = requestAnimationFrame(animate); return; }
 
     if (!lastRef.current) lastRef.current = t;
     const dt = Math.min((t - lastRef.current) / 1000, 0.1);
     lastRef.current = t;
 
-    angleRef.current += dt * 0.12;
-    const tilt = -0.3 + Math.sin(t * 0.00025) * 0.1;
-
-    // Measure char size
-    const style = getComputedStyle(canvas);
-    const fontSize = parseFloat(style.fontSize) || 10;
-    ctx.font = `${fontSize}px JetBrains Mono, monospace`;
-    const charW = ctx.measureText("#").width || fontSize * 0.6;
-    const charH = fontSize * 1.15;
-
-    // Size canvas to fit grid
-    const w = Math.ceil(COLS * charW);
-    const h = Math.ceil(ROWS * charH);
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w;
-      canvas.height = h;
+    // Physics
+    const vel = velRef.current;
+    if (dragRef.current.active) {
+      // velocity set by mousemove
+    } else {
+      vel.angle *= 0.95;
+      vel.tilt *= 0.95;
+      if (Math.abs(vel.angle) < 0.001 && Math.abs(vel.tilt) < 0.001) {
+        vel.angle = 0;
+        vel.tilt = 0;
+        angleRef.current += dt * 0.12;
+      } else {
+        angleRef.current += vel.angle;
+        tiltRef.current = Math.max(-1.2, Math.min(1.2, tiltRef.current + vel.tilt));
+      }
     }
 
-    // Compute globe
-    const cells = computeGrid(angleRef.current, tilt, bmpRef.current, charW, charH);
+    // Measure once / on resize
+    const sz = sizeRef.current;
+    if (!sz.fontSize) {
+      const fs = parseFloat(getComputedStyle(canvas).fontSize) || 6;
+      ctx.font = `${fs}px JetBrains Mono,monospace`;
+      const cw = ctx.measureText("#").width || fs * 0.6;
+      const ch = fs * 1.15;
+      sz.fontSize = fs; sz.charW = cw; sz.charH = ch;
+      sz.w = Math.ceil(COLS * cw);
+      sz.h = Math.ceil(ROWS * ch);
+      canvas.width = sz.w;
+      canvas.height = sz.h;
+    }
 
-    // Clear
-    ctx.clearRect(0, 0, w, h);
+    // Compute
+    computeFrame(angleRef.current, tiltRef.current, bmpRef.current, sz.charW, sz.charH);
+
+    // Draw
+    ctx.clearRect(0, 0, sz.w, sz.h);
     ctx.textBaseline = "top";
-    ctx.font = `${fontSize}px JetBrains Mono, monospace`;
+    ctx.font = `${sz.fontSize}px JetBrains Mono,monospace`;
 
-    const mouse = mouseRef.current;
+    const mouse = !dragRef.current.active ? mouseRef.current : null;
+    const { land: landColor, earth: earthColor } = colorsRef.current;
+    const total = COLS * ROWS;
 
-    // Get CSS custom property colors
-    const rootStyle = getComputedStyle(document.documentElement);
-    const landColor = rootStyle.getPropertyValue("--text-1").trim() || "#0D0D0D";
-    const earthColor = rootStyle.getPropertyValue("--text-3").trim() || "#B0B0B0";
+    for (let i = 0; i < total; i++) {
+      if (!cellActive[i]) continue;
 
-    for (const cell of cells) {
-      let dx = 0, dy = 0;
+      let px = cellBx[i], py = cellBy[i];
 
       if (mouse) {
-        const distX = cell.bx + charW / 2 - mouse.x;
-        const distY = cell.by + charH / 2 - mouse.y;
-        const dist = Math.sqrt(distX * distX + distY * distY);
-        if (dist < REPEL_RADIUS && dist > 0) {
-          const force = (1 - dist / REPEL_RADIUS) * REPEL_STRENGTH;
-          dx = (distX / dist) * force;
-          dy = (distY / dist) * force;
+        const mx = px + sz.charW * 0.5 - mouse.x;
+        const my = py + sz.charH * 0.5 - mouse.y;
+        const d2 = mx * mx + my * my;
+        if (d2 < REPEL_R * REPEL_R && d2 > 0) {
+          const d = Math.sqrt(d2);
+          const f = (1 - d / REPEL_R) * REPEL_STR;
+          px += (mx / d) * f;
+          py += (my / d) * f;
         }
       }
 
-      if (cell.isLand) {
+      if (cellLand[i]) {
         ctx.globalAlpha = 1;
         ctx.fillStyle = landColor;
       } else {
@@ -271,7 +261,7 @@ export function AsciiGlobe() {
         ctx.fillStyle = earthColor;
       }
 
-      ctx.fillText(cell.ch, cell.bx + dx, cell.by + dy);
+      ctx.fillText(cellLand[i] ? "#" : ".", px, py);
     }
 
     ctx.globalAlpha = 1;
@@ -286,21 +276,47 @@ export function AsciiGlobe() {
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
-    mouseRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    if (dragRef.current.active) {
+      const dx = e.clientX - dragRef.current.lastX;
+      const dy = e.clientY - dragRef.current.lastY;
+      const ad = -dx * 0.008, td = dy * 0.008;
+      angleRef.current += ad;
+      tiltRef.current = Math.max(-1.2, Math.min(1.2, tiltRef.current + td));
+      velRef.current = { angle: ad, tilt: td };
+      dragRef.current.lastX = e.clientX;
+      dragRef.current.lastY = e.clientY;
+    } else {
+      mouseRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }
   }, []);
 
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    dragRef.current = { active: true, lastX: e.clientX, lastY: e.clientY };
+    mouseRef.current = null;
+  }, []);
+
+  const handleMouseUp = useCallback(() => { dragRef.current.active = false; }, []);
   const handleMouseLeave = useCallback(() => {
+    dragRef.current.active = false;
     mouseRef.current = null;
   }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="select-none"
-      style={{ fontSize: "10px" }}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      aria-hidden="true"
-    />
+    <div style={{ perspective: "800px" }}>
+      <canvas
+        ref={canvasRef}
+        className="select-none"
+        style={{
+          fontSize: "6px",
+          transform: "rotateX(15deg) rotateY(-5deg)",
+          transformOrigin: "center center",
+        }}
+        onMouseMove={handleMouseMove}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+        aria-hidden="true"
+      />
+    </div>
   );
 }
