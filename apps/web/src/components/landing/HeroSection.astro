@@ -2,7 +2,6 @@
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { AsciiGlobe } from './ascii-globe';
-import { GlowBlob } from '../ui/glow-blob';
 import type { HeroData } from '@/lib/landing-data';
 import { integrations } from '@/lib/landing-data';
 
@@ -13,8 +12,11 @@ interface Props {
 const { data } = Astro.props;
 ---
 
-<section class="px-6 pt-20 pb-16 md:px-20 md:pt-32">
-  <div class="max-w-[1280px] mx-auto">
+<section class="px-6 pt-20 pb-16 md:px-20 md:pt-32 relative overflow-hidden">
+  <!-- Ambient glow: centered on globe (right), fills entire hero -->
+  <div class="hidden lg:block absolute pointer-events-none inset-0" style="background: radial-gradient(ellipse 60% 80% at 75% 45%, var(--accent) 0%, transparent 70%); opacity: 0.5;"></div>
+
+  <div class="max-w-[1280px] mx-auto relative">
     <!-- Two-column layout: content left, globe right -->
     <div class="flex flex-col lg:flex-row lg:items-center lg:gap-12">
       <!-- Left column: text content -->
@@ -57,16 +59,16 @@ const { data } = Astro.props;
         </div>
       </div>
 
-      <!-- Right column: ASCII globe + glow blobs -->
-      <div class="hidden lg:flex items-center justify-center shrink-0 relative">
-        <GlowBlob size="w-80 h-80" blur="blur-[30px]" opacity="opacity-80" shape={0} className="-top-16 -right-12" client:load />
-        <GlowBlob size="w-64 h-64" blur="blur-[25px]" opacity="opacity-70" shape={1} className="-bottom-10 -left-16" client:load />
+      <!-- Right column: ASCII globe -->
+      <div class="hidden lg:flex items-center justify-center shrink-0">
         <AsciiGlobe client:load />
       </div>
     </div>
 
     <!-- Stats -->
-    <div class="mt-10 grid grid-cols-2 gap-6 sm:flex sm:gap-16 border-t border-border pt-10">
+    <div class="mt-10 grid grid-cols-2 gap-6 sm:flex sm:gap-16 border-t border-border pt-10 relative">
+      <!-- Glow emitting upward from the border line -->
+      <div class="hidden lg:block absolute pointer-events-none left-0 right-0 bottom-full h-[250px]" style="background: radial-gradient(ellipse 60% 100% at 50% 100%, var(--accent) 0%, transparent 70%); opacity: 0.35;"></div>
       {data.stats.map((stat) => (
         <div>
           <div class:list={[

@@ -161,7 +161,6 @@ export function AsciiGlobe() {
   const dragRef = useRef({ active: false, lastX: 0, lastY: 0 });
   const lastRef = useRef(0);
   // Cache colors so we don't read getComputedStyle every frame
-  const colorsRef = useRef({ land: "#0D0D0D", earth: "#B0B0B0" });
   const sizeRef = useRef({ w: 0, h: 0, charW: 0, charH: 0, fontSize: 0 });
 
   // Load GeoJSON + bake bitmap in background
@@ -172,21 +171,12 @@ export function AsciiGlobe() {
       .catch(() => {});
   }, []);
 
-  // Read colors once + on theme change
-  useEffect(() => {
-    const read = () => {
-      const s = getComputedStyle(document.documentElement);
-      colorsRef.current = {
-        land: s.getPropertyValue("--text-1").trim() || "#0D0D0D",
-        earth: s.getPropertyValue("--text-3").trim() || "#B0B0B0",
-        bg: s.getPropertyValue("--bg").trim() || "#FFFFFF",
-      };
-    };
-    read();
-    const mo = new MutationObserver(read);
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-    return () => mo.disconnect();
-  }, []);
+  // Fixed globe colors — always dark, never changes with theme
+  const colorsRef = useRef({
+    land: "#F1F5F9",
+    earth: "#64748B",
+    bg: "#0A0A0A",
+  });
 
   const animate = useCallback((t: number) => {
     const canvas = canvasRef.current;
