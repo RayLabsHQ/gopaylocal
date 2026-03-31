@@ -71,8 +71,8 @@ function bakeBitmap(polys: LandPoly[]): Uint8Array {
 const COLS = 130;
 const ROWS = 72;
 const DEG = 180 / Math.PI;
-const REPEL_R = 60;
-const REPEL_STR = 18;
+const REPEL_R = 20;
+const REPEL_STR = 8;
 
 // Precompute grid coordinates (never changes)
 const gridX = new Float32Array(COLS * ROWS);
@@ -154,6 +154,10 @@ export function AsciiGlobe() {
   const velRef = useRef({ angle: 0, tilt: 0 });
   const bmpRef = useRef<Uint8Array | null>(null);
   const mouseRef = useRef<{ x: number; y: number } | null>(null);
+  // Trail: array of past mouse positions, [0] = newest
+  const TRAIL_LEN = 8;
+  const trailRef = useRef<{ x: number; y: number }[]>([]);
+  const smoothMouseRef = useRef<{ x: number; y: number } | null>(null);
   const dragRef = useRef({ active: false, lastX: 0, lastY: 0 });
   const lastRef = useRef(0);
   // Cache colors so we don't read getComputedStyle every frame
@@ -232,25 +236,58 @@ export function AsciiGlobe() {
     ctx.textBaseline = "top";
     ctx.font = `${sz.fontSize}px JetBrains Mono,monospace`;
 
-    const mouse = !dragRef.current.active ? mouseRef.current : null;
+    // Smooth mouse + trail update
+    const rawMouse = !dragRef.current.active ? mouseRef.current : null;
+    const sm = smoothMouseRef.current;
+    const trail = trailRef.current;
+
+    if (rawMouse) {
+      if (sm) {
+        // Lerp toward actual mouse position
+        sm.x += (rawMouse.x - sm.x) * 0.3;
+        sm.y += (rawMouse.y - sm.y) * 0.3;
+      } else {
+        smoothMouseRef.current = { x: rawMouse.x, y: rawMouse.y };
+      }
+      // Push current smooth position to front of trail
+      const cur = smoothMouseRef.current!;
+      trail.unshift({ x: cur.x, y: cur.y });
+      if (trail.length > TRAIL_LEN) trail.length = TRAIL_LEN;
+    } else {
+      // Fade trail out by removing tail
+      smoothMouseRef.current = null;
+      if (trail.length > 0) trail.pop();
+    }
+
     const { land: landColor, earth: earthColor } = colorsRef.current;
     const total = COLS * ROWS;
+    const trailLen = trail.length;
 
     for (let i = 0; i < total; i++) {
       if (!cellActive[i]) continue;
 
       let px = cellBx[i], py = cellBy[i];
 
-      if (mouse) {
-        const mx = px + sz.charW * 0.5 - mouse.x;
-        const my = py + sz.charH * 0.5 - mouse.y;
-        const d2 = mx * mx + my * my;
-        if (d2 < REPEL_R * REPEL_R && d2 > 0) {
-          const d = Math.sqrt(d2);
-          const f = (1 - d / REPEL_R) * REPEL_STR;
-          px += (mx / d) * f;
-          py += (my / d) * f;
+      // Accumulate repel from each trail point (head = strongest, tail = weakest)
+      if (trailLen > 0) {
+        const cx = px + sz.charW * 0.5;
+        const cy = py + sz.charH * 0.5;
+        let fx = 0, fy = 0;
+        for (let t = 0; t < trailLen; t++) {
+          const strength = (1 - t / TRAIL_LEN); // 1.0 → 0.0
+          const radius = REPEL_R * (0.5 + strength * 0.5); // shrinks along trail
+          const mx = cx - trail[t].x;
+          const my = cy - trail[t].y;
+          const d2 = mx * mx + my * my;
+          if (d2 < radius * radius && d2 > 0) {
+            const d = Math.sqrt(d2);
+            const f = (1 - d / radius) * REPEL_STR * strength;
+            fx += (mx / d) * f;
+            fy += (my / d) * f;
+          }
         }
+        px += fx;
+        py += fy;
       }
 
       if (cellLand[i]) {
