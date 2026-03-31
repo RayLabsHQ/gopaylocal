@@ -179,6 +179,7 @@ export function AsciiGlobe() {
       colorsRef.current = {
         land: s.getPropertyValue("--text-1").trim() || "#0D0D0D",
         earth: s.getPropertyValue("--text-3").trim() || "#B0B0B0",
+        bg: s.getPropertyValue("--bg").trim() || "#FFFFFF",
       };
     };
     read();
@@ -233,6 +234,15 @@ export function AsciiGlobe() {
 
     // Draw
     ctx.clearRect(0, 0, sz.w, sz.h);
+
+    // Semi-transparent background circle — glassmorphism effect
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = colorsRef.current.bg;
+    ctx.beginPath();
+    ctx.ellipse(sz.w / 2, sz.h / 2, sz.w / 2, sz.h / 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
     ctx.textBaseline = "top";
     ctx.font = `${sz.fontSize}px JetBrains Mono,monospace`;
 
