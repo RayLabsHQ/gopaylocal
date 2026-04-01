@@ -12,9 +12,15 @@ interface Props {
 const { data } = Astro.props;
 ---
 
-<section class="px-6 pt-20 pb-16 md:px-20 md:pt-32 relative overflow-hidden">
-  <!-- Ambient glow: centered on globe (right), fills entire hero -->
-  <div class="hidden lg:block absolute pointer-events-none inset-0" style="background: radial-gradient(ellipse 60% 80% at 75% 45%, var(--accent) 0%, transparent 70%); opacity: 0.5;"></div>
+<section class="px-6 pt-20 pb-16 md:px-20 md:pt-32 relative">
+  <!-- SVG noise filter definition -->
+  <svg class="absolute w-0 h-0">
+    <filter id="hero-noise">
+      <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="4" stitchTiles="stitch" />
+      <feColorMatrix type="saturate" values="0" />
+    </filter>
+  </svg>
+
 
   <div class="max-w-[1280px] mx-auto relative">
     <!-- Two-column layout: content left, globe right -->
@@ -59,15 +65,19 @@ const { data } = Astro.props;
         </div>
       </div>
 
-      <!-- Right column: ASCII globe -->
-      <div class="hidden lg:flex items-center justify-center shrink-0">
+      <!-- Right column: ASCII globe + glow -->
+      <div class="hidden lg:flex items-center justify-center shrink-0 relative">
+        <!-- Glow behind globe — relative to globe, spreads left -->
+        <div class="absolute pointer-events-none -inset-32" style="background: radial-gradient(ellipse 70% 70% at 50% 50%, var(--accent) 0%, transparent 70%); opacity: 0.5;"></div>
+        <!-- Noise grain over glow -->
+        <div class="absolute pointer-events-none -inset-32 mix-blend-soft-light opacity-40" style="filter: url(#hero-noise);"></div>
         <AsciiGlobe client:load />
       </div>
     </div>
 
     <!-- Stats -->
-    <div class="mt-10 grid grid-cols-2 gap-6 sm:flex sm:gap-16 border-t border-border pt-10 relative">
-      <!-- Glow emitting upward from the border line -->
+    <div class="mt-10 grid grid-cols-2 gap-6 sm:flex sm:gap-16 pt-10 relative" style="border-image: linear-gradient(to right, var(--border-color), transparent) 1;border-top: 1px solid;">
+      <!-- Glow emitting upward from the line, left side -->
       <div class="hidden lg:block absolute pointer-events-none left-0 right-0 bottom-full h-[250px]" style="background: radial-gradient(ellipse 60% 100% at 50% 100%, var(--accent) 0%, transparent 70%); opacity: 0.35;"></div>
       {data.stats.map((stat) => (
         <div>
