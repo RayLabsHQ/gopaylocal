@@ -66,10 +66,76 @@ function bakeBitmap(polys: LandPoly[]): Uint8Array {
   return bmp;
 }
 
+// ── Arc data ─────────────────────────────────────────────────────────
+
+interface Arc {
+  startLat: number; startLon: number;
+  endLat: number; endLon: number;
+  speed: number;
+}
+
+const ARCS: Arc[] = [
+  { startLat: 28.6, startLon: 77.2, endLat: 51.5, endLon: -0.1, speed: 3 },
+  { startLat: 40.7, startLon: -74.0, endLat: 48.9, endLon: 2.35, speed: 2.5 },
+  { startLat: -33.9, startLon: 151.2, endLat: 35.7, endLon: 139.7, speed: 2.8 },
+  { startLat: 1.35, startLon: 103.8, endLat: -34.6, endLon: -58.4, speed: 3.5 },
+  { startLat: 37.6, startLon: 127.0, endLat: 34.1, endLon: -118.2, speed: 3.2 },
+  { startLat: -22.9, startLon: -43.2, endLat: 22.3, endLon: 114.2, speed: 4 },
+  { startLat: 52.5, startLon: 13.4, endLat: -1.3, endLon: 36.8, speed: 2.6 },
+  { startLat: 55.8, startLon: 37.6, endLat: 31.2, endLon: 121.5, speed: 3.1 },
+  { startLat: 14.6, startLon: 121.0, endLat: 49.3, endLon: -123.1, speed: 3.4 },
+  { startLat: -8.8, startLon: 13.3, endLat: -15.8, endLon: -47.9, speed: 2.9 },
+  { startLat: 41.9, startLon: 12.5, endLat: 39.9, endLon: 116.4, speed: 3.6 },
+  { startLat: -6.2, startLon: 106.8, endLat: 52.4, endLon: 4.9, speed: 3.3 },
+];
+
+const RAD = Math.PI / 180;
+
+// Convert lat/lon to 3D unit sphere point
+function latLonToXYZ(lat: number, lon: number): [number, number, number] {
+  const phi = lat * RAD, lam = lon * RAD;
+  const cp = Math.cos(phi);
+  return [cp * Math.sin(lam), -Math.sin(phi), cp * Math.cos(lam)];
+}
+
+// Slerp between two unit vectors — great circle interpolation
+function slerp(a: [number, number, number], b: [number, number, number], t: number): [number, number, number] {
+  let dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  dot = Math.max(-1, Math.min(1, dot));
+  const omega = Math.acos(dot);
+  if (omega < 0.001) return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  const sinO = Math.sin(omega);
+  const sa = Math.sin((1 - t) * omega) / sinO;
+  const sb = Math.sin(t * omega) / sinO;
+  return [sa * a[0] + sb * b[0], sa * a[1] + sb * b[1], sa * a[2] + sb * b[2]];
+}
+
+// Lift a point off the sphere surface for arc height
+function liftPoint(p: [number, number, number], altitude: number): [number, number, number] {
+  const scale = 1 + altitude;
+  return [p[0] * scale, p[1] * scale, p[2] * scale];
+}
+
+// Project a 3D point to canvas coords, returns null if behind globe
+function project3D(
+  sx: number, sy: number, sz: number,
+  rotY: number, tilt: number,
+  w: number, h: number,
+): { x: number; y: number; z: number } | null {
+  const cosR = Math.cos(rotY), sinR = Math.sin(rotY);
+  const rx = sx * cosR - sz * sinR;
+  const rz = sx * sinR + sz * cosR;
+  const cosT = Math.cos(tilt), sinT = Math.sin(tilt);
+  const fy = sy * cosT - rz * sinT;
+  const fz = sy * sinT + rz * cosT;
+  if (fz < -0.6) return null;
+  return { x: (rx + 1) / 2 * w, y: (fy + 1) / 2 * h, z: fz };
+}
+
 // ── Precomputed lookup tables ────────────────────────────────────────
 
-const COLS = 130;
-const ROWS = 72;
+const COLS = 140;
+const ROWS = 78;
 const DEG = 180 / Math.PI;
 const REPEL_R = 20;
 const REPEL_STR = 8;
@@ -178,6 +244,8 @@ export function AsciiGlobe() {
     bg: "#0A0A0A",
   });
 
+  const frameSkipRef = useRef(0);
+
   const animate = useCallback((t: number) => {
     const canvas = canvasRef.current;
     if (!canvas) { frameRef.current = requestAnimationFrame(animate); return; }
@@ -188,7 +256,7 @@ export function AsciiGlobe() {
     const dt = Math.min((t - lastRef.current) / 1000, 0.1);
     lastRef.current = t;
 
-    // Physics
+    // Physics runs every frame for smooth drag
     const vel = velRef.current;
     if (dragRef.current.active) {
       // velocity set by mousemove
@@ -205,10 +273,17 @@ export function AsciiGlobe() {
       }
     }
 
-    // Measure once / on resize
+    // Render at ~30fps (skip every other frame) unless dragging
+    frameSkipRef.current++;
+    if (!dragRef.current.active && frameSkipRef.current % 2 !== 0) {
+      frameRef.current = requestAnimationFrame(animate);
+      return;
+    }
+
+    // Measure once
     const sz = sizeRef.current;
     if (!sz.fontSize) {
-      const fs = parseFloat(getComputedStyle(canvas).fontSize) || 6;
+      const fs = parseFloat(getComputedStyle(canvas).fontSize) || 4.5;
       ctx.font = `${fs}px JetBrains Mono,monospace`;
       const cw = ctx.measureText("#").width || fs * 0.6;
       const ch = fs * 1.15;
@@ -219,42 +294,33 @@ export function AsciiGlobe() {
       canvas.height = sz.h;
     }
 
-    // Compute
+    // Compute grid
     computeFrame(angleRef.current, tiltRef.current, bmpRef.current, sz.charW, sz.charH);
 
     // Draw
     ctx.clearRect(0, 0, sz.w, sz.h);
 
-    // Semi-transparent background circle — glassmorphism effect
+    // Background circle
     ctx.globalAlpha = 0.85;
     ctx.fillStyle = colorsRef.current.bg;
     ctx.beginPath();
     ctx.ellipse(sz.w / 2, sz.h / 2, sz.w / 2, sz.h / 2, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.globalAlpha = 1;
 
     ctx.textBaseline = "top";
     ctx.font = `${sz.fontSize}px JetBrains Mono,monospace`;
 
-    // Smooth mouse + trail update
+    // Mouse trail update
     const rawMouse = !dragRef.current.active ? mouseRef.current : null;
     const sm = smoothMouseRef.current;
     const trail = trailRef.current;
-
     if (rawMouse) {
-      if (sm) {
-        // Lerp toward actual mouse position
-        sm.x += (rawMouse.x - sm.x) * 0.3;
-        sm.y += (rawMouse.y - sm.y) * 0.3;
-      } else {
-        smoothMouseRef.current = { x: rawMouse.x, y: rawMouse.y };
-      }
-      // Push current smooth position to front of trail
+      if (sm) { sm.x += (rawMouse.x - sm.x) * 0.3; sm.y += (rawMouse.y - sm.y) * 0.3; }
+      else { smoothMouseRef.current = { x: rawMouse.x, y: rawMouse.y }; }
       const cur = smoothMouseRef.current!;
       trail.unshift({ x: cur.x, y: cur.y });
       if (trail.length > TRAIL_LEN) trail.length = TRAIL_LEN;
     } else {
-      // Fade trail out by removing tail
       smoothMouseRef.current = null;
       if (trail.length > 0) trail.pop();
     }
@@ -262,44 +328,205 @@ export function AsciiGlobe() {
     const { land: landColor, earth: earthColor } = colorsRef.current;
     const total = COLS * ROWS;
     const trailLen = trail.length;
+    const hasTrail = trailLen > 0;
+    const halfCW = sz.charW * 0.5;
+    const halfCH = sz.charH * 0.5;
 
+    // ── Pass 1: Earth dots (batched, no shadow) ──
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 0.4;
+    ctx.fillStyle = earthColor;
     for (let i = 0; i < total; i++) {
-      if (!cellActive[i]) continue;
-
+      if (!cellActive[i] || cellLand[i]) continue;
       let px = cellBx[i], py = cellBy[i];
-
-      // Accumulate repel from each trail point (head = strongest, tail = weakest)
-      if (trailLen > 0) {
-        const cx = px + sz.charW * 0.5;
-        const cy = py + sz.charH * 0.5;
+      if (hasTrail) {
+        const cx = px + halfCW, cy = py + halfCH;
         let fx = 0, fy = 0;
         for (let t = 0; t < trailLen; t++) {
-          const strength = (1 - t / TRAIL_LEN); // 1.0 → 0.0
-          const radius = REPEL_R * (0.5 + strength * 0.5); // shrinks along trail
-          const mx = cx - trail[t].x;
-          const my = cy - trail[t].y;
+          const mx = cx - trail[t].x, my = cy - trail[t].y;
           const d2 = mx * mx + my * my;
-          if (d2 < radius * radius && d2 > 0) {
-            const d = Math.sqrt(d2);
-            const f = (1 - d / radius) * REPEL_STR * strength;
-            fx += (mx / d) * f;
-            fy += (my / d) * f;
+          if (d2 < REPEL_R * REPEL_R && d2 > 0) {
+            const strength = 1 - t / TRAIL_LEN;
+            const radius = REPEL_R * (0.5 + strength * 0.5);
+            if (d2 < radius * radius) {
+              const d = Math.sqrt(d2);
+              const f = (1 - d / radius) * REPEL_STR * strength;
+              fx += (mx / d) * f; fy += (my / d) * f;
+            }
           }
         }
-        px += fx;
-        py += fy;
+        px += fx; py += fy;
       }
-
-      if (cellLand[i]) {
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = landColor;
-      } else {
-        ctx.globalAlpha = 0.4;
-        ctx.fillStyle = earthColor;
-      }
-
-      ctx.fillText(cellLand[i] ? "#" : ".", px, py);
+      ctx.fillText(".", px, py);
     }
+
+    // ── Pass 2: Land chars (no rim glow) ──
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = landColor;
+    for (let i = 0; i < total; i++) {
+      if (!cellActive[i] || !cellLand[i] || gridR2[i] > 0.9) continue;
+      let px = cellBx[i], py = cellBy[i];
+      if (hasTrail) {
+        const cx = px + halfCW, cy = py + halfCH;
+        let fx = 0, fy = 0;
+        for (let t = 0; t < trailLen; t++) {
+          const mx = cx - trail[t].x, my = cy - trail[t].y;
+          const d2 = mx * mx + my * my;
+          if (d2 < REPEL_R * REPEL_R && d2 > 0) {
+            const strength = 1 - t / TRAIL_LEN;
+            const radius = REPEL_R * (0.5 + strength * 0.5);
+            if (d2 < radius * radius) {
+              const d = Math.sqrt(d2);
+              const f = (1 - d / radius) * REPEL_STR * strength;
+              fx += (mx / d) * f; fy += (my / d) * f;
+            }
+          }
+        }
+        px += fx; py += fy;
+      }
+      ctx.fillText("#", px, py);
+    }
+
+    // ── Pass 3: Land rim glow (few cells, expensive shadow) ──
+    ctx.shadowColor = "#ffffff";
+    ctx.fillStyle = "#ffffff";
+    for (let i = 0; i < total; i++) {
+      if (!cellActive[i] || !cellLand[i] || gridR2[i] <= 0.9) continue;
+      const rim = gridR2[i];
+      ctx.shadowBlur = 40 * ((rim - 0.9) / 0.1);
+      ctx.globalAlpha = 1;
+      let px = cellBx[i], py = cellBy[i];
+      if (hasTrail) {
+        const cx = px + halfCW, cy = py + halfCH;
+        let fx = 0, fy = 0;
+        for (let t = 0; t < trailLen; t++) {
+          const mx = cx - trail[t].x, my = cy - trail[t].y;
+          const d2 = mx * mx + my * my;
+          if (d2 < REPEL_R * REPEL_R && d2 > 0) {
+            const strength = 1 - t / TRAIL_LEN;
+            const radius = REPEL_R * (0.5 + strength * 0.5);
+            if (d2 < radius * radius) {
+              const d = Math.sqrt(d2);
+              const f = (1 - d / radius) * REPEL_STR * strength;
+              fx += (mx / d) * f; fy += (my / d) * f;
+            }
+          }
+        }
+        px += fx; py += fy;
+      }
+      ctx.fillText("#", px, py);
+    }
+    ctx.shadowBlur = 0;
+
+    // ── Draw arcs (great-circle, white glow, tapered) ──
+    const rotY = angleRef.current;
+    const currentTilt = tiltRef.current;
+    const ARC_STEPS = 60;
+
+    ctx.shadowColor = "#ffffff";
+    ctx.lineCap = "round";
+
+    for (const arc of ARCS) {
+      const a = latLonToXYZ(arc.startLat, arc.startLon);
+      const b = latLonToXYZ(arc.endLat, arc.endLon);
+
+      // Compute great-circle distance for arc height
+      const dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+      const arcAngle = Math.acos(Math.max(-1, Math.min(1, dot)));
+      const maxAlt = arcAngle * 0.4; // tall arcs that fly above the globe
+
+      // Animated progress
+      const cycle = (t / 1000) / arc.speed;
+      const head = cycle % 1;
+      const tailLen = 0.4;
+      const tail = Math.max(0, head - tailLen);
+
+      // Project all visible points along the arc
+      const points: { x: number; y: number; t: number; fade: number }[] = [];
+      for (let s = 0; s <= ARC_STEPS; s++) {
+        const st = s / ARC_STEPS;
+        const p = slerp(a, b, st);
+        const alt = maxAlt * 4 * st * (1 - st);
+        const lifted = liftPoint(p, alt);
+        const proj = project3D(lifted[0], lifted[1], lifted[2], rotY, currentTilt, sz.w, sz.h);
+        if (!proj) continue;
+        // Smooth fade: 1 when facing viewer, 0 when at edge/behind
+        const fade = Math.max(0, Math.min(1, (proj.z + 0.3) / 0.5));
+        points.push({ x: proj.x, y: proj.y, t: st, fade });
+      }
+
+      if (points.length < 2) continue;
+
+      const stepSize = 1 / ARC_STEPS;
+
+      // ── Full arc path: thin dim line with edge fade ──
+      ctx.shadowBlur = 2;
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 0.5;
+      for (let i = 1; i < points.length; i++) {
+        const p0 = points[i - 1], p1 = points[i];
+        if (p1.t - p0.t > stepSize * 2.5) continue;
+        const fade = Math.min(p0.fade, p1.fade);
+        ctx.globalAlpha = 0.15 * fade;
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p1.x, p1.y);
+        ctx.stroke();
+      }
+
+      // ── Bright animated trail with edge fade ──
+      ctx.shadowBlur = 6;
+      for (let i = 1; i < points.length; i++) {
+        const p0 = points[i - 1], p1 = points[i];
+        if (p1.t - p0.t > stepSize * 2.5) continue;
+
+        const mid = (p0.t + p1.t) / 2;
+        if (mid < tail || mid > head) continue;
+
+        const fade = Math.min(p0.fade, p1.fade);
+        const progress = (mid - tail) / tailLen;
+        const width = 2.5 * (1 - progress) + 0.5;
+        const alpha = (0.3 + 0.7 * progress) * fade;
+
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p1.x, p1.y);
+        ctx.stroke();
+      }
+
+      // Head dot — bright white glow
+      if (points.length > 0) {
+        const headPt = points.find(p => p.t >= head) || points[points.length - 1];
+        ctx.shadowBlur = 12;
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(headPt.x, headPt.y, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Endpoint dots — red glow with edge fade
+      ctx.shadowColor = "#E42313";
+      ctx.shadowBlur = 8;
+      for (const [lat, lon] of [[arc.startLat, arc.startLon], [arc.endLat, arc.endLon]] as [number, number][]) {
+        const xyz = latLonToXYZ(lat, lon);
+        const proj = project3D(xyz[0], xyz[1], xyz[2], rotY, currentTilt, sz.w, sz.h);
+        if (!proj) continue;
+        const dotFade = Math.max(0, Math.min(1, (proj.z + 0.3) / 0.5));
+        ctx.globalAlpha = 0.8 * dotFade;
+        ctx.fillStyle = "#E42313";
+        ctx.beginPath();
+        ctx.arc(proj.x, proj.y, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.shadowColor = "#ffffff";
+    }
+
+    ctx.shadowBlur = 0;
 
     ctx.globalAlpha = 1;
     frameRef.current = requestAnimationFrame(animate);
@@ -344,7 +571,7 @@ export function AsciiGlobe() {
         ref={canvasRef}
         className="select-none"
         style={{
-          fontSize: "6px",
+          fontSize: "5.5px",
           transform: "rotateX(15deg) rotateY(-5deg)",
           transformOrigin: "center center",
         }}
