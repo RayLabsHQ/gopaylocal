@@ -1,13 +1,13 @@
 ---
 const integrations = [
-  { name: 'Stripe', slug: 'stripe', desc: 'Coupons API' },
-  { name: 'Paddle', slug: 'paddle', desc: 'Discounts API' },
-  { name: 'LemonSqueezy', slug: 'lemonsqueezy', desc: 'Coupons API' },
-  { name: 'Gumroad', slug: 'gumroad', desc: 'Offer codes' },
-  { name: 'Chargebee', slug: 'chargebee', desc: 'Coupons API' },
-  { name: 'Dodo', slug: 'dodo', desc: 'Discounts API' },
-  { name: 'Polar', slug: 'polar', desc: 'Discounts API' },
-  { name: 'Whop', slug: 'whop', desc: 'Promo codes' },
+  { name: 'Stripe', slug: 'stripe', desc: 'Coupons API', height: 'h-7 sm:h-9' },
+  { name: 'Paddle', slug: 'paddle', desc: 'Discounts API', height: 'h-7 sm:h-8' },
+  { name: 'LemonSqueezy', slug: 'lemonsqueezy', desc: 'Coupons API', height: 'h-6 sm:h-7' },
+  { name: 'Gumroad', slug: 'gumroad', desc: 'Offer codes', height: 'h-6 sm:h-7' },
+  { name: 'Chargebee', slug: 'chargebee', desc: 'Coupons API', height: 'h-6 sm:h-7' },
+  { name: 'Dodo', slug: 'dodo', desc: 'Discounts API', height: 'h-7 sm:h-9' },
+  { name: 'Polar', slug: 'polar', desc: 'Discounts API', height: 'h-7 sm:h-9' },
+  { name: 'Whop', slug: 'whop', desc: 'Promo codes', height: 'h-5 sm:h-6' },
 ];
 ---
 
@@ -32,7 +32,7 @@ const integrations = [
         <a
           href={`https://docs.gopaylocal.com/integrations/${integration.slug}`}
           class:list={[
-            "group flex items-center gap-3 p-4 no-underline transition-colors",
+            "group flex flex-col gap-3 p-4 no-underline transition-colors",
             "border border-[#EBEBEB] hover:border-[#D0D0D0] hover:bg-bg-surface",
             "sm:border-0 sm:border-b sm:border-border sm:py-6 sm:px-0",
             i % 4 !== 0 && "sm:border-l sm:pl-6",
@@ -41,16 +41,11 @@ const integrations = [
           ]}
         >
           <img
-            src={`/logos/${integration.slug}.svg`}
+            src={`/logos/wordmarks/${integration.slug}.svg`}
             alt={integration.name}
-            class="h-8 w-8 sm:h-10 sm:w-10 shrink-0 object-contain"
+            class={`${integration.height} w-auto object-contain object-left`}
           />
-          <div class="min-w-0">
-            <p class="font-display text-sm sm:text-base font-semibold text-text-primary group-hover:text-accent-500 transition-colors">
-              {integration.name}
-            </p>
-            <p class="text-xs text-text-muted mt-0.5">{integration.desc}</p>
-          </div>
+          <p class="text-xs text-text-muted">{integration.desc}</p>
         </a>
       ))}
     </div>
