@@ -13,6 +13,7 @@
     "deploy:worker:preview": "wrangler versions upload"
   },
   "dependencies": {
+    "@astraicons/react": "^1.7.0",
     "@astrojs/react": "^5.0.1",
     "astro": "^6",
     "class-variance-authority": "^0.7.1",

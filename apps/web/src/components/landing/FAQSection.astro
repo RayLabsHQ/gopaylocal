@@ -1,12 +1,17 @@
 ---
 import FAQAccordion from './FAQAccordion';
+import { TetrahedronIcon } from '@astraicons/react/3d';
 ---
 
-<section class="border-t border-border bg-bg">
-  <div class="max-w-7xl mx-auto px-6 py-16 md:py-24 md:px-20">
+<section class="relative border-t w-full border-border overflow-hidden">
+  <div class="pointer-events-none absolute w-full h-full bg-linear-210 from-red-500/70 via-transparent via-30% -z-10" />
+  <div class="pointer-events-none absolute -right-20 2xl:left-[70%] 2xl:-translate-x-1/2 top-10 md:top-40 -z-20 rotate-180 -translate-y-1/2 opacity-90 blur-xs select-none">
+    <TetrahedronIcon className="w-[400px] md:w-[600px] lg:w-[800px] h-auto [&_path[fill='#00d2a0']]:fill-red-500" />
+  </div>
+
+  <div class="relative max-w-7xl mx-auto px-6 py-16 md:py-24 md:px-20">
     <h2 class="font-display text-3xl md:text-4xl font-semibold text-text-primary tracking-tight">Frequently asked questions</h2>
     <p class="mt-4 text-base text-text-secondary">Everything you need to know about purchasing power parity pricing.</p>
-
     <div class="mt-12">
       <FAQAccordion client:visible />
     </div>
