@@ -8,8 +8,6 @@ interface Props {
 }
 
 const { title, items } = Astro.props;
-const row1 = items.slice(0, 3);
-const row2 = items.slice(3, 6);
 ---
 
 <section class="bg-bg">
@@ -18,40 +16,29 @@ const row2 = items.slice(3, 6);
       {title}
     </h2>
 
-    <div class="mt-12">
-      <!-- Row 1 -->
-      <div class="grid grid-cols-1 md:grid-cols-3 border-b border-border">
-        {row1.map((feature, i) => (
-          <div class:list={[
-            "py-7",
-            i === 0 ? "md:pr-7" : "md:px-7 md:border-l border-border",
-          ]}>
-            <div class="text-accent-500 mb-3">
-              <FeatureIcon name={feature.icon} className="h-5 w-5" client:load />
-            </div>
-            <h3 class="font-display text-base font-semibold text-text-primary">{feature.title}</h3>
-            <p class="mt-2 text-sm text-text-secondary leading-relaxed">{feature.description}</p>
-          </div>
-        ))}
-      </div>
+    <div class="mt-12 grid grid-cols-1 md:grid-cols-3">
+      {items.slice(0, 6).map((feature, index) => (
+        <div class="relative p-10 backdrop-blur-lg">
+          
+          {index % 3 !== 2 && (
+            <div class="hidden md:block absolute right-0 top-0 bottom-0 w-[1px] bg-red-500/20 shadow-[0_0_30px_3px_rgba(239,68,68,0.8)] z-10 pointer-events-none" />
+          )}
 
-      <!-- Row 2 -->
-      {row2.length > 0 && (
-        <div class="grid grid-cols-1 md:grid-cols-3">
-          {row2.map((feature, i) => (
-            <div class:list={[
-              "py-7",
-              i === 0 ? "md:pr-7" : "md:px-7 md:border-l border-border",
-            ]}>
-              <div class="text-accent-500 mb-3">
-                <FeatureIcon name={feature.icon} className="h-5 w-5" client:load />
-              </div>
-              <h3 class="font-display text-base font-semibold text-text-primary">{feature.title}</h3>
-              <p class="mt-2 text-sm text-text-secondary leading-relaxed">{feature.description}</p>
-            </div>
-          ))}
+          {index < 3 && (
+            <div class="hidden md:block absolute bottom-0 left-0 right-0 h-[1px] bg-red-500/20 shadow-[0_0_30px_3px_rgba(239,68,68,0.8)] z-10 pointer-events-none" />
+          )}
+          
+          {index < 5 && (
+            <div class="block md:hidden absolute bottom-0 left-10 right-10 h-[1px] bg-red-500/20 shadow-[0_0_30px_rgba(239,68,68,0.5)] z-10 pointer-events-none" />
+          )}
+
+          <div class="text-accent-500 mb-5 relative z-20">
+            <FeatureIcon name={feature.icon} className="h-5 w-5" client:load />
+          </div>
+          <h3 class="font-display text-base font-semibold text-text-primary relative z-20">{feature.title}</h3>
+          <p class="mt-2 text-sm text-text-secondary leading-relaxed relative z-20">{feature.description}</p>
         </div>
-      )}
+      ))}
     </div>
   </div>
 </section>

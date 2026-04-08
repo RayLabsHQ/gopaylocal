@@ -9,7 +9,11 @@ const enterprise = pricingCards[3];
 
 <section id="pricing" class="relative border-t border-border overflow-hidden">
   <div
-    class="pointer-events-none absolute w-full h-full bg-linear-180 from-red-500/70 via-transparent via-5% md:via-20% -z-10"
+    class="pointer-events-none absolute w-full h-full bg-linear-175 from-red-500/70 via-transparent via-5% md:via-20% -z-10"
+  >
+  </div>
+  <div
+    class="pointer-events-none absolute w-full h-full bg-linear-355 from-red-500/70 via-transparent via-5% md:via-20% -z-10"
   >
   </div>
   <div
@@ -39,7 +43,7 @@ const enterprise = pricingCards[3];
             class:list={[
               "p-8 flex flex-col overflow-hidden backdrop-blur-lg bg-black/20 rounded-3xl",
               card.highlighted
-                ? "bg-bg-inverted text-white border border-red-500"
+                ? "bg-bg-inverted text-white border border-red-400 shadow-[inset_0_0_30px_rgba(239,68,68,0.8)]"
                 : "border border-border",
             ]}
           >
@@ -139,7 +143,7 @@ const enterprise = pricingCards[3];
     <!-- Enterprise full-width banner -->
     {
       enterprise && (
-        <div class="mt-8 bg-bg-inverted px-8 py-8 md:py-6">
+        <div class="mt-8 bg-bg-inverted px-8 py-8 md:py-6 rounded-3xl border border-[#2A2A2A]">
           <div class="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
             <div class="flex flex-col gap-4 md:flex-row md:items-center md:gap-10">
               <div class="shrink-0">
