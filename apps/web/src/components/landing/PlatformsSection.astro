@@ -1,97 +1,197 @@
 ---
 const codeFrameworks = [
-  { name: 'React', slug: 'react', badge: 'SDK', href: '/docs/react' },
-  { name: 'Next.js', slug: 'nextjs', badge: 'SDK', href: '/docs/platforms/nextjs' },
-  { name: 'Astro', slug: 'astro', badge: 'Script', href: '/docs/platforms/astro' },
-  { name: 'Remix', slug: 'remix', badge: 'Script', href: '/docs/platforms/remix' },
-  { name: 'Vue', slug: 'vue', badge: 'Script', href: '/docs/js' },
-  { name: 'Svelte', slug: 'svelte', badge: 'Script', href: '/docs/js' },
-  { name: 'HTML', slug: 'html', badge: 'Script', href: '/docs/js' },
+  { name: "React", slug: "react", badge: "SDK", href: "/docs/react" },
+  {
+    name: "Next.js",
+    slug: "nextjs",
+    badge: "SDK",
+    href: "/docs/platforms/nextjs",
+    invert: true,
+  },
+  {
+    name: "Astro",
+    slug: "astro",
+    badge: "Script",
+    href: "/docs/platforms/astro",
+  },
+  {
+    name: "Remix",
+    slug: "remix",
+    badge: "Script",
+    href: "/docs/platforms/remix",
+    invert: true,
+  },
+  { name: "Vue", slug: "vue", badge: "Script", href: "/docs/js" },
+  { name: "Svelte", slug: "svelte", badge: "Script", href: "/docs/js" },
+  { name: "HTML", slug: "html", badge: "Script", href: "/docs/js" },
 ];
 
 const nocodeTools = [
-  { name: 'Shopify', slug: 'shopify', badge: 'Script', href: '/docs/platforms/shopify' },
-  { name: 'WordPress', slug: 'wordpress', badge: 'Plugin', href: '/docs/platforms/wordpress' },
-  { name: 'Webflow', slug: 'webflow', badge: 'Script', href: '/docs/platforms/webflow' },
-  { name: 'Framer', slug: 'framer', badge: 'Script', href: '/docs/platforms/framer' },
-  { name: 'Carrd', slug: 'carrd', badge: 'Script', href: '/docs/platforms/carrd' },
-  { name: 'Notion', slug: 'notion', badge: 'Script', href: '/docs/js' },
+  {
+    name: "Shopify",
+    slug: "shopify",
+    badge: "Script",
+    href: "/docs/platforms/shopify",
+  },
+  {
+    name: "WordPress",
+    slug: "wordpress",
+    badge: "Plugin",
+    href: "/docs/platforms/wordpress",
+  },
+  {
+    name: "Webflow",
+    slug: "webflow",
+    badge: "Script",
+    href: "/docs/platforms/webflow",
+  },
+  {
+    name: "Framer",
+    slug: "framer",
+    badge: "Script",
+    href: "/docs/platforms/framer",
+  },
+  {
+    name: "Carrd",
+    slug: "carrd",
+    badge: "Script",
+    href: "/docs/platforms/carrd",
+  },
+  { name: "Notion", slug: "notion", badge: "Script", href: "/docs/js", invert: true },
 ];
 
 function badgeClasses(badge: string) {
-  if (badge === 'SDK') return 'bg-accent-500/10 text-accent-500';
-  if (badge === 'Plugin') return 'bg-purple-500/10 text-purple-600';
-  return 'bg-[#F0F0F0] text-text-secondary';
+  if (badge === "SDK") return "bg-sky-500/15 text-sky-400 rounded-md";
+  if (badge === "Plugin") return "bg-purple-500/15 text-purple-400 rounded-md";
+  return "bg-white/10 text-text-muted rounded-md";
 }
 ---
 
-<section class="bg-bg border-t border-border">
+<section class="border-t border-border relative overflow-clip">
+  <!-- Background radial glow -->
+  <div
+    class="pointer-events-none absolute w-full h-full bg-linear-75 from-red-500/40 via-transparent via-5% md:via-10% -z-10"
+  >
+  </div>
+  <div
+    class="pointer-events-none absolute w-full h-full bg-linear-285 from-red-500/40 via-transparent via-5% md:via-10% -z-10"
+  >
+  </div>
   <div class="max-w-7xl mx-auto px-6 py-16 md:py-24 md:px-20">
-    <h2 class="font-display text-3xl md:text-4xl font-semibold tracking-tight text-text-primary">
+    <h2
+      class="font-display text-3xl md:text-4xl font-semibold tracking-tight text-text-primary"
+    >
       Works everywhere.
     </h2>
     <p class="mt-3 text-base text-text-secondary max-w-lg leading-relaxed">
-      One script tag works on any website. SDKs for React and Node.js. Native support for every major platform.
+      One script tag works on any website. SDKs for React and Node.js. Native
+      support for every major platform.
     </p>
 
-    <div class="mt-10 md:mt-12 grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10">
+    <div class="mt-10 md:mt-12 grid grid-cols-1 md:grid-cols-2 gap-4">
       <!-- Frameworks & SDKs -->
-      <div>
-        <p class="text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-3">
-          Frameworks & SDKs
-        </p>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {codeFrameworks.map((f) => (
-            <a
-              href={f.href}
-              class="flex items-center gap-3 border border-[#EBEBEB] hover:border-[#D0D0D0] hover:bg-bg-surface px-4 py-3 group no-underline transition-colors"
-            >
-              <img
-                src={`/logos/${f.slug}.svg`}
-                alt={f.name}
-                class="h-5 w-5 shrink-0 object-contain"
-              />
-              <span class="text-sm font-semibold text-text-primary group-hover:text-accent-500 transition-colors flex-1">
-                {f.name}
-              </span>
-              <span class:list={[
-                "text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 shrink-0",
-                badgeClasses(f.badge)
-              ]}>
-                {f.badge}
-              </span>
-            </a>
-          ))}
+      <div class="relative flex flex-col">
+        <!-- Chart label -->
+        <div class="flex items-end ml-6 mb-1">
+          <svg
+            class="overflow-visible shrink-0"
+            width="50"
+            height="20"
+            viewBox="0 0 50 20"
+            fill="none"
+          >
+            <circle cx="0" cy="20" r="4" fill="var(--accent)"></circle>
+            <polyline
+              points="0,20 16,4 50,4"
+              stroke="var(--accent)"
+              stroke-width="1"
+              stroke-opacity="0.4"
+              fill="none"></polyline>
+          </svg>
+          <span
+            class="text-[11px] font-semibold uppercase tracking-wider text-text-muted ml-1 -translate-y-[8px]"
+            >Frameworks & SDKs</span
+          >
+        </div>
+        <!-- Card -->
+        <div class="border border-border rounded-2xl p-6 md:p-8 flex-1">
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-y-6 gap-x-4">
+            {
+              codeFrameworks.map((f) => (
+                <a
+                  href={f.href}
+                  class="group flex flex-col items-center gap-2 no-underline rounded-xl p-3 transition-colors duration-200 hover:bg-white/5"
+                >
+                  <img
+                    src={`/logos/${f.slug}.svg`}
+                    alt={f.name}
+                    class:list={["h-8 w-8 shrink-0 object-contain", f.invert && "brightness-0 invert"]}
+                  />
+                  <span
+                    class:list={[
+                      "text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5",
+                      badgeClasses(f.badge),
+                    ]}
+                  >
+                    {f.badge}
+                  </span>
+                </a>
+              ))
+            }
+          </div>
         </div>
       </div>
 
       <!-- No-code & Low-code -->
-      <div>
-        <p class="text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-3">
-          No-code & Low-code
-        </p>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {nocodeTools.map((f) => (
-            <a
-              href={f.href}
-              class="flex items-center gap-3 border border-[#EBEBEB] hover:border-[#D0D0D0] hover:bg-bg-surface px-4 py-3 group no-underline transition-colors"
-            >
-              <img
-                src={`/logos/${f.slug}.svg`}
-                alt={f.name}
-                class="h-5 w-5 shrink-0 object-contain"
-              />
-              <span class="text-sm font-semibold text-text-primary group-hover:text-accent-500 transition-colors flex-1">
-                {f.name}
-              </span>
-              <span class:list={[
-                "text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 shrink-0",
-                badgeClasses(f.badge)
-              ]}>
-                {f.badge}
-              </span>
-            </a>
-          ))}
+      <div class="relative flex flex-col">
+        <!-- Chart label -->
+        <div class="flex items-end ml-6 mb-1">
+          <svg
+            class="overflow-visible shrink-0"
+            width="50"
+            height="20"
+            viewBox="0 0 50 20"
+            fill="none"
+          >
+            <circle cx="0" cy="20" r="4" fill="#a855f7"></circle>
+            <polyline
+              points="0,20 16,4 50,4"
+              stroke="#a855f7"
+              stroke-width="1"
+              stroke-opacity="0.4"
+              fill="none"></polyline>
+          </svg>
+          <span
+            class="text-[11px] font-semibold uppercase tracking-wider text-text-muted ml-1 -translate-y-[8px]"
+            >No-code & Low-code</span
+          >
+        </div>
+        <!-- Card -->
+        <div class="border border-border rounded-2xl p-6 md:p-8 flex-1">
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-y-6 gap-x-4">
+            {
+              nocodeTools.map((f) => (
+                <a
+                  href={f.href}
+                  class="group flex flex-col items-center gap-2 no-underline rounded-xl p-3 transition-colors duration-200 hover:bg-white/5"
+                >
+                  <img
+                    src={`/logos/${f.slug}.svg`}
+                    alt={f.name}
+                    class:list={["h-8 w-8 shrink-0 object-contain", f.invert && "brightness-0 invert"]}
+                  />
+                  <span
+                    class:list={[
+                      "text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5",
+                      badgeClasses(f.badge),
+                    ]}
+                  >
+                    {f.badge}
+                  </span>
+                </a>
+              ))
+            }
+          </div>
         </div>
       </div>
     </div>

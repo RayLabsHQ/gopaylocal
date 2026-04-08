@@ -11,9 +11,16 @@ const integrations = [
 ];
 ---
 
-<section id="integrations" class="border-t border-border bg-bg relative overflow-hidden">
+<section id="integrations" class="border-t border-border relative overflow-hidden">
   <!-- Background radial glow -->
-  <div class="absolute pointer-events-none inset-0" style="background: radial-gradient(ellipse 80% 60% at 50% 80%, rgba(202,63,22,0.12) 0%, transparent 70%);"></div>
+  <div
+    class="pointer-events-none absolute w-full h-full bg-linear-115 from-red-500/40 via-transparent via-5% md:via-10% -z-10"
+  >
+  </div>
+  <div
+    class="pointer-events-none absolute w-full h-full bg-linear-240 from-red-500/40 via-transparent via-5% md:via-10% -z-10"
+  >
+  </div>
 
   <div class="max-w-7xl mx-auto px-6 py-16 md:py-24 md:px-20 relative">
     <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-10 md:mb-12">
@@ -54,7 +61,7 @@ const integrations = [
             <img
               src={`/logos/wordmarks/${integration.slug}.svg`}
               alt={integration.name}
-              class={`${integration.height} w-auto object-contain object-left ${integration.offset || ''}`}
+              class={`${integration.height} w-full max-w-[140px] object-contain object-left ${integration.offset || ''}`}
             />
           </div>
           <p class="text-xs text-text-muted transition-colors duration-300 group-hover:text-text-secondary relative z-10">{integration.desc}</p>
