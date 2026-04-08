@@ -1,5 +1,5 @@
 ---
-import { faqItems } from '@/lib/landing-data';
+import FAQAccordion from './FAQAccordion';
 ---
 
 <section class="border-t border-border bg-bg">
@@ -8,15 +8,7 @@ import { faqItems } from '@/lib/landing-data';
     <p class="mt-4 text-base text-text-secondary">Everything you need to know about purchasing power parity pricing.</p>
 
     <div class="mt-12">
-      {faqItems.map((item, i) => (
-        <div class:list={[
-          "py-6",
-          i < faqItems.length - 1 && "border-b border-border"
-        ]}>
-          <h3 class="font-display text-base font-semibold text-text-primary">{item.question}</h3>
-          <p class="mt-3 text-sm text-text-secondary leading-relaxed max-w-3xl">{item.answer}</p>
-        </div>
-      ))}
+      <FAQAccordion client:visible />
     </div>
   </div>
 </section>
