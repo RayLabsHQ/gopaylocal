@@ -42,8 +42,9 @@ enabled = true
 # - "30 9 * * *": daily rebuild of the VPN / datacenter / Tor IP dataset in VPN_DATA.
 #   Must equal VPN_REFRESH_CRON in src/services/vpn-refresh.service.ts. Needs the
 #   Workers Paid plan (the Free plan allows 10 ms CPU per cron run, which is not enough).
-#   On Workers Free the run stops before it writes and leaves existing data alone; seed
-#   and refresh VPN_DATA with scripts/build-vpn-dataset.ts instead (see the guide).
+#   On Workers Free the run stops before it writes and leaves existing data alone; let
+#   .github/workflows/vpn-refresh.yml refresh VPN_DATA every day instead, or build it by
+#   hand with scripts/build-vpn-dataset.ts (see the guide).
 # - "40 */6 * * *": every 6 hours, fetches, checks and stores the exchange rates used
 #   for local prices (CACHE key fx:rates). Must equal FX_REFRESH_CRON in
 #   src/services/fx-refresh.service.ts. Sources: FX_RATES_URL and FX_RATES_FALLBACK_URL

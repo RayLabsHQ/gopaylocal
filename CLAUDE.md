@@ -128,6 +128,26 @@ submit — lands on `/dashboard` exactly like the OAuth flow.
 - `pnpm typecheck` — every package, plus the API tests and scripts
   (`apps/api/tsconfig.test.json`) and the e2e suite (`tsconfig.e2e.json`)
 
+### Scheduled GitHub workflows
+
+Besides `ci.yml` (typecheck, unit, integration and docs build on every push and pull request):
+
+- `provider-checks.yml` (nightly, and `gh workflow run provider-checks.yml -f provider=stripe`):
+  runs `verify:provider` against each provider's sandbox. A provider is checked once
+  its key exists as the repository secret `VERIFY_<PROVIDER>_API_KEY`; without it the
+  job reports "not set up". Never runs for pull requests.
+- `woocommerce-store.yml` (nightly, and on pull requests that touch the WooCommerce
+  integration): starts a real WooCommerce store in the job and checks coupon,
+  checkout link, order and webhook end to end. Uses no secrets.
+- `vpn-refresh.yml` (daily): rebuilds the VPN dataset and writes it to the `VPN_DATA`
+  KV namespace through Cloudflare's API, because the Worker's own cron cannot finish
+  on Workers Free. Needs the secrets `CLOUDFLARE_KV_API_TOKEN` and
+  `CLOUDFLARE_ACCOUNT_ID`; without them it reports "not set up".
+
+Guide for the first two: `apps/api/PROVIDER_VERIFICATION.md`. The status table there
+is the record of which integrations have been verified against a real account; do not
+describe an integration as verified beyond what it says.
+
 ### Toolchain notes
 
 - TypeScript 7 has no compiler API. `apps/web` (astro check) and the two SDKs (tsup

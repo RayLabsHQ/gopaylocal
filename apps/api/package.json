@@ -13,6 +13,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate || tsx scripts/migrate.ts",
     "vpn:build-dataset": "node scripts/build-vpn-dataset.ts",
+    "vpn:refresh": "node --experimental-transform-types --disable-warning=ExperimentalWarning --import ./scripts/verify-provider/register-ts-resolve.mjs scripts/refresh-vpn-dataset.ts",
     "verify:provider": "node --experimental-transform-types --disable-warning=ExperimentalWarning --import ./scripts/verify-provider/register-ts-resolve.mjs scripts/verify-provider.ts",
     "verify:provider:ci": "node --experimental-transform-types --disable-warning=ExperimentalWarning --import ./scripts/verify-provider/register-ts-resolve.mjs scripts/verify-provider/ci.ts",
     "clean": "rm -rf dist"

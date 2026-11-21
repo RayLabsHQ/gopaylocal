@@ -34,7 +34,7 @@ What self-hosted mode changes in practice:
 | Where data lives | GoPayLocal's Cloudflare account and database | Your Cloudflare account and your database |
 | Updates | Deployed by GoPayLocal | You pull and deploy them ([Upgrading](/self-hosting/upgrading/)) |
 | Old analytics | Deleted once they are 24 months old | Kept until you delete them yourself |
-| VPN data refresh | Automatic | Automatic on Workers Paid; by hand on Workers Free ([VPN detection](/guides/vpn-detection/#self-hosting-loading-the-data)) |
+| VPN data refresh | Automatic (a daily GitHub Actions job) | Automatic on Workers Paid; on Workers Free, the same GitHub Actions job or by hand ([VPN detection](/guides/vpn-detection/#self-hosting-loading-the-data)) |
 | Sign-in | Google and GitHub | The OAuth apps you create ([OAuth setup](/self-hosting/oauth/)) |
 | Team invitation emails | Sent | Only with your own Azure Communication Services resource (`ACS_CONNECTION_STRING`, `EMAIL_FROM` and `APP_BASE_URL`); see [Invitation emails](/self-hosting/configuration/#invitation-emails). Invitation links can always be copied from the dashboard. |
 

@@ -129,6 +129,23 @@ cd apps/api
 pnpm wrangler kv key get --binding VPN_DATA vpn:v1:status --remote --text
 ```
 
+### Workers Free: refresh every day from GitHub Actions
+
+The repository has a workflow for this, `.github/workflows/vpn-refresh.yml`. Once a day it runs the same refresh code as the Worker's cron on a GitHub runner, where CPU time is not limited, and writes the result to `VPN_DATA` through Cloudflare's API. It is what the hosted version uses.
+
+To turn it on in your copy of the repository on GitHub:
+
+1. In the Cloudflare dashboard, create an API token (**My Profile** > **API Tokens** > **Create Token** > **Create Custom Token**) with one permission, **Account** > **Workers KV Storage** > **Edit**, limited to your account. The token can write to every KV namespace in that account, so give it nothing else and keep it only in GitHub's secret store.
+2. In the GitHub repository, under **Settings** > **Secrets and variables** > **Actions**, add the secrets `CLOUDFLARE_KV_API_TOKEN` (the token) and `CLOUDFLARE_ACCOUNT_ID` (your account id).
+3. On the **Variables** tab of the same page, add `VPN_KV_NAMESPACE_ID` with the id of your `VPN_DATA` namespace, unless `apps/api/wrangler.toml` in your repository already has it.
+4. On the **Actions** tab, enable workflows if GitHub asks (it does in a fork), open **VPN list refresh** and choose **Run workflow** for the first load.
+
+The run's summary page lists each list and each section of the dataset. If a list looks wrong one day, that section keeps the previous day's data and the run says so. The workflow never runs for pull requests, so code from a fork cannot reach the token. GitHub pauses scheduled workflows in a repository with no activity for 60 days; the Actions tab then offers to turn them back on.
+
+Any other scheduler works too: `pnpm --filter @gopaylocal/api vpn:refresh` does the same with `CLOUDFLARE_KV_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the environment.
+
+With this in place you can delete `"30 9 * * *"` from `[triggers]` (and from `VPN_REFRESH_CRON`, which a test compares with it) to avoid a daily cut-off run in the Worker.
+
 ### Workers Free: build locally and upload
 
 The free plan gives a cron trigger 10 ms of CPU, far less than processing the lists takes. The run is expected to be cut off before it reaches the write, so existing data is left alone, but the data is not refreshed either. You can delete `"30 9 * * *"` from `[triggers]` to avoid a daily failed run. Build the dataset on your machine instead (Node 22.18 or newer, which [runs TypeScript natively](https://nodejs.org/api/typescript.html); no extra packages):

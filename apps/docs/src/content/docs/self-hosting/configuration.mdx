@@ -35,7 +35,7 @@ Rate limits are counted separately in each Cloudflare location, and `namespace_i
 | Schedule (UTC) | Job |
 |---|---|
 | `*/10 * * * *` | Recomputes each organization's monthly API-call usage, and retries provider redemption webhooks that could not be processed when they arrived. Its 03:00 run also deletes sign-in sessions that expired more than a day ago. Analytics are never deleted on a self-hosted deployment |
-| `30 9 * * *` | Rebuilds the VPN dataset in `VPN_DATA`. Needs Workers Paid; see [Cloudflare plan](/self-hosting/#cloudflare-plan) |
+| `30 9 * * *` | Rebuilds the VPN dataset in `VPN_DATA`. Needs Workers Paid; on Workers Free a GitHub Actions job does it instead. See [Cloudflare plan](/self-hosting/#cloudflare-plan) |
 | `40 */6 * * *` | Refreshes the exchange rates used for local prices (`fx:rates` in `CACHE`). Its CPU use has not been measured on Workers Free. If it has not run, banners still work and show exact prices in your product's currency, with no converted estimate. |
 
 ## Variables

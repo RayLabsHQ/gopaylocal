@@ -22,8 +22,9 @@ enabled = true
 #   ~10-min enforcement lag.
 # - "30 9 * * *": daily VPN/datacenter/Tor IP dataset refresh into VPN_DATA
 #   (services/vpn-refresh.service.ts). Must equal VPN_REFRESH_CRON there (a unit test
-#   checks it). Needs Workers Paid: the free plan's 10 ms cron CPU limit is too small,
-#   so on free, seed with scripts/build-vpn-dataset.ts instead.
+#   checks it). Needs Workers Paid: the free plan's 10 ms cron CPU limit is too small.
+#   On free, .github/workflows/vpn-refresh.yml does the same refresh every day from a
+#   GitHub runner (scripts/refresh-vpn-dataset.ts).
 # - "40 */6 * * *": exchange rates for local prices into CACHE `fx:rates`
 #   (services/fx-refresh.service.ts). Must equal FX_REFRESH_CRON there (a unit test
 #   checks it). About 0.5 ms of CPU per run in Node (first run in a fresh process:

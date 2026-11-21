@@ -84,7 +84,8 @@ integrations and the API.
 
 A self-hosted install runs the same code with `SELF_HOSTED="true"`: every organization
 is unlimited, the banner has no GoPayLocal link, and billing is switched off. You need a
-Cloudflare account (Workers Paid is recommended; the daily VPN-list refresh needs it),
+Cloudflare account (Workers Paid is recommended; on Workers Free the daily VPN-list
+refresh runs from a GitHub Actions job instead of the Worker),
 Postgres 15 or newer reachable over TLS, and a Google or GitHub OAuth app.
 
 The setup guide is at

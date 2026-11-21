@@ -145,7 +145,7 @@ Only users with the admin role can use it; see [First admin user](/self-hosting/
 ## 9. Load the VPN data
 
 - **Workers Paid:** the daily cron (`30 9 * * *`, UTC) loads and refreshes the data. Nothing to do.
-- **Workers Free:** build the dataset on your computer and upload it with Wrangler, then repeat now and then. Follow [VPN detection: Workers Free](/guides/vpn-detection/#workers-free-build-locally-and-upload).
+- **Workers Free:** let the daily GitHub Actions job do it ([VPN detection: refresh from GitHub Actions](/guides/vpn-detection/#workers-free-refresh-every-day-from-github-actions)), or build the dataset on your computer and upload it with Wrangler now and then ([by hand](/guides/vpn-detection/#workers-free-build-locally-and-upload)).
 
 Until the data is loaded, VPN detection only checks the visitor's network against a built-in list of datacenter and VPN networks.
 
