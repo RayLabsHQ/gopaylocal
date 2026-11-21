@@ -1,0 +1,177 @@
+---
+import { Button } from '../ui/button';
+import ComparisonTable from './ComparisonTable.astro';
+import ComparisonSources from './ComparisonSources.astro';
+import FinalCTASection from './FinalCTASection.astro';
+import {
+  COMPARISON_CHECKED_ON,
+  CTA_SUBTITLE,
+  competitorList,
+  gopaylocalListing,
+  otherOptions,
+  type Competitor,
+} from '@/lib/comparison-data';
+
+interface Props {
+  competitor: Competitor;
+}
+
+const { competitor } = Astro.props;
+const others = competitorList.filter((c) => c.slug !== competitor.slug);
+
+interface Option {
+  name: string;
+  summary: string;
+  price: string;
+  calls: string;
+  openSource: string;
+  goodFit: string;
+  href: string;
+  linkLabel: string;
+  ours?: boolean;
+}
+
+const options: Option[] = [
+  { ...gopaylocalListing, ours: true },
+  ...others.map((other) => ({
+    name: other.name,
+    summary: other.summary,
+    price: other.listing.price,
+    calls: other.listing.calls,
+    openSource: other.cells.openSource,
+    goodFit: other.listing.goodFit,
+    href: `/vs/${other.slug}`,
+    linkLabel: `GoPayLocal vs ${other.name}`,
+  })),
+  ...otherOptions,
+];
+
+const sources = [competitor, ...others].map((c) => ({ label: c.sourceLabel, href: c.sourceUrl }));
+---
+
+<!-- Hero -->
+<section class="pt-24 pb-16">
+  <div class="max-w-7xl mx-auto px-6 md:px-20">
+    <div class="flex items-center gap-2 mb-6">
+      <span class="h-2 w-2 bg-accent-500 inline-block"></span>
+      <span class="text-sm font-medium text-text-secondary">Alternatives, checked {COMPARISON_CHECKED_ON}</span>
+    </div>
+
+    <h1 class="font-display text-4xl sm:text-5xl md:text-6xl font-bold tracking-[-2px] leading-[1.05]">
+      {competitor.name} alternatives
+    </h1>
+
+    <p class="mt-6 text-base sm:text-lg text-text-secondary leading-[1.7] max-w-2xl">
+      {options.length} other ways to give visitors a price that fits their country, compared on price, call limits and
+      openness. We make the first one. The others are described from their own websites.
+    </p>
+
+    <div class="mt-8 flex flex-wrap items-center gap-4">
+      <Button href="https://app.gopaylocal.com" variant="primary" size="md" client:load>
+        Start Free
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+        </svg>
+      </Button>
+      <Button href={`/vs/${competitor.slug}`} variant="secondary" size="md" client:load>
+        GoPayLocal vs {competitor.name}
+      </Button>
+    </div>
+  </div>
+</section>
+
+<!-- Why look -->
+<section class="border-y border-border bg-bg-surface">
+  <div class="max-w-7xl mx-auto px-6 py-16 md:py-24 md:px-20">
+    <h2 class="font-display text-3xl md:text-4xl font-semibold tracking-tight leading-tight text-text-primary">
+      Why people look past {competitor.name}
+    </h2>
+    <p class="mt-4 max-w-prose text-base text-text-secondary leading-relaxed">{competitor.summary}</p>
+    <ul class="mt-10 grid grid-cols-1 gap-x-12 gap-y-6 md:grid-cols-2">
+      {competitor.whyLook.map((fact) => (
+        <li class="flex gap-4 border-t border-border pt-5">
+          <span class="mt-2 h-2 w-2 shrink-0 bg-accent-500"></span>
+          <span class="text-base text-text-primary leading-relaxed">{fact}</span>
+        </li>
+      ))}
+    </ul>
+    <div class="mt-12 max-w-3xl">
+      <ComparisonTable
+        caption={`${competitor.name}'s plans`}
+        corner="Plan"
+        columns={['Price', 'Includes']}
+        emphasize={-1}
+        rows={competitor.plans.map((plan) => ({ label: plan.name, cells: [plan.price, plan.includes] }))}
+      />
+    </div>
+  </div>
+</section>
+
+<!-- The options -->
+<section>
+  <div class="max-w-7xl mx-auto px-6 py-16 md:py-24 md:px-20">
+    <h2 class="font-display text-3xl md:text-4xl font-semibold tracking-tight leading-tight text-text-primary">The alternatives</h2>
+    <ol class="mt-12">
+      {options.map((option, index) => (
+        <li class="grid grid-cols-1 gap-6 border-t-2 border-text-primary py-10 md:grid-cols-[5rem_1fr_18rem] md:gap-10">
+          <p class="font-mono text-sm text-accent-text tabular-nums md:pt-1.5">0{index + 1}</p>
+          <div>
+            <h3 class="font-display text-2xl font-semibold leading-snug text-text-primary">
+              {option.name}
+              {option.ours && (
+                <span class="ml-3 align-middle border border-accent-500 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-accent-text">Ours</span>
+              )}
+            </h3>
+            <p class="mt-3 max-w-prose text-base text-text-secondary leading-relaxed">{option.summary}</p>
+            <p class="mt-4 max-w-prose text-base text-text-primary leading-relaxed">
+              <span class="font-semibold">A good fit when:</span> {option.goodFit}
+            </p>
+            <p class="mt-4">
+              <a
+                href={option.href}
+                rel={option.href.startsWith('http') ? 'noopener nofollow' : undefined}
+                class="text-sm font-medium text-text-primary underline underline-offset-4"
+              >{option.linkLabel}</a>
+            </p>
+          </div>
+          <dl class="grid grid-cols-2 gap-x-6 gap-y-4 self-start text-sm md:grid-cols-1">
+            <div>
+              <dt class="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Price</dt>
+              <dd class="mt-1 text-text-primary tabular-nums">{option.price}</dd>
+            </div>
+            <div>
+              <dt class="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Calls a month</dt>
+              <dd class="mt-1 text-text-primary tabular-nums">{option.calls}</dd>
+            </div>
+            <div>
+              <dt class="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Open source</dt>
+              <dd class="mt-1 text-text-primary">{option.openSource}</dd>
+            </div>
+          </dl>
+        </li>
+      ))}
+    </ol>
+  </div>
+</section>
+
+<!-- More comparisons -->
+<section class="border-t border-border">
+  <div class="max-w-7xl mx-auto px-6 py-12 md:px-20">
+    <h2 class="text-[11px] font-semibold uppercase tracking-wider text-text-muted">More comparisons</h2>
+    <ul class="mt-4 flex flex-wrap gap-x-8 gap-y-3 text-base">
+      <li><a href={`/vs/${competitor.slug}`} class="font-medium text-text-primary underline underline-offset-4">GoPayLocal vs {competitor.name}</a></li>
+      {others.map((other) => (
+        <li><a href={`/alternatives/${other.slug}`} class="font-medium text-text-primary underline underline-offset-4">{other.name} alternatives</a></li>
+      ))}
+      <li><a href="/compare" class="font-medium text-text-primary underline underline-offset-4">All comparisons</a></li>
+    </ul>
+  </div>
+</section>
+
+<ComparisonSources sources={sources} />
+
+<FinalCTASection
+  title={`One flat price.\nOpen source.`}
+  subtitle={CTA_SUBTITLE}
+  dark={false}
+/>

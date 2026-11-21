@@ -67,10 +67,24 @@ Client-side JS on index checks UTM params and redirects. Cookie persists variant
 - `/use-cases/online-courses` — Course creators (Teachable, Podia, etc.)
 - `/use-cases/developer-tools` — Dev tool companies
 
+### Comparison Pages (SEO)
+
+- `/vs/paritydeals`, `/vs/parityvend`, `/vs/parity-kit` — GoPayLocal next to one other product
+- `/alternatives/paritydeals`, `/alternatives/parityvend`, `/alternatives/parity-kit` — the other ways to do PPP pricing
+- `/compare` — the hub that links to all six
+
+All of their content is in `src/lib/comparison-data.ts`. What it says about GoPayLocal is
+computed from the shared plan constants. What it says about another product comes from that
+product's own website, read on `COMPARISON_CHECKED_ON`; where the site says nothing the page
+says "not listed", never that the product lacks something. Each page has a section on when
+the other product is the better choice: keep it. When you re-read the sources, update the
+facts and the date together.
+
 ### Key Files
 
 - `src/lib/landing-data.ts` — All 3 variant content datasets + pricing cards
 - `src/lib/use-case-data.ts` — All 4 use case content datasets
+- `src/lib/comparison-data.ts` — The comparison pages' content (other products' facts are dated)
 - `src/lib/utm-router.ts` — UTM routing logic
 - `src/components/ui/button.tsx` — shadcn/ui Button (CVA variants: primary/secondary/ghost/dark)
 - `src/components/ui/badge.tsx` — shadcn/ui Badge

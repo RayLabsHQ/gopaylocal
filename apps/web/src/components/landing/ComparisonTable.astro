@@ -1,0 +1,59 @@
+---
+/**
+ * A comparison table that is a real <table> on wide screens and a stack of
+ * labelled blocks on narrow ones (each cell shows its column name), so a row
+ * with long cells never forces the page to scroll sideways.
+ */
+interface Props {
+  /** Read by screen readers. */
+  caption: string;
+  /** Header of the first (row label) column. */
+  corner?: string;
+  columns: string[];
+  rows: { label: string; cells: string[] }[];
+  /** Index of the column to set in the primary text color. */
+  emphasize?: number;
+}
+
+const { caption, corner = '', columns, rows, emphasize = 0 } = Astro.props;
+---
+
+<table class="w-full border-collapse text-left">
+  <caption class="sr-only">{caption}</caption>
+  <thead class="hidden md:table-header-group">
+    <tr class="border-b-2 border-text-primary">
+      <th scope="col" class="w-[22%] py-4 pr-6 align-bottom text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+        {corner}
+      </th>
+      {columns.map((column) => (
+        <th scope="col" class="py-4 pr-6 align-bottom font-display text-lg font-semibold text-text-primary">
+          {column}
+        </th>
+      ))}
+    </tr>
+  </thead>
+  <tbody>
+    {rows.map((row) => (
+      <tr class="block border-b border-border py-6 md:table-row md:py-0">
+        <th
+          scope="row"
+          class="block pb-3 font-display text-lg font-semibold text-text-primary md:table-cell md:py-5 md:pr-6 md:align-top md:font-sans md:text-sm md:font-medium md:text-text-secondary"
+        >
+          {row.label}
+        </th>
+        {row.cells.map((cell, index) => (
+          <td
+            data-label={columns[index]}
+            class:list={[
+              'block pb-3 text-base leading-relaxed tabular-nums last:pb-0 md:table-cell md:py-5 md:pr-6 md:align-top md:last:pb-5',
+              "before:block before:pb-1 before:text-[11px] before:font-semibold before:uppercase before:tracking-wider before:text-text-muted before:content-[attr(data-label)] md:before:hidden",
+              index === emphasize ? 'text-text-primary' : 'text-text-secondary',
+            ]}
+          >
+            {cell}
+          </td>
+        ))}
+      </tr>
+    ))}
+  </tbody>
+</table>

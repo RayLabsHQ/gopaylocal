@@ -1,0 +1,22 @@
+---
+import SwissLayout from '../../layouts/SwissLayout.astro';
+import AlternativesPage from '../../components/landing/AlternativesPage.astro';
+import { competitorList, type Competitor } from '@/lib/comparison-data';
+
+export function getStaticPaths() {
+  return competitorList.map((competitor) => ({ params: { competitor: competitor.slug }, props: { competitor } }));
+}
+
+interface Props {
+  competitor: Competitor;
+}
+
+const { competitor } = Astro.props;
+---
+
+<SwissLayout
+  title={`${competitor.name} alternatives: PPP pricing tools compared`}
+  description={`Alternatives to ${competitor.name} for purchasing power parity pricing, compared on price, call limits and open source: GoPayLocal, other hosted tools, your payment platform's own setting, and building it yourself.`}
+>
+  <AlternativesPage competitor={competitor} />
+</SwissLayout>

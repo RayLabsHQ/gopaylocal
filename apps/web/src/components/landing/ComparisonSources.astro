@@ -1,0 +1,28 @@
+---
+import { COMPARISON_CHECKED_ON } from '@/lib/comparison-data';
+
+interface Props {
+  /** The pages the other products' facts were read from. */
+  sources: { label: string; href: string }[];
+}
+
+const { sources } = Astro.props;
+---
+
+<section class="border-t border-border">
+  <div class="max-w-7xl mx-auto px-6 py-12 md:px-20">
+    <h2 class="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Sources</h2>
+    <p class="mt-4 max-w-prose text-sm leading-relaxed text-text-secondary">
+      What this page says about other products comes from their own websites, read on {COMPARISON_CHECKED_ON}:
+      {sources.map((source, index) => (
+        <>
+          <a href={source.href} rel="noopener nofollow" class="underline underline-offset-4 hover:text-text-primary">{source.label}</a>{index < sources.length - 1 ? ', ' : '.'}
+        </>
+      ))}
+      Prices and plans change, so check their sites before you decide. Where a site says nothing about a feature, this
+      page says so and does not guess. Product names belong to their owners; GoPayLocal is not affiliated with them.
+      Found something out of date? Open an issue on
+      <a href="https://github.com/RayLabsHQ/gopaylocal/issues" class="underline underline-offset-4 hover:text-text-primary">GitHub</a>.
+    </p>
+  </div>
+</section>

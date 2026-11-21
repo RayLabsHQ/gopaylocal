@@ -1,0 +1,22 @@
+---
+import SwissLayout from '../../layouts/SwissLayout.astro';
+import VersusPage from '../../components/landing/VersusPage.astro';
+import { competitorList, type Competitor } from '@/lib/comparison-data';
+
+export function getStaticPaths() {
+  return competitorList.map((competitor) => ({ params: { competitor: competitor.slug }, props: { competitor } }));
+}
+
+interface Props {
+  competitor: Competitor;
+}
+
+const { competitor } = Astro.props;
+---
+
+<SwissLayout
+  title={`GoPayLocal vs ${competitor.name}: price, call limits and features compared`}
+  description={`GoPayLocal and ${competitor.name} side by side: what each plan costs and includes, payment platforms, VPN blocking, A/B testing and open source. Includes where ${competitor.name} is the better choice.`}
+>
+  <VersusPage competitor={competitor} />
+</SwissLayout>
