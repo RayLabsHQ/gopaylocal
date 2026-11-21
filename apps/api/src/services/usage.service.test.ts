@@ -7,6 +7,7 @@ import {
 } from "../db/schema";
 import type { Database } from "../db";
 import { createMockKV } from "../test/helpers";
+import { discountEpochKey } from "./parity.service";
 import {
   getQuotaState,
   isOverQuota,
@@ -134,6 +135,112 @@ describe("recomputeUsageForAllOrgs (hosted)", () => {
     // Next run with a healthy database records it.
     await recomputeUsageForAllOrgs(fakeDb(cronRows()), kv);
     expect(await kv.get("branding:org_pro")).toBe("0");
+  });
+});
+
+describe("recomputeUsageForAllOrgs: KV is written only when a snapshot changes", () => {
+  /** Rows for one organization: its calls this month and, optionally, an active Pro subscription. */
+  function orgRows(orgId: string, calls: number, pro = false) {
+    return new Map<object, unknown[] | Error>([
+      [apiUsageDaily, [{ organizationId: orgId, calls }]],
+      [
+        subscriptions,
+        pro
+          ? [{ organizationId: orgId, plan: "pro", status: "active", currentPeriodEnd: new Date(Date.now() + 10 * DAY) }]
+          : [],
+      ],
+      [organizationLimitOverrides, []],
+    ]);
+  }
+  /** Runs the cron and returns the KV keys it wrote and read. */
+  async function run(kv: KVNamespace, rows: Map<object, unknown[] | Error>) {
+    const put = vi.spyOn(kv, "put");
+    const get = vi.spyOn(kv, "get");
+    await recomputeUsageForAllOrgs(fakeDb(rows), kv, { SELF_HOSTED: "false" });
+    const result = { puts: put.mock.calls.map((c) => String(c[0])), gets: get.mock.calls.map((c) => String(c[0])) };
+    put.mockRestore();
+    get.mockRestore();
+    return result;
+  }
+
+  it("the first run writes the snapshot; a run that changes nothing writes nothing and reads one key per org", async () => {
+    const kv = createMockKV();
+    const first = await run(kv, cronRows());
+    expect(first.puts.filter((k) => k.startsWith("usage:"))).toHaveLength(5);
+
+    const second = await run(kv, cronRows());
+    expect(second.puts).toEqual([]);
+    expect(second.gets.sort()).toEqual(
+      ["org_free", "org_free_under", "org_pro", "org_business", "org_override"].map((o) => usageKey(o)).sort(),
+    );
+  });
+
+  it("a growing count alone is not written; reaching the cap is, and so is the cap being lifted", async () => {
+    const kv = createMockKV();
+    await run(kv, orgRows("org_a", 100));
+    expect((await run(kv, orgRows("org_a", 9_999))).puts).toEqual([]);
+    expect(await snapshot(kv, "org_a")).toMatchObject({ count: 100, over: false });
+
+    expect((await run(kv, orgRows("org_a", 10_000))).puts).toEqual([usageKey("org_a")]);
+    expect(await snapshot(kv, "org_a")).toMatchObject({ count: 10_000, limit: 10_000, over: true });
+    expect(await isOverQuota(kv, "org_a")).toBe(true);
+
+    // An upgrade: the limit and the branding bit change, so the documents are
+    // rebuilt (the epoch write is the rebuild) and the snapshot is rewritten.
+    const upgraded = await run(kv, orgRows("org_a", 10_500, true));
+    expect(upgraded.puts.sort()).toEqual(["branding:org_a", discountEpochKey("org_a"), usageKey("org_a")].sort());
+    expect(await snapshot(kv, "org_a")).toMatchObject({ limit: null, over: false, branding: "0" });
+    expect(await isOverQuota(kv, "org_a")).toBe(false);
+    expect((await run(kv, orgRows("org_a", 11_000, true))).puts).toEqual([]);
+  });
+
+  it("a new month writes a new snapshot without a rebuild: the marker key carries the branding bit over", async () => {
+    const kv = createMockKV();
+    await kv.put("branding:org_a", "1"); // applied in an earlier month
+    const result = await run(kv, orgRows("org_a", 3));
+    expect(result.puts).toEqual([usageKey("org_a")]);
+    expect(await snapshot(kv, "org_a")).toMatchObject({ count: 3, over: false, branding: "1" });
+    expect(result.gets.sort()).toEqual(["branding:org_a", usageKey("org_a")].sort());
+  });
+
+  it("a snapshot from before the branding field existed is completed once, without a rebuild", async () => {
+    const kv = createMockKV();
+    await kv.put("branding:org_a", "1");
+    await kv.put(usageKey("org_a"), JSON.stringify({ count: 5, limit: 10_000, over: false, updatedAt: "2026-11-01T00:00:00.000Z" }));
+    expect((await run(kv, orgRows("org_a", 6))).puts).toEqual([usageKey("org_a")]);
+    expect(await snapshot(kv, "org_a")).toMatchObject({ branding: "1" });
+    const next = await run(kv, orgRows("org_a", 7));
+    expect(next.puts).toEqual([]);
+    expect(next.gets).toEqual([usageKey("org_a")]);
+  });
+
+  it("an unreadable snapshot is replaced", async () => {
+    const kv = createMockKV();
+    await kv.put("branding:org_a", "1");
+    await kv.put(usageKey("org_a"), "not json");
+    expect((await run(kv, orgRows("org_a", 6))).puts).toEqual([usageKey("org_a")]);
+    expect(await snapshot(kv, "org_a")).toMatchObject({ count: 6, limit: 10_000, over: false, branding: "1" });
+  });
+
+  it("after a failed rebuild the snapshot does not claim the branding bit, and every run retries until one succeeds", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const kv = createMockKV();
+    const failing = orgRows("org_a", 50, true);
+    failing.set(apiKeys, new Error("connection reset"));
+
+    const first = await run(kv, failing);
+    expect(first.puts).toContain(usageKey("org_a"));
+    expect(first.puts).not.toContain("branding:org_a");
+    expect((await snapshot(kv, "org_a")).branding).toBeUndefined();
+
+    // Still failing: retried (the epoch write is the attempt), nothing recorded.
+    const second = await run(kv, failing);
+    expect(second.puts).toEqual([discountEpochKey("org_a")]);
+
+    const third = await run(kv, orgRows("org_a", 60, true));
+    expect(third.puts.sort()).toEqual(["branding:org_a", discountEpochKey("org_a"), usageKey("org_a")].sort());
+    expect(await snapshot(kv, "org_a")).toMatchObject({ limit: null, branding: "0" });
+    expect((await run(kv, orgRows("org_a", 70, true))).puts).toEqual([]);
   });
 });
 

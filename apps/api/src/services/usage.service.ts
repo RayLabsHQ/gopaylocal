@@ -10,12 +10,17 @@
 // could post them, or not post them).
 //
 // Design: a cron (see index.ts `scheduled`) sums each org's month-to-date LIVE
-// calls from api_usage_daily and writes a small per-org snapshot to KV under
-// `usage:{orgId}:{YYYYMM}`. The banner endpoint reads that snapshot (one cheap
-// KV read it already does) and stops serving when `over` is set. Enforcement
-// lags by up to the cron interval, which is fine for a billing cap. The month
-// is in the key, so usage resets each month. Unlimited orgs get
-// `limit: null, over: false` (null, not Infinity, so it survives JSON).
+// calls from api_usage_daily and keeps a small per-org snapshot in KV under
+// `usage:{orgId}:{YYYYMM}`. The banner endpoint reads that snapshot and stops
+// serving when `over` is set. Enforcement lags by up to the cron interval,
+// which is fine for a billing cap. The month is in the key, so usage resets
+// each month. Unlimited orgs get `limit: null, over: false` (null, not
+// Infinity, so it survives JSON).
+//
+// The snapshot is written only when what is read from it changes: the first
+// run of a month, a cap reached or lifted, a changed limit, a changed branding
+// bit. A run that changes nothing writes nothing, so `count` and `updatedAt`
+// in KV are those of the last write; the current count is in api_usage_daily.
 
 import { sql } from "drizzle-orm";
 import { hasReachedLimit } from "@gopaylocal/shared";
@@ -32,11 +37,35 @@ import { errorSummary } from "../lib/log";
 import { pushBannerConfigForOrg } from "./banner-cache.service";
 
 export interface UsageSnapshot {
+  /** Month-to-date live calls when the snapshot was last written (not kept current). */
   count: number;
   /** null = unlimited. */
   limit: Limit;
   over: boolean;
+  /** When the snapshot was last written. */
   updatedAt: string;
+  /**
+   * The branding bit ("1" shown, "0" hidden) the banner documents were last
+   * known to be built with. Missing in snapshots written before the field
+   * existed, and when no rebuild has succeeded yet.
+   */
+  branding?: BrandingBit;
+}
+
+type BrandingBit = "0" | "1";
+
+const brandingBit = (value: unknown): BrandingBit | null => (value === "0" || value === "1" ? value : null);
+
+/** The stored snapshot, or null when there is none or it cannot be read. */
+async function readSnapshot(kv: KVNamespace, key: string): Promise<Partial<UsageSnapshot> | null> {
+  try {
+    const raw = await kv.get(key);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? (parsed as Partial<UsageSnapshot>) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** `YYYYMM` for the given instant, in UTC (the Workers runtime timezone). */
@@ -93,7 +122,8 @@ export async function isOverQuota(
 
 /**
  * Cron job: recompute month-to-date usage for every org with live API calls
- * this month and write the snapshot to KV. Pass the Worker `env` so
+ * this month and bring its KV snapshot up to date (one read per org; a write
+ * only when the snapshot changes). Pass the Worker `env` so
  * self-hosted deployments resolve as unlimited; the banner endpoint also skips
  * the quota check when self-hosted, so a missing env can't block banners.
  */
@@ -150,29 +180,24 @@ export async function recomputeUsageForAllOrgs(
       const limit = ent.limits.apiHitsPerMonth;
       const count = Number(row.calls) || 0;
 
-      const snapshot: UsageSnapshot = {
-        count,
-        limit,
-        over: hasReachedLimit(count, limit),
-        updatedAt: now.toISOString(),
-      };
-
-      await kv.put(usageKey(row.organizationId, now), JSON.stringify(snapshot), {
-        expirationTtl,
-      });
+      const over = hasReachedLimit(count, limit);
+      const key = usageKey(row.organizationId, now);
+      const previous = await readSnapshot(kv, key);
 
       // Reconcile plan-derived banner branding. The banner document only
       // rebuilds on dashboard edits and on the upgrade webhook, so a downgrade
       // at subscription period-end (no Dodo event fires then) has no rebuild
       // trigger of its own. Here it is bounded to one cron interval for orgs
       // with live traffic, the only orgs whose stale branding anyone would
-      // see. A tiny per-org marker tracks the last-applied branding bit so we
-      // rebuild ONLY when it diverges, and it is written only after a
-      // successful rebuild, so a failed one is retried on the next run.
-      const marker = ent.showBranding ? "1" : "0";
+      // see. The last-applied bit is kept in the snapshot, and in a per-org
+      // marker key that carries it across months; we rebuild ONLY when it
+      // diverges, and record it only after a successful rebuild, so a failed
+      // one is retried on the next run.
+      const marker: BrandingBit = ent.showBranding ? "1" : "0";
       const markerKey = `branding:${row.organizationId}`;
-      const prevMarker = await kv.get(markerKey).catch(() => null);
-      if (prevMarker !== marker) {
+      let applied = brandingBit(previous?.branding);
+      if (applied === null) applied = brandingBit(await kv.get(markerKey).catch(() => null));
+      if (applied !== marker) {
         const rebuilt = await pushBannerConfigForOrg(db, kv, row.organizationId, deployment).then(
           () => true,
           (err: unknown) => {
@@ -183,8 +208,27 @@ export async function recomputeUsageForAllOrgs(
             return false;
           },
         );
-        if (rebuilt) await kv.put(markerKey, marker, { expirationTtl }).catch(() => {});
+        if (rebuilt) {
+          await kv.put(markerKey, marker, { expirationTtl }).catch(() => {});
+          applied = marker;
+        }
       }
+
+      const unchanged =
+        previous !== null &&
+        previous.limit === limit &&
+        previous.over === over &&
+        brandingBit(previous.branding) === applied;
+      if (unchanged) return;
+
+      const snapshot: UsageSnapshot = {
+        count,
+        limit,
+        over,
+        updatedAt: now.toISOString(),
+        ...(applied !== null && { branding: applied }),
+      };
+      await kv.put(key, JSON.stringify(snapshot), { expirationTtl });
     }),
   );
 }
