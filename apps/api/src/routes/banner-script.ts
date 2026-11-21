@@ -6,7 +6,7 @@ import { apiKeys, subscriptions } from "../db/schema";
 import { getDiscountForCountry } from "../services/parity.service";
 import { isVpnOrProxy } from "../services/vpn-detect.service";
 import { kvGet } from "../lib/kv";
-import { getQuotaState } from "../services/usage.service";
+import { getQuotaState, usageKey, type QuotaState } from "../services/usage.service";
 import { bannerShowsBranding, resolveEntitlements } from "../lib/entitlements";
 import { COUNTRY_NAMES } from "@gopaylocal/shared/constants";
 import { localPricing } from "@gopaylocal/shared/currency";
@@ -35,88 +35,50 @@ import {
   type ProductServing,
 } from "../services/banner-selection";
 import { usageMeter, writeUsageRows } from "../services/usage-meter";
+import { impressionMeter, writeImpressionRows } from "../services/impression-meter";
+import { apiKeyCache, quotaCache } from "../services/banner-hot-cache";
 import { enforceRateLimit } from "../lib/rate-limit";
 import { errorSummary, logBannerPushFailure } from "../lib/log";
-import { SECRET_KEY_NOT_ALLOWED, SECRET_KEY_NOT_ALLOWED_JS, isSecretKey } from "../lib/public-key";
+import { SECRET_KEY_NOT_ALLOWED, isSecretKey } from "../lib/public-key";
 // @ts-expect-error -- text module import handled by wrangler's esbuild bundler
 import bannerBundleJs from "../../../../packages/banner/dist/banner.js";
 
 const app = new Hono<AppEnv>();
 
 /**
- * Characters a public key can contain (`gpl_pk_` + hex; test keys use
- * letters, digits, `_` and `-`). Anything else is refused before it can reach
- * the generated JavaScript.
+ * GET /v1/banner/script.js and GET /v1/banner/bundle.js: the banner itself.
+ *
+ * In a deployment these two paths are static assets (wrangler.toml [assets],
+ * filled by scripts/build-assets.mjs from packages/banner/dist): Cloudflare
+ * answers them before the Worker runs, and requests for static assets are not
+ * billed. These handlers answer only where the assets are absent (the tests, a
+ * deployment whose wrangler.toml has no [assets]), with the same file and the
+ * same cache times as assets/_headers.
+ *
+ * script.js used to be a loader that injected bundle.js. Both are the banner
+ * now, so a visitor fetches one script instead of two; bundle.js stays for
+ * pages that cached the old loader. The file is the same for every key, so
+ * nothing from the request is written into it: the banner reads its key from
+ * its own <script> tag, and refuses a secret key there
+ * (packages/banner/src/index.ts).
  */
-const PUBLIC_KEY_RE = /^[A-Za-z0-9_-]{1,200}$/;
+function serveBanner(maxAgeSeconds: number) {
+  return async (c: Context<AppEnv>) => {
+    // Same generous per-IP limit as the config hot path (cheap static response).
+    // Skip the gate when the IP is empty — don't bucket header-less traffic on "".
+    const ip = c.req.header("cf-connecting-ip") ?? "";
+    const limited = ip ? await enforceRateLimit(c, c.env.RL_BANNER_IP, `ip:${ip}`) : null;
+    if (limited) return limited;
 
-/**
- * The loader script body. The bundle URL is built with URL/searchParams and
- * embedded as a JSON string literal, so nothing in `key` can break out of the
- * string (encodeURIComponent alone leaves `'` as is, which closed the old
- * single-quoted literal).
- */
-export function buildLoaderScript(apiBase: string, key: string): string {
-  const src = new URL("/v1/banner/bundle.js", apiBase);
-  src.searchParams.set("key", key);
-  return `(function(){var s=document.createElement('script');s.src=${JSON.stringify(src.toString())};s.async=true;document.head.appendChild(s)})();`;
+    return c.text(bannerBundleJs as string, 200, {
+      "Content-Type": "application/javascript",
+      "Cache-Control": `public, max-age=${maxAgeSeconds}`,
+    });
+  };
 }
 
-/**
- * GET /v1/banner/script.js?key=gpl_pk_xxx
- * Returns a loader script that fetches the full banner bundle.
- */
-app.get("/v1/banner/script.js", async (c) => {
-  // Same generous per-IP limit as the config hot path (cheap static response).
-  // Skip the gate when the IP is empty — don't bucket header-less traffic on "".
-  const ip = c.req.header("cf-connecting-ip") ?? "";
-  const limited = ip
-    ? await enforceRateLimit(c, c.env.RL_BANNER_IP, `ip:${ip}`)
-    : null;
-  if (limited) return limited;
-
-  const key = c.req.query("key");
-  if (!key) {
-    return c.text("// Missing API key", 400, {
-      "Content-Type": "application/javascript",
-    });
-  }
-  if (isSecretKey(key)) {
-    // Never write a secret key into the loader (lib/public-key.ts).
-    return c.text(SECRET_KEY_NOT_ALLOWED_JS, 400, {
-      "Content-Type": "application/javascript",
-    });
-  }
-  if (!PUBLIC_KEY_RE.test(key)) {
-    return c.text("// Invalid API key", 400, {
-      "Content-Type": "application/javascript",
-    });
-  }
-
-  return c.text(buildLoaderScript(new URL(c.req.url).origin, key), 200, {
-    "Content-Type": "application/javascript",
-    "Cache-Control": "public, max-age=3600",
-  });
-});
-
-/**
- * GET /v1/banner/bundle.js
- * Serves the pre-built banner bundle from packages/banner/dist.
- */
-app.get("/v1/banner/bundle.js", async (c) => {
-  // Same generous per-IP limit as the config hot path (cheap static response).
-  // Skip the gate when the IP is empty — don't bucket header-less traffic on "".
-  const ip = c.req.header("cf-connecting-ip") ?? "";
-  const limited = ip
-    ? await enforceRateLimit(c, c.env.RL_BANNER_IP, `ip:${ip}`)
-    : null;
-  if (limited) return limited;
-
-  return c.text(bannerBundleJs as string, 200, {
-    "Content-Type": "application/javascript",
-    "Cache-Control": "public, max-age=86400",
-  });
-});
+app.get("/v1/banner/script.js", serveBanner(3600));
+app.get("/v1/banner/bundle.js", serveBanner(86400));
 
 /**
  * Hash a public key using SHA-256 (same algorithm as api-keys route).
@@ -169,6 +131,49 @@ function meterApiCall(
   } catch (err) {
     console.error("banner: usage metering failed", { organizationId, error: errorSummary(err) });
   }
+}
+
+/**
+ * Count one impression: this request is answered with an offer (`show: true`)
+ * for `campaignId`. Counted here, not reported by the client, so serving a
+ * visitor costs one request (services/impression-meter.ts). Memory only on the
+ * request path; never throws: an analytics fault must not affect the banner.
+ */
+function countImpression(
+  c: Context<AppEnv>,
+  organizationId: string,
+  campaignId: string,
+  countryCode: string,
+  limited: boolean,
+): void {
+  const ctx = executionContext(c);
+  if (!ctx) return;
+  try {
+    impressionMeter.record(
+      { organizationId, campaignId, countryCode, limited },
+      {
+        waitUntil: (promise) => ctx.waitUntil(promise),
+        write: (rows) => writeImpressionRows(createDb(c.env), rows),
+      },
+    );
+  } catch (err) {
+    console.error("banner: impression count failed", { organizationId, error: errorSummary(err) });
+  }
+}
+
+/**
+ * The quota state of an organization: from the isolate's memory when it was
+ * read in the last minute (services/banner-hot-cache.ts), else from the
+ * `usage:` KV snapshot. The key carries the month, so a new month never sees
+ * the old month's answer.
+ */
+async function quotaState(c: Context<AppEnv>, organizationId: string): Promise<QuotaState> {
+  const key = usageKey(organizationId);
+  const remembered = quotaCache.get(key);
+  if (remembered) return remembered;
+  const state = await getQuotaState(c.env.CACHE, organizationId, c.env);
+  quotaCache.set(key, state);
+  return state;
 }
 
 /**
@@ -445,6 +450,9 @@ async function resolveKeyFromDatabase(
  *   2. Key -> organization: KV `apikey:{hash}`, else Postgres (negative-cached,
  *      cold-path rate limited).
  *   3. VPN check, then the monthly quota (KV usage snapshot; fails open).
+ *      The answers of 2 and 3 are kept in the isolate's memory for a minute
+ *      (services/banner-hot-cache.ts), so a busy key reads one KV key per
+ *      request: the document of step 4.
  *   4. Campaign resolution from the KV document `banner-config:{apiKeyId}`
  *      (version 3); a missing or older document is answered from Postgres with
  *      the same selection and rebuilt in the background.
@@ -454,6 +462,8 @@ async function resolveKeyFromDatabase(
  *   7. Local prices: the product's price after the discount, in the visitor's
  *      currency when a usable exchange rate exists (KV `fx:rates`, written by
  *      the FX cron), otherwise exactly in the product's currency.
+ *   8. An answer with an offer (`show: true`) is counted as one impression of
+ *      the served campaign (services/impression-meter.ts).
  */
 app.get("/v1/banner/config/:publicKey", async (c) => {
   const publicKey = c.req.param("publicKey");
@@ -502,11 +512,15 @@ app.get("/v1/banner/config/:publicKey", async (c) => {
 
     // 2. Key -> organization.
     const keyHash = await hashPublicKey(publicKey);
-    let apiKey = await kvGet<CachedApiKey>(c.env.CACHE, `apikey:${keyHash}`);
+    let apiKey = apiKeyCache.get(keyHash) ?? null;
     if (!apiKey) {
-      const resolved = await resolveKeyFromDatabase(c, keyHash, clientIp, getDb);
-      if (resolved instanceof Response) return resolved;
-      apiKey = resolved;
+      apiKey = await kvGet<CachedApiKey>(c.env.CACHE, `apikey:${keyHash}`);
+      if (!apiKey) {
+        const resolved = await resolveKeyFromDatabase(c, keyHash, clientIp, getDb);
+        if (resolved instanceof Response) return resolved;
+        apiKey = resolved;
+      }
+      apiKeyCache.set(keyHash, apiKey);
     }
     const organizationId = apiKey.organizationId;
 
@@ -515,7 +529,7 @@ app.get("/v1/banner/config/:publicKey", async (c) => {
     if (await isVpnOrProxy(clientIp, cfData, c.env.VPN_DATA)) {
       return c.json({ show: false, reason: "vpn_detected" });
     }
-    const quota = await getQuotaState(c.env.CACHE, organizationId, c.env);
+    const quota = await quotaState(c, organizationId);
     if (quota.over) {
       return c.json({ show: false, reason: "quota_exceeded" });
     }
@@ -582,6 +596,9 @@ app.get("/v1/banner/config/:publicKey", async (c) => {
       // Self-hosted deployments always get false, whatever the cache holds.
       showBranding: bannerShowsBranding(await resolver.showBranding(), c.env),
     };
+
+    // 8. The offer is served: one impression of this campaign.
+    countImpression(c, organizationId, campaignId, countryCode, quota.limited);
 
     return c.json(response);
   } catch (err) {

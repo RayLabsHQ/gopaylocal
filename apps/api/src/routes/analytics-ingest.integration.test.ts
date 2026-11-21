@@ -83,12 +83,16 @@ function createEventsApp() {
   return createTestClient(analyticsIngestRoute);
 }
 
-/** Sum impressions across all rollups for an org+campaign. */
-async function impressionsFor(orgId: string, campaignId: string): Promise<number> {
+/**
+ * Sum clicks across all rollups for an org+campaign. (Clicks, not impressions:
+ * the API counts impressions itself when it serves an offer, and ignores the
+ * ones a client posts here; banner-serving.integration.test.ts covers those.)
+ */
+async function clicksFor(orgId: string, campaignId: string): Promise<number> {
   const db = getTestDb();
   const [row] = await db
     .select({
-      total: sql<number>`COALESCE(SUM(${analyticsRollups.impressions}), 0)`,
+      total: sql<number>`COALESCE(SUM(${analyticsRollups.clicks}), 0)`,
     })
     .from(analyticsRollups)
     .where(
@@ -120,14 +124,14 @@ describe("Analytics Ingest API — campaign-ownership validation", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         key: rawKey,
-        event: "impression",
+        event: "click",
         campaignId,
         countryCode: "IN",
       }),
     });
 
     expect(res.status).toBe(204);
-    expect(await impressionsFor(ORG_OWNER, campaignId)).toBe(1);
+    expect(await clicksFor(ORG_OWNER, campaignId)).toBe(1);
   });
 
   it("DROPS (silently, still 2xx) an event whose campaignId belongs to a DIFFERENT org", async () => {
@@ -141,7 +145,7 @@ describe("Analytics Ingest API — campaign-ownership validation", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         key: rawKey,
-        event: "impression",
+        event: "click",
         campaignId: victimCampaignId,
         countryCode: "IN",
       }),
@@ -150,8 +154,8 @@ describe("Analytics Ingest API — campaign-ownership validation", () => {
     // No oracle: same success response as a valid event.
     expect(res.status).toBe(204);
     // Poisoning dropped: neither the attacker's org nor the victim's got a rollup.
-    expect(await impressionsFor(ORG_VICTIM, victimCampaignId)).toBe(0);
-    expect(await impressionsFor(ORG_OWNER, victimCampaignId)).toBe(0);
+    expect(await clicksFor(ORG_VICTIM, victimCampaignId)).toBe(0);
+    expect(await clicksFor(ORG_OWNER, victimCampaignId)).toBe(0);
   });
 
   it("DROPS an event with an unknown campaignId", async () => {
@@ -164,14 +168,14 @@ describe("Analytics Ingest API — campaign-ownership validation", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         key: rawKey,
-        event: "impression",
+        event: "click",
         campaignId: unknownCampaignId,
         countryCode: "IN",
       }),
     });
 
     expect(res.status).toBe(204);
-    expect(await impressionsFor(ORG_OWNER, unknownCampaignId)).toBe(0);
+    expect(await clicksFor(ORG_OWNER, unknownCampaignId)).toBe(0);
   });
 
   it("in a batch, writes owned items and drops cross-org items", async () => {
@@ -186,18 +190,18 @@ describe("Analytics Ingest API — campaign-ownership validation", () => {
       body: JSON.stringify({
         key: rawKey,
         events: [
-          { eventType: "impression", campaignId: ownedCampaignId, countryCode: "IN" },
-          { eventType: "impression", campaignId: victimCampaignId, countryCode: "IN" },
+          { eventType: "click", campaignId: ownedCampaignId, countryCode: "IN" },
+          { eventType: "click", campaignId: victimCampaignId, countryCode: "IN" },
         ],
       }),
     });
 
     expect(res.status).toBe(204);
-    expect(await impressionsFor(ORG_OWNER, ownedCampaignId)).toBe(1);
-    expect(await impressionsFor(ORG_VICTIM, victimCampaignId)).toBe(0);
+    expect(await clicksFor(ORG_OWNER, ownedCampaignId)).toBe(1);
+    expect(await clicksFor(ORG_VICTIM, victimCampaignId)).toBe(0);
   });
 
-  it("each event type increments its own counter on one daily rollup row; dismiss and browser redemptions are not stored", async () => {
+  it("clicks and copies increment their own counter on one daily rollup row; impressions, dismissals and browser redemptions are not stored", async () => {
     const campaignId = await seedCampaign(ORG_OWNER);
     const rawKey = await seedKey(ORG_OWNER);
     const app = createEventsApp();
@@ -208,7 +212,7 @@ describe("Analytics Ingest API — campaign-ownership validation", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ key: rawKey, event, campaignId, countryCode: "BR" }),
       });
-    for (const event of ["impression", "impression", "click", "copy", "redemption", "dismiss"]) {
+    for (const event of ["impression", "impression", "click", "click", "copy", "redemption", "dismiss"]) {
       expect((await send(event)).status).toBe(204);
     }
 
@@ -222,8 +226,10 @@ describe("Analytics Ingest API — campaign-ownership validation", () => {
       countryCode: "BR",
       period: "day",
       environment: "live",
-      impressions: 2,
-      clicks: 1,
+      // A client-posted impression gets its 204 and is not counted: the config
+      // endpoint counted the visitor when it served the offer.
+      impressions: 0,
+      clicks: 2,
       copies: 1,
       // A browser-reported "redemption" still gets 204 but is never counted:
       // redemptions come only from signature-verified provider webhooks, so a
@@ -238,9 +244,9 @@ describe("Analytics Ingest API — campaign-ownership validation", () => {
     const res = await app.request("/v1/events", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ key: "gpl_pk_unknown", event: "impression", campaignId, countryCode: "IN" }),
+      body: JSON.stringify({ key: "gpl_pk_unknown", event: "click", campaignId, countryCode: "IN" }),
     });
     expect(res.status).toBe(401);
-    expect(await impressionsFor(ORG_OWNER, campaignId)).toBe(0);
+    expect(await clicksFor(ORG_OWNER, campaignId)).toBe(0);
   });
 });

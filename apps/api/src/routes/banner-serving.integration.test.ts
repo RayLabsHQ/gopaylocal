@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { createTestBindings, createTestClient, type TestClient } from "../test/helpers";
 import { getTestDb, cleanupTestDb, closeTestDb } from "../test/setup";
 import {
+  analyticsRollups,
   apiKeys,
   apiUsageDaily,
   bannerConfigs,
@@ -17,6 +18,7 @@ import { DEFAULT_BANNER_MESSAGE, DEFAULT_CTA_TEXT, PLAN_LIMITS } from "@gopayloc
 import { assignVariant, visitorKey } from "../services/banner-selection";
 import { bannerDocKey, isCurrentBannerDoc } from "../services/banner-cache.service";
 import { usageMeter, utcDay } from "../services/usage-meter";
+import { writeImpressionRows } from "../services/impression-meter";
 import { recomputeUsageForAllOrgs, usageKey } from "../services/usage.service";
 import bannerScriptRoute from "./banner-script";
 
@@ -144,6 +146,10 @@ async function banner(
   return (await res.json()) as Record<string, unknown>;
 }
 
+async function rollupRows(org: string) {
+  return getTestDb().select().from(analyticsRollups).where(eq(analyticsRollups.organizationId, org));
+}
+
 async function usageRows(org: string) {
   return getTestDb()
     .select()
@@ -265,6 +271,77 @@ describe("banner serving (Postgres)", () => {
     await recomputeUsageForAllOrgs(db(), client.env.CACHE, client.env);
     const snapshot = JSON.parse((await client.env.CACHE.get(usageKey(ORG)))!);
     expect(snapshot).toMatchObject({ count: 4, limit: PLAN_LIMITS.free.apiHitsPerMonth, over: false });
+  });
+
+  // Impressions are counted here, by the request that serves the offer, not
+  // posted by the browser (services/impression-meter.ts).
+  describe("impressions", () => {
+    const todayStart = () => {
+      const now = new Date();
+      return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    };
+
+    it("every served offer adds one impression to the campaign's daily rollup row; a request with nothing to serve adds none", async () => {
+      const product = await seedProduct(ORG, "p");
+      const campaignId = await seedCampaign(ORG, product, { discountIN: 40 });
+      const { rawKey } = await seedKey(ORG);
+      const client = createTestClient(bannerScriptRoute);
+
+      // First from Postgres (empty KV), then from the rebuilt document.
+      for (let i = 0; i < 3; i++) expect((await banner(client, rawKey, { product })).show).toBe(true);
+      expect(await banner(client, rawKey, { product: ulid() })).toMatchObject({ show: false });
+
+      const rows = await rollupRows(ORG);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        campaignId,
+        countryCode: "IN",
+        period: "day",
+        environment: "live",
+        impressions: 3,
+        clicks: 0,
+        copies: 0,
+        redemptions: 0,
+      });
+      expect(rows[0]!.periodStart.toISOString()).toBe(todayStart().toISOString());
+    });
+
+    it("a Pro organization's impressions (the buffered path) are written too", async () => {
+      const product = await seedProduct(ORG, "p");
+      const campaignId = await seedCampaign(ORG, product, { discountIN: 40 });
+      const { rawKey } = await seedKey(ORG);
+      await setPro(ORG);
+      const client = createTestClient(bannerScriptRoute);
+      await banner(client, rawKey); // the first call creates the usage row the cron reads
+      await recomputeUsageForAllOrgs(db(), client.env.CACHE, client.env); // snapshot: unlimited
+      await banner(client, rawKey);
+      await banner(client, rawKey);
+
+      const rows = await rollupRows(ORG);
+      expect(rows.map((r) => ({ campaignId: r.campaignId, impressions: r.impressions }))).toEqual([
+        { campaignId, impressions: 3 },
+      ]);
+    });
+
+    it("the upsert adds to existing rows, several rows in one statement", async () => {
+      const day = utcDay(new Date());
+      const row = (campaignId: string, countryCode: string, count: number) => ({
+        organizationId: ORG,
+        campaignId,
+        countryCode,
+        day,
+        count,
+      });
+      await writeImpressionRows(db(), [row("camp_a", "IN", 5), row("camp_a", "BR", 2), row("camp_b", "IN", 1)]);
+      await writeImpressionRows(db(), [row("camp_a", "IN", 10), row("camp_b", "NG", 4)]);
+
+      const rows = await rollupRows(ORG);
+      expect(
+        rows
+          .map((r) => `${r.campaignId}/${r.countryCode}=${r.impressions}`)
+          .sort(),
+      ).toEqual(["camp_a/BR=2", "camp_a/IN=15", "camp_b/IN=1", "camp_b/NG=4"]);
+    });
   });
 
   describe("over quota", () => {

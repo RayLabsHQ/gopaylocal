@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { memo, useCallback, useState, type CSSProperties } from 'react';
 import { usePPP } from '../hooks/use-ppp';
 // Bundled into this package at build time.
 import { cssColor, fillTemplate, templateValues } from '../../../js-sdk/src/core';
@@ -67,19 +67,12 @@ export const PPPBanner = memo(function PPPBanner({
   const visible = ppp.discount > 0 && !dismissed && ppp.data !== null;
   const { track } = ppp;
 
-  // One impression per campaign shown (the assigned arm during an experiment).
-  const reportedCampaign = useRef<string | null>(null);
-  useEffect(() => {
-    if (!visible || !ppp.campaignId || reportedCampaign.current === ppp.campaignId) return;
-    reportedCampaign.current = ppp.campaignId;
-    track('impression');
-  }, [visible, ppp.campaignId, track]);
+  // No impression is reported here: the API counted it when it served the offer.
 
   const handleClose = useCallback(() => {
     setDismissed(true);
-    track('dismiss');
     onClose?.();
-  }, [onClose, track]);
+  }, [onClose]);
 
   const handleCopy = useCallback(async () => {
     if (!ppp.code) return;

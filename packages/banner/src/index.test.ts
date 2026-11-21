@@ -171,6 +171,30 @@ describe('banner request', () => {
     await runBanner();
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  // script.js is a static file, so the server cannot refuse the key: the
+  // banner does, before it sends the key anywhere.
+  it('refuses a secret key: says so in the console and sends nothing', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    setPage([tag({ src: 'https://api.gopaylocal.com/v1/banner/script.js?key=gpl_sk_live_0123456789' })]);
+    await runBanner();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(events).toHaveLength(0);
+    expect(session.map.size).toBe(0);
+    expect(error).toHaveBeenCalledOnce();
+    const message = String(error.mock.calls[0]![0]);
+    expect(message).toContain('This key is now exposed');
+    expect(message).not.toContain('gpl_sk_live_0123456789');
+    error.mockRestore();
+  });
+
+  it('runs as the script tag itself (script.js is the banner, not a loader)', async () => {
+    const own = tag({ src: SRC, 'data-product': 'prod_9' });
+    setPage([own], own);
+    await runBanner();
+    expect(requestedUrl().pathname).toBe('/v1/banner/config/gpl_pk_abc');
+    expect(requestedUrl().searchParams.get('product')).toBe('prod_9');
+  });
 });
 
 describe('banner cache and dismissal', () => {

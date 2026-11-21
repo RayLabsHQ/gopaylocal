@@ -7,11 +7,28 @@ compatibility_date = "2025-01-01"
 # same-zone bypass. Nothing in the API fetches its own zone.
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 
-# Import the pre-built banner bundle (packages/banner/dist/) as a text module
+# Import the pre-built banner bundle (packages/banner/dist/) as a text module.
+# The Worker serves it only where the static assets below are absent.
 [[rules]]
 type = "Text"
 globs = ["**/banner/dist/*.js"]
 fallthrough = false
+
+# The banner script as static assets. /v1/banner/script.js and /v1/banner/bundle.js
+# match a file in ./static, so Cloudflare answers them before the Worker runs, and
+# requests for static assets are not billed
+# (https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/).
+# No other path matches a file, so everything else reaches the Worker as before.
+# static/_headers sets the two files' cache time.
+[assets]
+directory = "./static"
+
+# Copies packages/banner/dist/banner.js to those two paths before every
+# `wrangler dev` and `wrangler deploy` (run `pnpm build:banner` first, as before).
+# watch_dir: in `wrangler dev`, rerun only when the banner is rebuilt.
+[build]
+command = "node scripts/build-static.mjs"
+watch_dir = "../../packages/banner/dist"
 
 [observability]
 enabled = true

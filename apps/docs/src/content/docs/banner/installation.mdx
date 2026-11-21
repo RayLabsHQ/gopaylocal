@@ -146,11 +146,11 @@ Put these on the `<script>` tag you add (the loader). The banner reads them from
 
 <Steps>
 
-1. `script.js` is a tiny loader. It loads asynchronously, so it does not block page rendering, and adds the banner itself (`bundle.js`) to the page
+1. `script.js` is the banner itself, about 8.5 KB (3.8 KB gzipped). It loads asynchronously, so it does not block page rendering
 2. The banner makes one API call (`GET /v1/banner/config/:key`, with `product` and the visitor id) to fetch the config for the visitor's country. It gives up after 5 seconds
 3. The response is cached in `sessionStorage` for 5 minutes, per key and product
 4. A discount banner renders inside a closed **Shadow DOM** element, using your campaign's [banner design](/banner/customization)
-5. The banner reports `impression`, `copy` and `dismiss` events to your [analytics](/banner/events)
+5. The API has counted the impression when it answered. The banner reports a `copy` event to your [analytics](/banner/events) when the visitor copies the code
 6. Page loads within those 5 minutes use the cache, with no additional API calls. A dismissed banner stays hidden for the rest of the browser session
 
 </Steps>

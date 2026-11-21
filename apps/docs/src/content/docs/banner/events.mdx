@@ -1,20 +1,28 @@
 ---
 title: Banner Events & Analytics
-description: Analytics events reported by the GoPayLocal banner script, and what GoPayLocal stores from them.
+description: How GoPayLocal counts impressions, which events the banner reports, and what is stored.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-The banner script reports what visitors do with the banner to `POST /v1/events`. GoPayLocal turns those events into daily counts per campaign and country, which the Analytics page of the dashboard shows.
+GoPayLocal counts an impression itself, each time the API serves an offer. The banner then reports what the visitor does with it to `POST /v1/events`. Both become daily counts per campaign and country, which the Analytics page of the dashboard shows.
+
+## Impressions
+
+An impression is one offer served: a [banner config](/api/banner/) request answered with `show: true`. The API counts it in that same request, for the campaign it served and the visitor's country. The browser sends nothing for it, so an impression costs no second request per visitor.
+
+- The banner script and the SDKs keep an answer with a discount for 5 minutes per browser tab, so the page views a visitor makes in those 5 minutes are one impression.
+- A discount fetched by an SDK counts as an impression whether or not you render a banner with it.
+- On Pro and self-hosted, impressions are written in batches and can take about 15 seconds to appear.
 
 ## Event Types
 
 | Event | Sent when | Stored |
 |---|---|---|
-| `impression` | The banner is shown | Yes: impressions |
 | `click` | The visitor clicks the button | Yes: clicks |
 | `copy` | The coupon code is copied | Yes: copies |
-| `dismiss` | The visitor closes the banner | No (accepted and ignored) |
+
+`impression` and `dismiss` events get the same `204` response and are ignored: impressions are counted by the API as described above, and dismissals are not stored. The banner script and the SDKs do not send them.
 
 **Redemptions** (a GoPayLocal code used at checkout) are counted only from your payment provider's webhooks, never from the browser. A `redemption` event sent to `/v1/events` gets the same `204` response but is ignored, so nobody can inflate your redemption numbers from a web page.
 
@@ -38,7 +46,7 @@ Each event is one small JSON body, sent as `text/plain` so it needs no CORS pref
 | Field | Required | Description |
 |---|---|---|
 | `key` | Yes | The public API key |
-| `event` | Yes | `impression`, `click`, `copy` or `dismiss` |
+| `event` | Yes | `click` or `copy` |
 | `campaignId` | For storage | The `campaignId` from the config response (during an A/B test, the visitor's arm) |
 | `countryCode` | For storage | The `country` from the config response (two letters) |
 | `url` | No | The page URL. Accepted, not stored. |
@@ -56,7 +64,7 @@ The banner script reuses a config response that has a discount from `sessionStor
 
 The Analytics page shows totals and breakdowns by country and by campaign:
 
-- **Impressions**: visitors who saw the banner
+- **Impressions**: offers served to visitors (see [Impressions](#impressions))
 - **Clicks**: visitors who clicked its button
 - **Copies**: visitors who copied the code
 - **Redemptions**: codes used at checkout, from your payment provider

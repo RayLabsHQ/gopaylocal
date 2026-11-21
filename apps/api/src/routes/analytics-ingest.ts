@@ -19,11 +19,16 @@ const app = new Hono<AppEnv>();
  * Schema for the simple single-event payload the banner sends:
  * { key, event, url, code? }
  *
- * `redemption` still parses (an old client sending it gets the same 204, and
- * a batch containing one is not rejected as a whole) but is never stored:
- * redemptions are recorded only from signature-verified payment-provider
- * webhooks (routes/webhooks.ts). Anyone holding a public key could otherwise
- * inflate a merchant's redemption counts from a browser.
+ * Only `click` and `copy` are stored. The rest still parse (a client sending
+ * one gets the same 204, and a batch containing one is not rejected as a
+ * whole) and are dropped:
+ *  - `impression`: counted by the config endpoint when it serves an offer
+ *    (services/impression-meter.ts). A banner or SDK built before that change
+ *    still posts one per render; storing it would count the visitor twice.
+ *  - `redemption`: recorded only from signature-verified payment-provider
+ *    webhooks (routes/webhooks.ts). Anyone holding a public key could
+ *    otherwise inflate a merchant's redemption counts from a browser.
+ *  - `dismiss`: there is no counter for it.
  */
 const bannerEventSchema = z.object({
   key: z.string().min(1),
@@ -44,15 +49,14 @@ async function hashKey(key: string): Promise<string> {
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** The rollup counter column each tracked banner event increments. */
-type RollupCounter = "impressions" | "clicks" | "copies";
+/** The rollup counter column each stored banner event increments. */
+type RollupCounter = "clicks" | "copies";
 
 /**
- * Event type → counter. `dismiss`, `redemption` (webhooks only, see
+ * Event type → counter. `impression`, `dismiss`, `redemption` (see
  * bannerEventSchema) and anything unknown are not stored.
  */
 const COUNTER_FOR_EVENT: ReadonlyMap<string, RollupCounter> = new Map([
-  ["impression", "impressions"],
   ["click", "clicks"],
   ["copy", "copies"],
 ]);
@@ -82,7 +86,7 @@ function utcDayStart(now: Date): Date {
  *
  * Built with Drizzle's query builder, not a raw `sql` template, on purpose:
  *  - A column object interpolated into raw `sql` renders table-qualified
- *    ("analytics_rollups"."impressions"; https://orm.drizzle.team/docs/sql:
+ *    ("analytics_rollups"."clicks"; https://orm.drizzle.team/docs/sql:
  *    "the escaped table names are appended to column names"), which Postgres
  *    rejects in an INSERT column list and as a DO UPDATE SET target. The
  *    builder emits bare names there (https://orm.drizzle.team/docs/insert,

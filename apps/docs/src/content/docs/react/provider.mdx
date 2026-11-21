@@ -149,7 +149,11 @@ interface PPPContextValue {
   experimentId: string | null;
   /** 'a' (control), 'b' (variant), or null when no experiment applied. */
   variant: 'a' | 'b' | null;
-  /** Report a banner interaction to GoPayLocal analytics (for custom banners). */
+  /**
+   * Report a click or a copy to GoPayLocal analytics (for custom banners).
+   * 'impression' and 'dismiss' are accepted and send nothing: the API counts
+   * the impression when it serves the discount.
+   */
   track: (event: 'impression' | 'click' | 'copy' | 'dismiss') => void;
 }
 ```

@@ -32,6 +32,19 @@ type = "Text"
 globs = ["**/banner/dist/*.js"]
 fallthrough = false
 
+# Recommended. Serves the banner script (/v1/banner/script.js and bundle.js) as static
+# assets: Cloudflare answers them before the Worker runs and does not bill requests for
+# static assets, so loading the banner costs no Worker request. Without these two
+# blocks the Worker serves the same file itself. The build command copies
+# packages/banner/dist/banner.js into ./static before every `wrangler dev` and
+# `wrangler deploy`; static/_headers sets the cache time.
+[assets]
+directory = "./static"
+
+[build]
+command = "node scripts/build-static.mjs"
+watch_dir = "../../packages/banner/dist"
+
 # Optional. Workers Logs for this Worker (dashboard > Workers > your Worker > Logs).
 [observability]
 enabled = true

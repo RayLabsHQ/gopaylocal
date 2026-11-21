@@ -434,8 +434,9 @@ export class GoPayLocal {
 
   /**
    * Show a PPP discount banner. Uses the campaign's banner design from the API,
-   * with `options` overriding it. Reports `impression`, `copy` and `dismiss`
-   * events to your GoPayLocal analytics, like the script-tag banner.
+   * with `options` overriding it. Reports a copied code to your GoPayLocal
+   * analytics, like the script-tag banner. (The impression was counted by the
+   * API when `init()` fetched the offer.)
    * Returns a handle with a `remove()` method. Does nothing before `init()`
    * has resolved with data.
    */
@@ -448,10 +449,8 @@ export class GoPayLocal {
 
     const bannerEl = createBanner(data, options, {
       copy: () => this.track('copy'),
-      dismiss: () => this.track('dismiss'),
     });
     document.body.appendChild(bannerEl);
-    this.track('impression');
 
     return {
       remove: () => {
@@ -467,6 +466,10 @@ export class GoPayLocal {
    * build your own banner instead of calling `showBanner()` (which reports
    * these itself). Sent with the current campaign (the assigned arm during
    * an experiment) and country. Does nothing when no discount applies.
+   *
+   * Only `'click'` and `'copy'` are sent. `'impression'` and `'dismiss'` are
+   * accepted and do nothing: the API counts an impression when it serves the
+   * offer, and stores no dismissals.
    */
   track(event: TrackableEvent): void {
     const data = this.data;

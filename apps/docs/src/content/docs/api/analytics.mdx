@@ -106,7 +106,8 @@ Returns one entry per campaign, most impressions first. During an A/B test, each
 
 | Field | Description |
 |---|---|
-| `impressions`, `clicks`, `copies` | From [banner events](/banner/events/) sent by the banner script |
+| `impressions` | Offers served: counted by the API each time a banner config request is answered with `show: true` (see [Impressions](/banner/events/#impressions)) |
+| `clicks`, `copies` | From [banner events](/banner/events/) sent by the banner script and the SDKs |
 | `redemptions` | GoPayLocal codes used at checkout, reported by your payment provider's webhooks. Browser-sent redemption events are not accepted. |
 | `revenueSavedByCurrency` | Discount given on those redemptions, per currency: an object keyed by ISO 4217 code, amounts in each currency's major unit (e.g. `{ "USD": 12.5, "INR": 400 }`). Amounts in different currencies are never added together. |
 | `totalRevenueSaved` / `revenueSaved` | The USD part only, in dollars. Redemptions in other currencies appear only in `revenueSavedByCurrency`. |
@@ -119,7 +120,7 @@ Errors: `401` without a session, `403` without access to the organization's anal
 POST /v1/events
 ```
 
-The banner script reports `impression`, `click`, `copy` and `dismiss` events here with the public key; see [Banner events](/banner/events/) for the payload, validation and what is stored.
+The banner script and the SDKs report `click` and `copy` events here with the public key (impressions are counted by the config endpoint, not sent here); see [Banner events](/banner/events/) for the payload, validation and what is stored.
 
 <Aside type="note">
 Analytics events do not count as API calls. Usage for the plan is counted on the banner config endpoint; see [What counts as an API call](/api/banner/#what-counts-as-an-api-call).

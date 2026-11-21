@@ -30,7 +30,8 @@ export { PLACEHOLDERS } from "../../js-sdk/src/core";
 
 /**
  * Render `z` into `parent` and return the host element. `on` hears
- * "impression" once, "copy" (with the code) and "dismiss"; after a dismiss the
+ * "impression" once (nothing is sent for it: the API counted the impression
+ * when it served the offer), "copy" (with the code) and "dismiss"; after a dismiss the
  * host removes itself (`on` must not throw). `still` skips the slide-in
  * animation.
  */

@@ -89,7 +89,7 @@ When a visitor loads your page:
 3. It checks for VPN, proxy, datacenter and Tor traffic, which gets no discount.
 4. It answers with the campaign's discount and coupon code for that country, mostly from its edge cache.
 5. The banner appears with the discount and code.
-6. Impressions, clicks and copies are reported with `sendBeacon`.
+6. The API has counted the impression. Copies of the code are reported with `sendBeacon`.
 
 <Aside type="note">
 The banner renders inside a **Shadow DOM** so it never breaks your site's styles. It's completely isolated.

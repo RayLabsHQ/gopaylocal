@@ -378,10 +378,15 @@ describe('GoPayLocal.track', () => {
     const beacon = vi.fn((_url: string, _body: string) => true);
     vi.stubGlobal('navigator', { sendBeacon: beacon });
     const gpl = new GoPayLocal({ apiKey: 'gpl_pk_abc' });
-    gpl.track('impression'); // before init: nothing to report
+    gpl.track('copy'); // before init: nothing to report
     expect(beacon).not.toHaveBeenCalled();
 
     await gpl.init();
+    // The API counted the impression when init() fetched the offer.
+    gpl.track('impression');
+    gpl.track('dismiss');
+    expect(beacon).not.toHaveBeenCalled();
+
     gpl.track('copy');
     const [url, body] = beacon.mock.calls[0]!;
     expect(url).toBe('https://api.gopaylocal.com/v1/events');

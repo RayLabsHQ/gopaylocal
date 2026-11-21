@@ -39,13 +39,14 @@ Never use a secret key (`gpl_sk_…`) in an integration. The banner script answe
 
 | Client | Install | Renders a banner | Banner design | Analytics events |
 |---|---|---|---|---|
-| Banner script | `<script src="https://api.gopaylocal.com/v1/banner/script.js?key=KEY" async></script>` | Yes, automatically | The campaign's | `impression`, `copy`, `dismiss`, sent automatically |
-| React SDK | `npm install @gopaylocal/react` | Only if you render `<PPPBanner />` | The campaign's; props override it | `<PPPBanner />` sends `impression`, `copy`, `dismiss`; for your own UI call `usePPP().track(event)` |
-| JS SDK | `npm install @gopaylocal/js` | Only if you call `gpl.showBanner()` | The campaign's; options override it | `showBanner()` sends `impression`, `copy`, `dismiss`; for your own UI call `gpl.track(event)` |
+| Banner script | `<script src="https://api.gopaylocal.com/v1/banner/script.js?key=KEY" async></script>` | Yes, automatically | The campaign's | `copy`, sent automatically |
+| React SDK | `npm install @gopaylocal/react` | Only if you render `<PPPBanner />` | The campaign's; props override it | `<PPPBanner />` sends `copy`; for your own UI call `usePPP().track(event)` |
+| JS SDK | `npm install @gopaylocal/js` | Only if you call `gpl.showBanner()` | The campaign's; options override it | `showBanner()` sends `copy`; for your own UI call `gpl.track(event)` |
 
 - Pick one banner. The banner script plus `<PPPBanner />` shows two banners.
 - All three banners add a "Powered by GoPayLocal" link when the response has `showBranding: true`. The server decides this; it is not configurable from code.
-- Events are only sent when a discount applies (they need the response's `campaignId`). `track()` accepts `impression`, `click`, `copy` and `dismiss`.
+- Impressions are counted by the API: one for each config request answered with `show: true`. No client sends them.
+- Events are only sent when a discount applies (they need the response's `campaignId`). `track()` sends `click` and `copy`; it also accepts `impression` and `dismiss` and sends nothing for them.
 - There is no server-side pricing API. The config endpoint uses the country of whoever makes the request, so calling it from a server, edge function, build step or CI gives the server's country and usually `vpn_detected`. Fetch from the browser.
 
 ## Banner script
@@ -62,22 +63,21 @@ Optional attributes on the same tag [packages/banner/src/setup.ts]:
 
 How the script works:
 
-- **Key.** The key goes in the `key` query parameter of the script URL. There is no `data-key` attribute. [apps/api/src/routes/banner-script.ts reads `?key=`]
-- **How settings are read.** The bundle looks at its own script tag first, then every script whose `src` contains `/v1/banner/` or `gopaylocal`, in document order. It takes:
+- **Key.** The key goes in the `key` query parameter of the script URL. There is no `data-key` attribute. [packages/banner/src/setup.ts reads `?key=`]
+- **How settings are read.** The script looks at its own tag first, then every script whose `src` contains `/v1/banner/` or `gopaylocal`, in document order. It takes:
   - the key from the first of those tags with a `key` parameter
   - the API base from that tag's `src` (everything before `/v1/`), so a self-hosted API works by changing the script host
   - each data attribute from the first tag that has it
 
-  So attributes on the `script.js` tag apply even though `bundle.js` is what runs.
-- **Errors.** `script.js` without `key` returns HTTP 400 with the body `// Missing API key`. A key with characters outside `A-Z a-z 0-9 _ -` returns 400 `// Invalid API key`.
-- **Loader.** `script.js` is a small loader: it appends `bundle.js?key=KEY` from the same host, and the bundle does the work.
+- **One static file.** `script.js` is the banner itself, the same file for every key, served without running the API. `bundle.js` is the same file under an older name. The server does not read `key` on this request, so it never answers 400 for a missing or malformed key.
+- **Errors.** A tag without a `key` parameter does nothing. A secret key (`gpl_sk_`) sends nothing and logs an error to the browser console. An unknown key gets `401` from the config request, and no banner.
 - **Runtime** [packages/banner/src/index.ts]:
   - 5-second fetch timeout.
   - The config response is cached for 5 minutes in `sessionStorage` key `gpl_c_<key>_<productId>`. The product part is empty without `data-product`.
   - Clicking close sets `gpl_d_<key>_<productId>` = `"1"`, which hides the banner for the rest of the session in that tab.
   - It renders into a closed Shadow DOM with `position: fixed` and the maximum `z-index`.
   - The copy button appears only when `code` is not null.
-  - It sends `impression` on render, `copy` when the code is copied and `dismiss` on close. Events go to `POST /v1/events` with `navigator.sendBeacon`, falling back to a keepalive `fetch`.
+  - It sends `copy` when the code is copied. The impression was counted by the API when it answered the config request, and a dismissal is only remembered in the browser. Events go to `POST /v1/events` with `navigator.sendBeacon`, falling back to a keepalive `fetch`.
 - **Page event.** After each config response, including cached ones and `show: false`, the script dispatches a `gopaylocal:config` `CustomEvent` on `document`. Its `detail` is `{ show, country, discount, code, campaignId, experimentId, variant }`, so page code can read the result and the experiment arm. It does not fire when the banner was dismissed earlier in the session or the request failed.
 - **Positions.** `top` and `bottom` render a full-width bar. `bottom-left` and `bottom-right` render a card that also shows the country name.
 - **Content Security Policy.** Allow `https://api.gopaylocal.com` in `script-src` and `connect-src`. The banner's styles are a constructed stylesheet, which a `style-src` without `'unsafe-inline'` does not block. Browsers without constructable stylesheets get a `<style>` element instead. [packages/js-sdk/src/core.ts `adoptStyles`]
@@ -105,7 +105,7 @@ What an integration needs for a test:
 - On a site with several products, pass the product id (`data-product` or `productId`). Otherwise the request can be answered for another product and the test never applies.
 - Don't set `data-no-storage` or `persistVisitorId: false` unless the human asks for it. Assignment then falls back to IP address plus user agent, and a visitor whose IP changes can switch arms.
 - To keep a signed-in user in one arm across devices, pass a stable id that is not personal data as `data-visitor-id` or `visitorId` (16 to 64 characters of `A-Z a-z 0-9 _ -`, so an email address is rejected).
-- A custom banner must report events with `track()` (or `POST /v1/events`) using the response's `campaignId`, or its arm records no impressions, clicks or copies.
+- A custom banner must report clicks and copies with `track()` (or `POST /v1/events`) using the response's `campaignId`, or its arm records none. Impressions need nothing: the API counts them for the arm it served.
 - To record the arm in the site's own analytics, read `experimentId` and `variant` from the `gopaylocal:config` event, `gpl.getExperiment()` or `usePPP()`. They are set even when the arm shows no banner.
 
 ## Visitor id (A/B test assignment)
@@ -252,7 +252,7 @@ Errors:
   - Props: `position`, `backgroundColor`, `fontColor`, `borderRadius`, `fontSize`, `className`, `onClose`, `showCloseIcon`, `noStyles`.
   - Uses the campaign's design (position, colors, message, CTA text, flag, close button), and props override it. `showCloseIcon` falls back to the design's `showCloseBtn`.
   - Renders nothing when `discount` is 0.
-  - Sends `impression`, `copy` and `dismiss`.
+  - Sends `copy`.
   - The message is plain text (`**` is not interpreted).
   - Dismissal is component state only and is not remembered across page loads.
 - `<PPPPrice price={29} />`: also `className`, `localize`, `showDecimal`, `currencyDisplay` (`'symbol' | 'code' | 'name'`). Renders the base price when there is no discount.
@@ -308,7 +308,7 @@ There is no `environment` option; passing it is a TypeScript error.
 
 **`showBanner(options)`**
 - Layers settings as SDK defaults, then the campaign's design from the API, then `options`. Options: `position`, colors, `ctaText`, `messageTemplate`, `showFlag`, `showCloseBtn`, `onClose`.
-- Sends `impression`, `copy` and `dismiss`.
+- Sends `copy`.
 - Does not remember dismissal.
 
 **Exports:** `GoPayLocal`, `formatCurrency`, `countryToFlag`, `splitPrice`, `DEFAULT_API_BASE`, `VISITOR_ID_STORAGE_KEY`, and the types `GoPayLocalConfig`, `PPPData`, `PricingResult`, `BannerOptions`, `BannerDesign`, `TrackableEvent` and `CharmStrategy`.
@@ -343,7 +343,7 @@ These are the product's own prices from the response, whatever `baseCurrencyCode
 
 Only needed for a banner you build yourself, and the SDKs' `track(event)` already does it. `POST /v1/events`, with a JSON body that may be sent as `text/plain`. [apps/api/src/routes/analytics-ingest.ts]
 
-- Single event: `{ "key", "event", "campaignId", "countryCode", "url"?, "code"? }`, where `event` is `impression`, `click`, `copy` or `dismiss`.
+- Single event: `{ "key", "event", "campaignId", "countryCode", "url"?, "code"? }`, where `event` is `click` or `copy`.
 - Batch: `{ "key", "events": [{ "eventType", "campaignId", "countryCode", "couponId"?, "pageUrl"?, "discountPercent"? }] }`, 1 to 50 events.
 - Take `campaignId` and `country` from the config response.
 - Responses:
@@ -354,6 +354,7 @@ Only needed for a banner you build yourself, and the SDKs' `track(event)` alread
 - What gets dropped silently, still with `204`:
   - events without `campaignId` and `countryCode`
   - events whose campaign belongs to another account
+  - `impression`, which is accepted but not counted, because the API counts impressions itself when it serves an offer
   - `dismiss`, which is accepted but not counted
   - `redemption`, which is accepted but never stored, because redemptions are recorded only from payment-provider webhooks. Don't send it.
 

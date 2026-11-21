@@ -109,7 +109,7 @@ gpl.showBanner({
   position: 'bottom-right',
   onClose: () => {
     console.log('Banner dismissed');
-    // Also tell your own analytics (GoPayLocal already records the dismissal)
+    // Tell your own analytics (GoPayLocal does not record dismissals)
     analytics.track('ppp_banner_dismissed');
   },
 });
@@ -160,4 +160,4 @@ The banner slides in with a 300ms ease-out animation:
 
 ## Analytics
 
-Like the standalone banner script, the SDK banner reports an `impression` when it is shown, `copy` when the code is copied and `dismiss` when it is closed. The events go to your GoPayLocal [analytics](/banner/events) and are attributed to the campaign that produced the discount (the assigned arm during an [A/B experiment](/guides/ab-testing)). If you build your own banner instead, report the same events with [`gpl.track()`](/js/client#track).
+The API counts an impression when it serves the discount, so the banner sends nothing for it. Like the standalone banner script, the SDK banner reports `copy` when the code is copied. Both go to your GoPayLocal [analytics](/banner/events) and are attributed to the campaign that produced the discount (the assigned arm during an [A/B experiment](/guides/ab-testing)). If you build your own banner instead, report copies and clicks with [`gpl.track()`](/js/client#track).

@@ -7,13 +7,15 @@
  *           data-no-storage              (optional) store nothing in the browser
  *           async></script>
  *
- * script.js is a loader that injects bundle.js, so the attributes usually sit
- * on a different tag from the one running this code. Candidates are the
- * running script first, then every script whose src contains `/v1/banner/` or
- * `gopaylocal`, in document order. The key comes from the first candidate with
- * a `key` query parameter, the API base from that tag's src (everything before
- * `/v1/`, so a self-hosted API works by loading the script from it), and each
- * data attribute from the first candidate that has it.
+ * script.js is the banner itself. It used to be a loader that injected
+ * bundle.js, and a page can still hold that loader in its cache, so the
+ * attributes may sit on a different tag from the one running this code.
+ * Candidates are the running script first, then every script whose src
+ * contains `/v1/banner/` or `gopaylocal`, in document order. The key comes
+ * from the first candidate with a `key` query parameter, the API base from
+ * that tag's src (everything before `/v1/`, so a self-hosted API works by
+ * loading the script from it), and each data attribute from the first
+ * candidate that has it.
  */
 
 import { DEFAULT_API_BASE } from '../../js-sdk/src/core';

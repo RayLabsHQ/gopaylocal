@@ -383,15 +383,17 @@ describe("Banner local prices (full Worker)", () => {
     expect(JSON.parse(configText)).toEqual({ error: expect.any(String), code: "secret_key_not_allowed" });
     expect(configText).not.toContain(hex);
 
+    // script.js is the same file for every key (the banner itself, a static
+    // asset in a deployment): nothing of the key can be in it. The banner
+    // refuses a secret key in the browser (packages/banner/src/index.test.ts).
     const script = await probe.request(`/v1/banner/script.js?key=${secret}`);
-    expect(script.status).toBe(400);
-    // The route's type for every script.js answer, the loader included.
+    expect(script.status).toBe(200);
     expect(script.headers.get("content-type")).toMatch(/^application\/javascript/);
     expect(await script.text()).not.toContain(hex);
 
     const events = await probe.request("/v1/events", {
       method: "POST",
-      json: { key: secret, event: "impression", campaignId: ulid(), countryCode: "IN" },
+      json: { key: secret, event: "click", campaignId: ulid(), countryCode: "IN" },
     });
     expect(events.status).toBe(401);
     const eventsText = await events.text();

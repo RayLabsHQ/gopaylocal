@@ -102,7 +102,12 @@ export interface PPPResponse {
 
 // ── Context Value ────────────────────────────────────────────────────────────
 
-/** Banner interaction events that can be reported to GoPayLocal analytics. */
+/**
+ * Banner interaction events. Only `'click'` and `'copy'` are sent to the API:
+ * an impression is counted by the API when it serves the offer, and a
+ * dismissal is not stored. `'impression'` and `'dismiss'` are accepted and do
+ * nothing.
+ */
 export type PPPTrackableEvent = 'impression' | 'click' | 'copy' | 'dismiss';
 
 /** The value exposed by the PPP context to all consumer hooks and components. */
@@ -166,6 +171,7 @@ export interface PPPContextValue {
   /**
    * Report a banner interaction to GoPayLocal analytics, for custom banners
    * (`<PPPBanner>` reports its own). Does nothing when no discount applies.
+   * Only `'click'` and `'copy'` are sent (see `PPPTrackableEvent`).
    */
   track: (event: PPPTrackableEvent) => void;
 }

@@ -51,7 +51,7 @@ When no discount applies, the elements keep their original text, so write the ba
 - `getData()`, `getCode()`, `getCountry()`, `getExperiment()`, `isLoading()`, `getError()`, `formatPrice(amount, currencyCode?)`, `subscribe(listener)`
 - `bindPriceElements()` fills `data-gopaylocal-price`, `-price-original`, `-currency-symbol`, `-currency-code`, `-country`, `-country-flag`, `-discount` (rendered with `%`) and `-coupon`
 - `showBanner(options?)` returns `{ remove }`
-- `track('impression' | 'click' | 'copy' | 'dismiss')` reports your own banner's events
+- `track('click' | 'copy')` reports your own banner's events (the API counts the impression itself when it serves the discount)
 - Helpers: `formatCurrency`, `countryToFlag`, `splitPrice`; constants `DEFAULT_API_BASE`, `VISITOR_ID_STORAGE_KEY`
 
 ## Good to know
@@ -59,7 +59,7 @@ When no discount applies, the elements keep their original text, so write the ba
 - Run it in the browser. The discount depends on the country of the device making the request, so calling the API from a server returns the server's location.
 - `discount` is a number (`40` means 40% off).
 - When the API converted your product's price for the visitor (`fxAsOf` is set) and `baseCurrencyCode` is your product's currency, `getPrice()` converts your prices with the response's rate and rounds them with the campaign's charm pricing, using the same code as the API: $19 at 60% off shows an Indian visitor ₹719 (was ₹1,769). Converted prices are estimates; your payment provider charges the exact discounted price in your currency. Otherwise prices are the base price minus the discount, exact ($7.60, was $19). Whole amounts show no decimals.
-- `showBanner()` starts from the campaign's banner design (sent by the API), with your options overriding it. It reports `impression`, `copy` and `dismiss` events, like the script tag, and shows "Powered by GoPayLocal" when the API asks for it (Free plan).
+- `showBanner()` starts from the campaign's banner design (sent by the API), with your options overriding it. It reports `copy` events, like the script tag (the API counts the impression when it serves the discount), and shows "Powered by GoPayLocal" when the API asks for it (Free plan).
 - A/B experiments: the SDK keeps a random visitor id in `localStorage` (`gpl_vid`, shared with the script tag and the React SDK) so a visitor stays in one arm. Pass `visitorId` to use your own, or `persistVisitorId: false` to store nothing. `getExperiment()` returns the arm, also when the arm has no discount for the visitor.
 - Responses with a discount are cached in `sessionStorage` for 5 minutes (`cacheTtl`), per key and product. Blocked storage never breaks the SDK.
 - Self-hosting: set `apiBase` to your API's URL. The default is `https://api.gopaylocal.com`.

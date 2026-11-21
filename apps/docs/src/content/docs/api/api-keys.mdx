@@ -107,4 +107,4 @@ DELETE /v1/teams/{orgId}/api-keys/:id
 
 The key is deleted and can't be restored:
 - A revoked **secret** key is refused on its next request (`401`, `"code": "invalid_api_key"`).
-- A revoked **public** key stops serving banners and accepting events within about a minute.
+- A revoked **public** key stops serving banners and accepting events within about two minutes.

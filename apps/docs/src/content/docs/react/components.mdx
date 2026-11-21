@@ -15,7 +15,7 @@ The examples below are for a $19 price and a visitor from India with 60% off (ra
 
 Renders a discount banner with the visitor's PPP information. Renders nothing if no discount is available.
 
-It uses your campaign's [banner design](/banner/customization) (message, button text, colors, position, flag and close button), and the props below override it. It reports `impression` (once per campaign), `copy` and `dismiss` events to your [analytics](/banner/events), and shows a "Powered by GoPayLocal" link when the API asks for it (the Free plan).
+It uses your campaign's [banner design](/banner/customization) (message, button text, colors, position, flag and close button), and the props below override it. It reports a `copy` event to your [analytics](/banner/events) when the visitor copies the code (the impression was counted by the API when it served the discount), and shows a "Powered by GoPayLocal" link when the API asks for it (the Free plan).
 
 The message supports the same [placeholders](/banner/customization#message-placeholders) as the script tag. `{{localPrice}}` and `{{localOriginalPrice}}` are your product's price from the API, in the visitor's currency when converted, whatever `baseCurrencyCode` you set on the provider.
 

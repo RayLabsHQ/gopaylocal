@@ -11,14 +11,14 @@ GoPayLocal counts four things per day, campaign and country: banner **impression
 
 | Metric | Recorded when |
 |---|---|
-| **Impressions** | The banner script or an SDK shows the banner |
+| **Impressions** | The API serves an offer: a banner script or SDK request is answered with a discount ([details](/banner/events/#impressions)) |
 | **Clicks** | A visitor clicks the banner's button |
 | **Copies** | A visitor copies the coupon code |
 | **Redemptions** | Your payment provider reports, through its webhook, an order that used one of the campaign's codes |
 
 Redemptions come only from payment-provider webhooks. A browser can't report a redemption, so redemption counts can't be inflated by someone holding your public key. Dismissals are not counted.
 
-Events are counted as they arrive, and a redemption appears once the provider's webhook reaches GoPayLocal.
+Impressions, clicks and copies are counted as they happen (on Pro and self-hosted, impressions can take about 15 seconds to appear), and a redemption appears once the provider's webhook reaches GoPayLocal.
 
 ## Overview Page
 

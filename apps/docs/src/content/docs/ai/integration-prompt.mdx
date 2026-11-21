@@ -53,7 +53,7 @@ Step 4 - Install and integrate, following the project's existing conventions.
 
 Step 5 - Verify.
 - Run the project's type check, lint and build.
-- Start the dev server, load a page in a browser (a headless browser is fine), and confirm that a request to https://api.gopaylocal.com/v1/banner/config/<key> is made and returns JSON with a "show" field. For the banner script, also confirm that script.js and bundle.js load.
+- Start the dev server, load a page in a browser (a headless browser is fine), and confirm that a request to https://api.gopaylocal.com/v1/banner/config/<key> is made and returns JSON with a "show" field. For the banner script, also confirm that script.js loads.
 - "show": false with a "reason" means the integration works and no discount applies to this request. Look up the reason on the reference card; vpn_detected, no_discount, domain_not_allowed and no_active_campaign are the usual ones. HTTP 401 means the key is wrong.
 - Expect no banner from a development machine: high-income countries, VPNs and cloud machines get no discount. To see the banner, I can temporarily give my own country a discount in the dashboard campaign. Tell me if that is needed.
 

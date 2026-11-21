@@ -1,0 +1,16 @@
+# Response headers for the banner files in this directory. Cloudflare reads this
+# file and does not serve it (https://developers.cloudflare.com/workers/static-assets/headers/).
+# The Worker's own handlers for the same two paths (src/routes/banner-script.ts,
+# used where the files are absent) send the same values.
+#
+# script.js is what a page loads: an hour in the browser, so a banner fix reaches
+# visitors within the hour. bundle.js is the same file for pages that cached the
+# old loader: a day, as it always was.
+
+/v1/banner/script.js
+  Cache-Control: public, max-age=3600
+  Access-Control-Allow-Origin: *
+
+/v1/banner/bundle.js
+  Cache-Control: public, max-age=86400
+  Access-Control-Allow-Origin: *

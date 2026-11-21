@@ -294,20 +294,20 @@ const banner = gpl.showBanner({
 banner.remove();
 ```
 
-The banner reports `impression`, `copy` and `dismiss` events to your [analytics](/banner/events), like the script tag does. See [Banner](/js/banner) for all options.
+The banner reports a `copy` event to your [analytics](/banner/events) when the visitor copies the code, like the script tag does. The impression was counted by the API when it served the discount. See [Banner](/js/banner) for all options.
 
 ### track()
 
 Report a banner interaction to your GoPayLocal analytics. Use it when you build your own banner or pricing UI instead of calling `showBanner()`, which reports its own events. The event is attributed to the current campaign (the assigned arm during an experiment) and the visitor's country. It does nothing when no discount applies.
 
 ```js
-gpl.track('impression'); // when your discount message is shown
-gpl.track('copy');       // when the visitor copies the code (the code is sent with it)
-gpl.track('dismiss');    // when they close it
-gpl.track('click');      // any other click on it
+gpl.track('copy');  // when the visitor copies the code (the code is sent with it)
+gpl.track('click'); // any other click on it
 ```
 
-**Parameters:** `event: 'impression' | 'click' | 'copy' | 'dismiss'`
+**Parameters:** `event: 'click' | 'copy'`
+
+You don't report an impression: the API counted it when it served the discount ([how impressions are counted](/banner/events/#impressions)). `'impression'` and `'dismiss'` are still accepted, so older code keeps working, and send nothing.
 
 ---
 

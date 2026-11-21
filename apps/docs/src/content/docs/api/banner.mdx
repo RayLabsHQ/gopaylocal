@@ -197,7 +197,7 @@ On the hosted service, current usage is shown in the dashboard under Settings, B
 
 ## Get Banner Script
 
-Returns a small loader that adds the banner bundle to the page.
+Returns the banner: one JavaScript file, the same for every key.
 
 ```
 GET /v1/banner/script.js?key=:publicKey
@@ -207,9 +207,11 @@ GET /v1/banner/script.js?key=:publicKey
 <script src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" async></script>
 ```
 
-The loader inserts `GET /v1/banner/bundle.js`, which fetches the config above, renders the banner and reports [banner events](/banner/events/). Script tag options (product, visitor ID, storage) are described in [Installation](/banner/installation/).
+The script reads `key` from its own tag, fetches the config above, renders the banner and reports [banner events](/banner/events/). Script tag options (product, visitor ID, storage) are described in [Installation](/banner/installation/).
 
-A missing key, or a key with characters other than letters, digits, `_` and `-`, gets a `400` response with a JavaScript comment body (`// Missing API key` or `// Invalid API key`). A secret key (`gpl_sk_`) also gets a `400` with a comment saying so, and is never written into the loader (see [A secret key on a public endpoint](/api/authentication/#a-secret-key-on-a-public-endpoint)).
+The file is static: it is served without running the API, and the server does not read `key` on this request. A tag without a key does nothing. With a secret key (`gpl_sk_`) the banner sends nothing and logs an error to the browser console saying that the key is exposed and must be revoked (see [A secret key on a public endpoint](/api/authentication/#a-secret-key-on-a-public-endpoint)).
+
+`GET /v1/banner/bundle.js` returns the same file. `script.js` used to be a loader that added it to the page.
 
 | File | Cache-Control |
 |---|---|

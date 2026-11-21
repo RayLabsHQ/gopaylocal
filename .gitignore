@@ -13,6 +13,9 @@ dist/
 !.env.test
 !.env.example
 
+# The banner copied into the API Worker's static assets (apps/api/scripts/build-static.mjs)
+/apps/api/static/v1/
+
 *.log
 .DS_Store
 .vite/

@@ -15,7 +15,7 @@ When a visitor loads your page with the GoPayLocal script, here is what happens:
 
 1. **Browser loads the script**
 
-   The `<script>` tag loads asynchronously and does not block page rendering. A loader of about 200 bytes adds the banner bundle (about 8.2 KB, 3.6 KB gzipped).
+   The `<script>` tag loads asynchronously and does not block page rendering. `script.js` is the banner itself (about 8.5 KB, 3.8 KB gzipped), a static file that Cloudflare serves without running the API.
 
 2. **One request to the API**
 
@@ -93,13 +93,14 @@ When a visitor loads your page with the GoPayLocal script, here is what happens:
 |---|---|---|
 | **Cloudflare KV** | Each workspace's banner document | Until the next change in the dashboard, which normally applies within seconds and reaches every location within about a minute (in the worst case, about 16 minutes) |
 | **Browser sessionStorage** | The config response, per key and product | 5 minutes (the banner script keeps every answer; the SDKs only answers with a discount) |
+| **API memory** | Which workspace a public key belongs to, and whether the workspace is over its quota | 1 minute |
 | **Browser HTTP cache** | `script.js` / `bundle.js` | 1 hour / 1 day |
 
 Within those 5 minutes, page views in the same tab make no further API call.
 
 ## Analytics Pipeline
 
-Banner events (impressions, clicks, copies) are sent with `navigator.sendBeacon()` to `POST /v1/events`, so they arrive even when the visitor navigates away. The API adds them to daily totals per campaign and country in PostgreSQL. Redemptions come only from your payment provider's webhooks. See [Analytics](/dashboard/analytics/).
+The API counts an impression in the request that serves the offer. Clicks and copies are sent with `navigator.sendBeacon()` to `POST /v1/events`, so they arrive even when the visitor navigates away. The API adds all three to daily totals per campaign and country in PostgreSQL. Redemptions come only from your payment provider's webhooks. See [Analytics](/dashboard/analytics/).
 
 ## Security
 

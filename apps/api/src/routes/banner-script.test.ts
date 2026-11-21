@@ -11,15 +11,19 @@ import { TEST_BANNER, TEST_COUNTRIES, bannerDocForCampaign, cachedCampaign } fro
 import { resetFxCacheForTests } from "../services/fx-cache";
 import { FX_RATES_KEY } from "../services/fx-refresh.service";
 import type { UsageRow } from "../services/usage-meter";
+import type { ImpressionRow } from "../services/impression-meter";
+import { BANNER_HOT_CACHE_TTL_MS, configureBannerHotCache } from "../services/banner-hot-cache";
 
 // The route imports the pre-built browser bundle as a wrangler text module;
 // stub it so the browser code never runs under Node.
-vi.mock("../../../../packages/banner/dist/banner.js", () => ({ default: "" }));
+vi.mock("../../../../packages/banner/dist/banner.js", () => ({ default: "/* banner bundle */" }));
 
 const state = vi.hoisted(() => ({
   db: null as unknown,
   written: [] as Array<Array<Record<string, unknown>>>,
   writeError: null as Error | null,
+  impressions: [] as ImpressionRow[][],
+  impressionWriteError: null as Error | null,
 }));
 
 // Postgres: every createDb() returns the current test's SQL recorder.
@@ -37,6 +41,18 @@ vi.mock("../services/usage-meter", async (importOriginal) => {
   };
 });
 
+// Impressions: the real ImpressionMeter, with the analytics_rollups write captured.
+vi.mock("../services/impression-meter", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../services/impression-meter")>();
+  return {
+    ...actual,
+    writeImpressionRows: vi.fn(async (_db: unknown, rows: ImpressionRow[]) => {
+      if (state.impressionWriteError) throw state.impressionWriteError;
+      state.impressions.push(rows.map((r) => ({ ...r })));
+    }),
+  };
+});
+
 // Background rebuilds are asserted, not run (banner-cache.service.test.ts
 // covers the builder).
 vi.mock("../services/banner-cache.service", async (importOriginal) => {
@@ -44,8 +60,9 @@ vi.mock("../services/banner-cache.service", async (importOriginal) => {
   return { ...actual, pushBannerConfigForOrg: vi.fn(async () => {}) };
 });
 
-const { default: bannerScriptRoute, buildLoaderScript } = await import("./banner-script");
+const { default: bannerScriptRoute } = await import("./banner-script");
 const { usageMeter } = await import("../services/usage-meter");
+const { impressionMeter } = await import("../services/impression-meter");
 const { pushBannerConfigForOrg } = await import("../services/banner-cache.service");
 
 const PUBLIC_KEY = "gpl_pk_test_fastpath";
@@ -121,7 +138,14 @@ beforeEach(() => {
   state.db = createSqlRecorder().db;
   state.written = [];
   state.writeError = null;
+  state.impressions = [];
+  state.impressionWriteError = null;
   usageMeter.reset();
+  impressionMeter.reset();
+  impressionMeter.configure({ flushDelayMs: 5, flushThreshold: 1_000, failureBackoffMs: 5_000 });
+  // The route remembers key and quota lookups for a minute. Off here: every
+  // test seeds its own KV. "remembered lookups" below turns it on.
+  configureBannerHotCache({ ttlMs: 0 });
   // The FX document is memoised per isolate; no test may see another's rates.
   resetFxCacheForTests();
   // Short unlimited window so settle() doesn't wait 15 s (self-hosted and Pro
@@ -136,6 +160,7 @@ afterEach(() => {
 });
 
 const total = () => state.written.flat().reduce((n, r) => n + (r.count as number), 0);
+const impressionTotal = () => state.impressions.flat().reduce((n, r) => n + r.count, 0);
 
 // ── KV document (fast path) ────────────────────────────────────────────────
 
@@ -848,16 +873,18 @@ describe("a secret key (gpl_sk_) on the banner endpoints", () => {
     for (const call of errorSpy.mock.calls) expect(JSON.stringify(call)).not.toContain(HEX);
   });
 
-  it("script.js: 400 and the key is never written into the loader", async () => {
+  // script.js is one static file for every key: nothing from the request can
+  // be written into it. The banner refuses a secret key in the browser
+  // (packages/banner/src/index.test.ts).
+  it("script.js: the same file whatever the key, with nothing of the key in it", async () => {
     const res = await bannerScriptRoute.fetch(
       new Request(`https://api.test/v1/banner/script.js?key=${SECRET}`),
       createTestBindings(),
     );
     const text = await res.text();
-    expect(res.status).toBe(400);
-    expect(text.startsWith("//")).toBe(true);
+    expect(res.status).toBe(200);
+    expect(text).toBe("/* banner bundle */");
     expect(text).not.toContain(HEX);
-    expect(res.headers.get("content-type")).toContain("application/javascript");
   });
 
   it("a public key still works (control)", async () => {
@@ -866,36 +893,196 @@ describe("a secret key (gpl_sk_) on the banner endpoints", () => {
   });
 });
 
-// ── loader script (B-5) ────────────────────────────────────────────────────
+// ── the banner file ────────────────────────────────────────────────────────
 
-describe("GET /v1/banner/script.js (B-5)", () => {
-  async function script(key: string) {
-    const res = await bannerScriptRoute.fetch(
-      new Request(`https://api.test/v1/banner/script.js?key=${encodeURIComponent(key)}`),
-      createTestBindings(),
-    );
-    return { status: res.status, text: await res.text() };
+// In a deployment these paths are static assets and never reach the Worker
+// (wrangler.toml [assets]); these handlers are what answers without them.
+describe("GET /v1/banner/script.js and bundle.js", () => {
+  async function get(path: string) {
+    const res = await bannerScriptRoute.fetch(new Request(`https://api.test${path}`), createTestBindings());
+    return { status: res.status, text: await res.text(), headers: res.headers };
   }
 
-  it("embeds a valid key in a JSON string literal pointing at the bundle", async () => {
-    const { status, text } = await script("gpl_pk_abc123");
+  it("script.js is the banner itself, not a loader, cached for an hour", async () => {
+    const { status, text, headers } = await get("/v1/banner/script.js?key=gpl_pk_abc123");
     expect(status).toBe(200);
-    expect(text).toContain('s.src="https://api.test/v1/banner/bundle.js?key=gpl_pk_abc123"');
+    expect(text).toBe("/* banner bundle */");
+    expect(headers.get("content-type")).toContain("application/javascript");
+    expect(headers.get("cache-control")).toBe("public, max-age=3600");
   });
 
-  it("refuses a key with characters outside [A-Za-z0-9_-] instead of writing it into JavaScript", async () => {
-    for (const key of ["abc';alert(1)//", 'abc"};alert(1)//', "abc</script>", "a b"]) {
-      expect(await script(key)).toEqual({ status: 400, text: "// Invalid API key" });
+  it("bundle.js (what the old loader asked for) is the same file, cached for a day", async () => {
+    const { status, text, headers } = await get("/v1/banner/bundle.js?key=gpl_pk_abc123");
+    expect(status).toBe(200);
+    expect(text).toBe("/* banner bundle */");
+    expect(headers.get("cache-control")).toBe("public, max-age=86400");
+  });
+
+  it("the answer does not depend on the key: missing, odd or hostile keys change nothing", async () => {
+    for (const query of ["", "?key=", "?key=abc%27%3Balert(1)%2F%2F", "?key=%3C%2Fscript%3E"]) {
+      const { status, text } = await get(`/v1/banner/script.js${query}`);
+      expect(status).toBe(200);
+      expect(text).toBe("/* banner bundle */");
     }
   });
+});
 
-  it("buildLoaderScript cannot be broken out of, whatever the key", () => {
-    const key = "x';alert(1);'\"</script>";
-    const out = buildLoaderScript("https://api.test", key);
-    const literal = out.match(/s\.src=("(?:[^"\\]|\\.)*");/)![1]!;
-    const src = new URL(JSON.parse(literal) as string);
-    expect(src.origin + src.pathname).toBe("https://api.test/v1/banner/bundle.js");
-    expect(src.searchParams.get("key")).toBe(key);
-    expect(out).not.toContain("';alert");
+// ── impressions, counted by the API ────────────────────────────────────────
+
+describe("impressions", () => {
+  const DAY = expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/);
+
+  it("an answer with an offer counts one impression of the served campaign, for the visitor's country", async () => {
+    const { body } = await call(await seededEnv());
+    expect(body.show).toBe(true);
+    expect(state.impressions).toEqual([
+      [{ organizationId: "org_1", campaignId: "camp_1", countryCode: "IN", day: DAY, count: 1 }],
+    ]);
+  });
+
+  it("an answer without an offer counts none", async () => {
+    await call(await seededEnv(), { query: { product: "NOPE" } }); // no_active_campaign
+    await call(await seededEnv(), { country: "US" }); // no_discount
+    await call(await seededEnv({ doc: bannerDocForCampaign({ allowedDomains: ["a.example"] }) })); // domain_not_allowed
+    await call(await seededEnv({ usage: "over" })); // quota_exceeded
+    await call(await seededEnv(), { country: "XX" }); // unknown_country
+    expect(state.impressions).toEqual([]);
+    expect(total()).toBe(3); // the first three are still API calls
+  });
+
+  it("a test-environment campaign's impression is counted too", async () => {
+    await call(await seededEnv({ doc: bannerDocForCampaign({ environment: "test" }) }));
+    expect(impressionTotal()).toBe(1);
+  });
+
+  it("during an experiment the impression goes to the arm that was served", async () => {
+    const doc = bannerDocForCampaign({});
+    doc.campaigns.camp_2 = cachedCampaign({});
+    doc.products = {
+      prod_1: { kind: "experiment", experimentId: "exp_1", campaignAId: "camp_1", campaignBId: "camp_2", trafficSplitB: 50 },
+    };
+    const { body } = await call(await seededEnv({ doc }), { query: { vid: "visitor_0123456789abcdef" } });
+    expect(body.show).toBe(true);
+    expect(state.impressions.flat()).toEqual([expect.objectContaining({ campaignId: body.campaignId, count: 1 })]);
+  });
+
+  it("an unlimited organization's impressions go out as one statement per window, one row per campaign and country", async () => {
+    impressionMeter.configure({ flushDelayMs: 20 });
+    usageMeter.configure({ unlimitedFlushDelayMs: 20 });
+    const doc = bannerDocForCampaign({});
+    doc.campaigns.camp_1!.countries.BR = { discount: 30, tier: 2, code: "PPP30", countryName: "Brazil" };
+    const env = await seededEnv({ usage: "pro", doc });
+    const ctxs = [createExecutionContext(), createExecutionContext(), createExecutionContext()];
+    await call(env, { ctx: ctxs[0], country: "IN" });
+    await call(env, { ctx: ctxs[1], country: "IN" });
+    await call(env, { ctx: ctxs[2], country: "BR" });
+    expect(state.impressions).toEqual([]); // nothing written on the request path
+    for (const ctx of ctxs) await ctx.settle();
+    expect(state.impressions).toHaveLength(1);
+    expect(state.impressions[0]).toEqual([
+      expect.objectContaining({ campaignId: "camp_1", countryCode: "IN", count: 2 }),
+      expect.objectContaining({ campaignId: "camp_1", countryCode: "BR", count: 1 }),
+    ]);
+  });
+
+  it("fails open: a failing impression write never affects the banner or the usage count, and is logged", async () => {
+    state.impressionWriteError = new Error("db down");
+    const { status, body } = await call(await seededEnv());
+    expect(status).toBe(200);
+    expect(body.show).toBe(true);
+    expect(total()).toBe(1);
+    expect(errorSpy).toHaveBeenCalledWith(
+      "impression-meter: write failed; counts kept for the next flush",
+      expect.objectContaining({ organizationId: "org_1", count: 1 }),
+    );
+  });
+});
+
+// ── remembered lookups: one KV read per request on a warm isolate ──────────
+
+describe("remembered lookups (services/banner-hot-cache.ts)", () => {
+  /** The CACHE keys a request read, in order. */
+  function watchReads(env: Bindings): string[] {
+    const keys: string[] = [];
+    const get = env.CACHE.get.bind(env.CACHE);
+    env.CACHE.get = (async (key: string, ...rest: unknown[]) => (
+      keys.push(key), (get as (...a: unknown[]) => unknown)(key, ...rest)
+    )) as KVNamespace["get"];
+    return keys;
+  }
+  const strip = (keys: string[]) => keys.filter((k) => k !== FX_RATES_KEY);
+
+  beforeEach(() => {
+    configureBannerHotCache({ ttlMs: BANNER_HOT_CACHE_TTL_MS });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("the first request reads the key mapping, the quota and the document; the next reads the document only", async () => {
+    const env = await seededEnv({ usage: "pro" });
+    const keyHash = await sha256Hex(PUBLIC_KEY);
+    const reads = watchReads(env);
+
+    expect((await call(env)).body.show).toBe(true);
+    expect(strip(reads)).toEqual([`apikey:${keyHash}`, usageKey("org_1"), `banner-config:${API_KEY_ID}`]);
+
+    reads.length = 0;
+    expect((await call(env)).body.show).toBe(true);
+    expect((await call(env)).body.show).toBe(true);
+    expect(strip(reads)).toEqual([`banner-config:${API_KEY_ID}`, `banner-config:${API_KEY_ID}`]);
+  });
+
+  it("the document itself is never remembered: an edit shows on the next request", async () => {
+    const env = await seededEnv();
+    expect((await call(env)).body.discount).toBe(40);
+    const edited = bannerDocForCampaign({});
+    edited.campaigns.camp_1!.countries.IN!.discount = 55;
+    await env.CACHE.put(`banner-config:${API_KEY_ID}`, JSON.stringify(edited));
+    expect((await call(env)).body.discount).toBe(55);
+  });
+
+  it("a quota that was just reached applies once the minute is over, not before", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const env = await seededEnv();
+    expect((await call(env)).body.show).toBe(true);
+    await env.CACHE.put(usageKey("org_1"), JSON.stringify({ count: 12_000, limit: 10_000, over: true, updatedAt: "" }));
+
+    vi.setSystemTime(Date.now() + BANNER_HOT_CACHE_TTL_MS - 1);
+    expect((await call(env)).body.show).toBe(true);
+    vi.setSystemTime(Date.now() + 1);
+    expect((await call(env)).body).toEqual({ show: false, reason: "quota_exceeded" });
+  });
+
+  it("a revoked key is answered for at most the same minute", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const env = await seededEnv();
+    expect((await call(env)).status).toBe(200);
+    // Revocation removes the mapping and the document (routes/api-keys.ts).
+    await env.CACHE.delete(`apikey:${await sha256Hex(PUBLIC_KEY)}`);
+    await env.CACHE.delete(`banner-config:${API_KEY_ID}`);
+    state.db = createSqlRecorder([[], [], [], []]).db; // no campaigns, then no key row
+
+    vi.setSystemTime(Date.now() + BANNER_HOT_CACHE_TTL_MS);
+    expect((await call(env)).status).toBe(401);
+  });
+
+  it("an unknown key is never remembered as valid", async () => {
+    state.db = createSqlRecorder([[]]).db;
+    const env = await seededEnv({ keyInKv: false });
+    expect((await call(env)).status).toBe(401);
+    expect((await call(env)).status).toBe(401);
+  });
+
+  it("a key resolved through Postgres is remembered like one from KV", async () => {
+    const r = createSqlRecorder([[{ id: API_KEY_ID, organizationId: "org_1", keyType: "public" }]]);
+    state.db = r.db;
+    const env = await seededEnv({ keyInKv: false });
+    expect((await call(env)).body.show).toBe(true);
+    const lookups = r.queries.filter((q) => /from "api_keys"/.test(q.sql)).length;
+    // The KV backfill is mocked out with the rebuild; memory alone answers now.
+    await env.CACHE.delete(`apikey:${await sha256Hex(PUBLIC_KEY)}`);
+    expect((await call(env)).body.show).toBe(true);
+    expect(r.queries.filter((q) => /from "api_keys"/.test(q.sql)).length).toBe(lookups);
   });
 });

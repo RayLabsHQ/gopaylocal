@@ -15,8 +15,8 @@ account.
 <script src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_YOUR_PUBLIC_KEY" async></script>
 ```
 
-1. The script tag loads a small loader, which loads the banner bundle (under 4 KB
-   gzipped; it renders in a closed Shadow DOM, so it does not touch your page's CSS).
+1. The script tag loads the banner (under 4 KB gzipped; it renders in a closed Shadow
+   DOM, so it does not touch your page's CSS).
 2. The banner asks the API for this visitor's offer. The API reads the country from the
    Cloudflare request, checks the visitor's network against VPN, Tor and datacenter lists,
    and picks the campaign for your product.

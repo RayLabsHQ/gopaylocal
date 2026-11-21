@@ -78,7 +78,7 @@ function PricingBanner() {
 | `campaignId` | `string \| null` | The campaign that produced the discount (the assigned arm during an experiment) |
 | `experimentId` | `string \| null` | The running [A/B experiment](/react/provider#ab-experiments)'s id, or `null`. Also set when the visitor's arm has no discount. |
 | `variant` | `'a' \| 'b' \| null` | The visitor's arm: `'a'` (control), `'b'` (variant), or `null` |
-| `track` | `(event: 'impression' \| 'click' \| 'copy' \| 'dismiss') => void` | Report a banner interaction to your GoPayLocal analytics |
+| `track` | `(event: 'click' \| 'copy') => void` | Report a banner interaction to your GoPayLocal analytics. `'impression'` and `'dismiss'` are also accepted and send nothing. |
 
 ### Helper Functions
 
@@ -111,18 +111,13 @@ formatPrice(19, { minimumFractionDigits: 0, maximumFractionDigits: 0 }); // → 
 
 Output follows the browser's locale, so a visitor may see for example `US$7.60`.
 
-**`track(event)`** — Use it when you build your own banner instead of [`<PPPBanner>`](/react/components#pppbanner), which reports its own events. The event is attributed to the current campaign and the visitor's country; it does nothing without a discount.
+**`track(event)`** — Use it when you build your own banner instead of [`<PPPBanner>`](/react/components#pppbanner), which reports its own events. Report copies and clicks; the impression was counted by the API when it served the discount. The event is attributed to the current campaign and the visitor's country; it does nothing without a discount.
 
 ```tsx
-import { useEffect } from 'react';
 import { usePPP } from '@gopaylocal/react';
 
 function CouponNotice() {
   const { code, track } = usePPP();
-
-  useEffect(() => {
-    if (code) track('impression');
-  }, [code, track]);
 
   if (!code) return null;
   return (

@@ -96,6 +96,22 @@ export function resolveVisitorId(options: VisitorIdOptions = {}): string | null 
   }
 }
 
+/**
+ * Whether `key` looks like a secret API key (`gpl_sk_`). The same prefix rule
+ * as the API's (apps/api/src/lib/public-key.ts): case-insensitive, leading
+ * whitespace ignored.
+ */
+export function isSecretKey(key: unknown): boolean {
+  return typeof key === 'string' && /^\s*gpl_sk_/i.test(key);
+}
+
+/**
+ * What a client logs when it is given a secret key, before it sends anything.
+ * The wording after the prefix is the API's refusal text for the same mistake.
+ */
+export const SECRET_KEY_MESSAGE =
+  'GoPayLocal: Secret keys (gpl_sk_) must never be used in a browser. This key is now exposed: revoke it in the dashboard, replace it with a new secret key on your server, and use your public key (gpl_pk_) here.';
+
 /** Strip trailing slashes; fall back to the hosted API when empty. */
 export function normalizeApiBase(apiBase?: string | null): string {
   return (apiBase || DEFAULT_API_BASE).replace(/\/+$/, '');
@@ -286,7 +302,12 @@ export function fillTemplate(
   });
 }
 
-/** Banner interaction events the clients may report. */
+/**
+ * Banner events. Only `click` and `copy` are sent to the API (`sendEvent`):
+ * an impression is counted by the API itself when it serves the offer, and a
+ * dismissal is not stored. The other two remain in the type so that code
+ * written for earlier versions still compiles.
+ */
 export type TrackableEvent = 'impression' | 'click' | 'copy' | 'dismiss';
 
 export interface TrackRequest {
@@ -301,13 +322,17 @@ export interface TrackRequest {
 /**
  * Report a banner event to `POST {apiBase}/v1/events`, fire and forget.
  *
+ * Only `click` and `copy` are sent. The API counts an impression when it
+ * answers the config request with an offer, and stores no dismissals, so
+ * sending either would be a request for nothing.
+ *
  * The body is a JSON string sent as text/plain, which is CORS-safelisted, so
  * it goes out without a preflight from any origin. Uses `sendBeacon` when it
  * accepts the payload, otherwise a keepalive `fetch` in no-cors mode. Events
  * without a campaign are dropped by the API, so they are not sent.
  */
 export function sendEvent(request: TrackRequest): void {
-  if (!request.campaignId) return;
+  if (!request.campaignId || (request.event !== 'click' && request.event !== 'copy')) return;
   try {
     const url = normalizeApiBase(request.apiBase) + '/v1/events';
     const body = JSON.stringify({

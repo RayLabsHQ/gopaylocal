@@ -49,7 +49,7 @@ describe("buildRollupUpsert (query shape)", () => {
     organizationId: ORG,
     campaignId: "01JCAMPAIGNAAAAAAAAAAAAAAA",
     countryCode: "in",
-    eventType: "impression",
+    eventType: "click",
     now,
   };
 
@@ -60,11 +60,11 @@ describe("buildRollupUpsert (query shape)", () => {
     // which Postgres rejects in the column list and as the SET target.
     const [insertPart, conflictPart] = sql.split(" on conflict ");
     expect(insertPart).toContain('insert into "analytics_rollups" (');
-    expect(insertPart).toContain('"impressions"');
+    expect(insertPart).toContain('"clicks"');
     expect(insertPart).not.toContain('"analytics_rollups"."');
     expect(conflictPart).toBe(
       '("organization_id","campaign_id","country_code","period","period_start","environment") ' +
-        'do update set "impressions" = "analytics_rollups"."impressions" + $10',
+        'do update set "clicks" = "analytics_rollups"."clicks" + $10',
     );
     expect(params).toEqual([
       expect.any(String), // ulid
@@ -97,6 +97,8 @@ describe("buildRollupUpsert (query shape)", () => {
   });
 
   it.each([
+    // Counted by the config endpoint when it serves the offer (services/impression-meter.ts).
+    ["a client-sent impression", { eventType: "impression" }],
     ["a dismiss event", { eventType: "dismiss" }],
     ["a browser-sent redemption (webhooks only)", { eventType: "redemption" }],
     ["an unknown event type", { eventType: "constructor" }],
@@ -109,7 +111,9 @@ describe("buildRollupUpsert (query shape)", () => {
   });
 
   it("maps event types to counters and ignores prototype keys", () => {
-    expect(counterForEvent("impression")).toBe("impressions");
+    expect(counterForEvent("click")).toBe("clicks");
+    expect(counterForEvent("copy")).toBe("copies");
+    expect(counterForEvent("impression")).toBeNull();
     expect(counterForEvent("dismiss")).toBeNull();
     expect(counterForEvent("redemption")).toBeNull();
     expect(counterForEvent("toString")).toBeNull();
@@ -121,21 +125,22 @@ describe("groupRollupIncrements", () => {
     const a = "01JCAMPAIGNAAAAAAAAAAAAAAA";
     const b = "01JCAMPAIGNBBBBBBBBBBBBBBB";
     const grouped = groupRollupIncrements([
-      { campaignId: a, countryCode: "IN", eventType: "impression" },
-      { campaignId: a, countryCode: "in", eventType: "impression" },
-      { campaignId: a, countryCode: "IN", eventType: "impression" },
       { campaignId: a, countryCode: "IN", eventType: "click" },
-      { campaignId: a, countryCode: "BR", eventType: "impression" },
-      { campaignId: b, countryCode: "IN", eventType: "impression" },
+      { campaignId: a, countryCode: "in", eventType: "click" },
+      { campaignId: a, countryCode: "IN", eventType: "click" },
+      { campaignId: a, countryCode: "IN", eventType: "copy" },
+      { campaignId: a, countryCode: "BR", eventType: "click" },
+      { campaignId: b, countryCode: "IN", eventType: "click" },
       { campaignId: a, countryCode: "IN", eventType: "dismiss" },
-      { campaignId: a, countryCode: "IND", eventType: "impression" },
-      { campaignId: "", countryCode: "IN", eventType: "impression" },
+      { campaignId: a, countryCode: "IN", eventType: "impression" },
+      { campaignId: a, countryCode: "IND", eventType: "click" },
+      { campaignId: "", countryCode: "IN", eventType: "click" },
     ]);
     expect(grouped).toEqual([
-      { campaignId: a, countryCode: "IN", eventType: "impression", amount: 3 },
-      { campaignId: a, countryCode: "IN", eventType: "click", amount: 1 },
-      { campaignId: a, countryCode: "BR", eventType: "impression", amount: 1 },
-      { campaignId: b, countryCode: "IN", eventType: "impression", amount: 1 },
+      { campaignId: a, countryCode: "IN", eventType: "click", amount: 3 },
+      { campaignId: a, countryCode: "IN", eventType: "copy", amount: 1 },
+      { campaignId: a, countryCode: "BR", eventType: "click", amount: 1 },
+      { campaignId: b, countryCode: "IN", eventType: "click", amount: 1 },
     ]);
   });
 });
@@ -160,22 +165,22 @@ describe("POST /v1/events rollup writes", () => {
     const res = await post(client, {
       key: RAW_KEY,
       events: [
-        { eventType: "impression", campaignId: owned, countryCode: "IN" },
-        { eventType: "impression", campaignId: owned, countryCode: "IN" },
         { eventType: "click", campaignId: owned, countryCode: "IN" },
+        { eventType: "click", campaignId: owned, countryCode: "IN" },
+        { eventType: "copy", campaignId: owned, countryCode: "IN" },
         { eventType: "dismiss", campaignId: owned, countryCode: "IN" },
-        { eventType: "impression", campaignId: foreign, countryCode: "IN" },
+        { eventType: "click", campaignId: foreign, countryCode: "IN" },
       ],
     });
 
     expect(res.status).toBe(204);
     expect(state.recorder.queries).toHaveLength(2);
-    const [impressions, clicks] = state.recorder.queries;
-    expect(impressions!.sql).toContain('do update set "impressions" = "analytics_rollups"."impressions" + $10');
-    expect(impressions!.params.slice(1, 4)).toEqual([ORG, owned, "IN"]);
-    expect(impressions!.params.at(-1)).toBe(2);
+    const [clicks, copies] = state.recorder.queries;
     expect(clicks!.sql).toContain('do update set "clicks" = "analytics_rollups"."clicks" + $10');
-    expect(clicks!.params.at(-1)).toBe(1);
+    expect(clicks!.params.slice(1, 4)).toEqual([ORG, owned, "IN"]);
+    expect(clicks!.params.at(-1)).toBe(2);
+    expect(copies!.sql).toContain('do update set "copies" = "analytics_rollups"."copies" + $10');
+    expect(copies!.params.at(-1)).toBe(1);
     // Nothing was written for the other org's campaign.
     expect(state.recorder.queries.some((q) => q.params.includes(foreign))).toBe(false);
   });
@@ -191,21 +196,41 @@ describe("POST /v1/events rollup writes", () => {
       events: [
         { eventType: "redemption", campaignId: owned, countryCode: "IN" },
         { eventType: "redemption", campaignId: owned, countryCode: "BR" },
-        { eventType: "impression", campaignId: owned, countryCode: "IN" },
+        { eventType: "click", campaignId: owned, countryCode: "IN" },
       ],
     });
     expect(batch.status).toBe(204);
 
-    // Only the impression reached the database; no statement touches redemptions.
+    // Only the click reached the database; no statement touches redemptions.
     expect(state.recorder.queries).toHaveLength(1);
-    expect(state.recorder.queries[0]!.sql).toContain('"impressions" = "analytics_rollups"."impressions"');
+    expect(state.recorder.queries[0]!.sql).toContain('"clicks" = "analytics_rollups"."clicks"');
     expect(state.recorder.queries.some((q) => q.sql.includes('"redemptions" ='))).toBe(false);
+  });
+
+  // The config endpoint counts the impression when it serves the offer. A
+  // banner or SDK from before that change still posts one per render; storing
+  // it would count the visitor twice.
+  it("ignores client-sent impressions (simple and batch): 204, nothing written", async () => {
+    const owned = ulid();
+    const client = createTestClient(analyticsIngestRoute, await primedEnv({ [owned]: ORG }));
+
+    const simple = await post(client, { key: RAW_KEY, event: "impression", campaignId: owned, countryCode: "IN" });
+    expect(simple.status).toBe(204);
+    const batch = await post(client, {
+      key: RAW_KEY,
+      events: [
+        { eventType: "impression", campaignId: owned, countryCode: "IN" },
+        { eventType: "impression", campaignId: owned, countryCode: "BR" },
+      ],
+    });
+    expect(batch.status).toBe(204);
+    expect(state.recorder.queries).toHaveLength(0);
   });
 
   it("drops a simple banner event whose country is not a 2-letter code", async () => {
     const owned = ulid();
     const client = createTestClient(analyticsIngestRoute, await primedEnv({ [owned]: ORG }));
-    const res = await post(client, { key: RAW_KEY, event: "impression", campaignId: owned, countryCode: "x".repeat(500) });
+    const res = await post(client, { key: RAW_KEY, event: "click", campaignId: owned, countryCode: "x".repeat(500) });
     expect(res.status).toBe(204);
     expect(state.recorder.queries).toHaveLength(0);
   });
@@ -219,7 +244,7 @@ describe("POST /v1/events rollup writes", () => {
     );
     state.recorder.results.push(pgError);
 
-    const res = await post(client, { key: RAW_KEY, event: "impression", campaignId: owned, countryCode: "IN" });
+    const res = await post(client, { key: RAW_KEY, event: "click", campaignId: owned, countryCode: "IN" });
 
     expect(res.status).toBe(204);
     expect(errorSpy).toHaveBeenCalledWith(
@@ -228,7 +253,7 @@ describe("POST /v1/events rollup writes", () => {
         organizationId: ORG,
         campaignId: owned,
         countryCode: "IN",
-        eventType: "impression",
+        eventType: "click",
         error: expect.stringContaining("(code 42703)"),
       }),
     );
@@ -243,8 +268,8 @@ describe("POST /v1/events rollup writes", () => {
     const res = await post(client, {
       key: RAW_KEY,
       events: [
-        { eventType: "impression", campaignId: a, countryCode: "IN" },
-        { eventType: "impression", campaignId: b, countryCode: "IN" },
+        { eventType: "click", campaignId: a, countryCode: "IN" },
+        { eventType: "click", campaignId: b, countryCode: "IN" },
       ],
     });
 

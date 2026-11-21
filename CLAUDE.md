@@ -148,6 +148,22 @@ Guide for the first two: `apps/api/PROVIDER_VERIFICATION.md`. The status table t
 is the record of which integrations have been verified against a real account; do not
 describe an integration as verified beyond what it says.
 
+### Banner request cost
+
+Each of these exists to keep the hosted bill down; do not undo one without a reason.
+
+- `/v1/banner/script.js` and `/v1/banner/bundle.js` are static assets (`apps/api/static`,
+  the `[assets]` block in `wrangler.toml`): Cloudflare serves them without running the
+  Worker and does not bill them. `apps/api/static/v1/` is generated from the banner build
+  by `apps/api/scripts/build-static.mjs` (the `[build]` command). The Worker routes for
+  the two paths are a fallback for tests and for deployments without assets.
+- Impressions are counted by the config endpoint when it serves an offer
+  (`apps/api/src/services/impression-meter.ts`). Clients send only `click` and `copy` to
+  `/v1/events`; do not re-add a client-sent impression.
+- The config endpoint remembers the key and quota lookups in isolate memory for 60 s
+  (`apps/api/src/services/banner-hot-cache.ts`), so a warm isolate reads one KV key per
+  request. A revoked public key can therefore keep working for about two minutes.
+
 ### Toolchain notes
 
 - TypeScript 7 has no compiler API. `apps/web` (astro check) and the two SDKs (tsup

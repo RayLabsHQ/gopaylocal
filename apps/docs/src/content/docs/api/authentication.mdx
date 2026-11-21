@@ -43,7 +43,7 @@ The public endpoints refuse a secret key:
 | Endpoint | Status | Body |
 |---|---|---|
 | `GET /v1/banner/config/{key}` | `401` | JSON, `"code": "secret_key_not_allowed"` |
-| `GET /v1/banner/script.js?key={key}` | `400` | A JavaScript comment (`application/javascript`) with the same message |
+| `GET /v1/banner/script.js?key={key}` | `200` | The banner file, which is the same for every key. In the browser the banner sends nothing and logs the same message to the console |
 | `POST /v1/events` | `401` | JSON, `"code": "secret_key_not_allowed"` |
 
 ```json

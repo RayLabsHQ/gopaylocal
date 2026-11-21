@@ -419,11 +419,16 @@ describe("Secret API keys (full Worker)", () => {
       expect(await res.text()).not.toContain(key.slice(7));
     });
 
-    it("is refused by /v1/banner/script.js and never echoed into the loader", async () => {
+    // script.js is one file for every key, so the server has nothing to refuse
+    // and nothing to echo. The banner refuses the key in the browser.
+    it("is never echoed by /v1/banner/script.js, which answers the same file for every key", async () => {
       const { key } = await createKey(a, "secret");
-      const res = await client.request(`/v1/banner/script.js?key=${key}`);
-      expect(res.status).toBe(400);
-      expect(await res.text()).not.toContain(key.slice(7));
+      const withSecret = await client.request(`/v1/banner/script.js?key=${key}`);
+      const withOther = await client.request("/v1/banner/script.js?key=gpl_pk_anything");
+      expect(withSecret.status).toBe(200);
+      const text = await withSecret.text();
+      expect(text).not.toContain(key.slice(7));
+      expect(text).toBe(await withOther.text());
     });
 
     it("is refused by POST /v1/events, and records nothing", async () => {
@@ -448,7 +453,7 @@ describe("Secret API keys (full Worker)", () => {
           })
         ).json()
       ).data.id as string;
-      const event = { event: "impression", campaignId, countryCode: "IN", url: "https://a.example.com/pricing" };
+      const event = { event: "click", campaignId, countryCode: "IN", url: "https://a.example.com/pricing" };
       const rollupsOfA = () =>
         getTestDb().select().from(analyticsRollups).where(eq(analyticsRollups.organizationId, a.orgId));
 

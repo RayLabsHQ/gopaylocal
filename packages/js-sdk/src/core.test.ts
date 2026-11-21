@@ -14,6 +14,8 @@ import {
   isValidVisitorId,
   readExperiment,
   resolveVisitorId,
+  SECRET_KEY_MESSAGE,
+  isSecretKey,
   sendEvent,
 } from './core';
 import { THREE_DECIMAL_CURRENCIES } from '../../shared/src/currency/exponents';
@@ -317,9 +319,26 @@ describe('sendEvent', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('navigator', { sendBeacon: beacon });
     vi.stubGlobal('fetch', fetchMock);
-    sendEvent({ ...base, campaignId: null, event: 'impression' });
+    sendEvent({ ...base, campaignId: null, event: 'click' });
     expect(beacon).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // The API counts an impression when it serves the offer and stores no
+  // dismissals: a request for either would be billed and then dropped.
+  it('sends clicks and copies only: an impression or a dismissal sends nothing', () => {
+    const beacon = vi.fn((_url: string, _body: string) => true);
+    const fetchMock = vi.fn();
+    vi.stubGlobal('navigator', { sendBeacon: beacon });
+    vi.stubGlobal('fetch', fetchMock);
+    sendEvent({ ...base, event: 'impression' });
+    sendEvent({ ...base, event: 'dismiss' });
+    expect(beacon).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    sendEvent({ ...base, event: 'click' });
+    sendEvent({ ...base, event: 'copy', code: 'PPP40' });
+    expect(beacon.mock.calls.map(([, body]) => JSON.parse(body).event)).toEqual(['click', 'copy']);
   });
 
   it('uses sendBeacon with a JSON string body', () => {
@@ -347,9 +366,9 @@ describe('sendEvent', () => {
     const fetchMock = vi.fn((_url: string, _init: RequestInit) => Promise.resolve(new Response()));
     vi.stubGlobal('fetch', fetchMock);
     vi.stubGlobal('navigator', { sendBeacon: () => false });
-    sendEvent({ ...base, event: 'impression' });
+    sendEvent({ ...base, event: 'click' });
     vi.stubGlobal('navigator', {});
-    sendEvent({ ...base, event: 'dismiss' });
+    sendEvent({ ...base, event: 'click' });
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe('https://ppp.example.com/v1/events');
@@ -362,7 +381,26 @@ describe('sendEvent', () => {
     vi.stubGlobal('fetch', () => {
       throw new Error('no network');
     });
-    expect(() => sendEvent({ ...base, event: 'impression' })).not.toThrow();
+    expect(() => sendEvent({ ...base, event: 'click' })).not.toThrow();
+  });
+});
+
+describe('isSecretKey', () => {
+  it('recognises the secret prefix, whatever its case, and nothing else', () => {
+    expect(isSecretKey('gpl_sk_abc')).toBe(true);
+    expect(isSecretKey('  GPL_SK_abc')).toBe(true);
+    expect(isSecretKey('gpl_pk_abc')).toBe(false);
+    expect(isSecretKey('')).toBe(false);
+    expect(isSecretKey(null)).toBe(false);
+  });
+
+  // The API's refusal for the same mistake says the same (apps/api/src/lib/public-key.ts).
+  it('the message says the key is exposed and must be revoked and replaced', () => {
+    expect(SECRET_KEY_MESSAGE).toContain('Secret keys (gpl_sk_) must never be used in a browser.');
+    expect(SECRET_KEY_MESSAGE).toContain('This key is now exposed');
+    expect(SECRET_KEY_MESSAGE).toMatch(/revoke it in the dashboard/);
+    expect(SECRET_KEY_MESSAGE).toMatch(/replace it with a new secret key/);
+    expect(SECRET_KEY_MESSAGE).toContain('gpl_pk_');
   });
 });
 
