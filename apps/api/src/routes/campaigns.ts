@@ -557,12 +557,11 @@ app.patch("/v1/teams/:orgId/campaigns/:id", requirePermission("campaigns.update"
 
     // The codes of the campaign's holiday deals belong to its integration and
     // environment: after either changed, they are created there (and the old
-    // ones removed). Only a campaign that has such deals gets its document
-    // written again, with the new codes.
+    // ones removed). The document is written again only when a code changed.
     if (integrationChanged || environmentChanged) {
       c.executionCtx.waitUntil(
-        syncDealCouponsForCampaign(db, c.env, orgId, campaignId).then((hadDeals) =>
-          hadDeals
+        syncDealCouponsForCampaign(db, c.env, orgId, campaignId).then((codesChanged) =>
+          codesChanged
             ? pushBannerConfigForOrg(db, c.env.CACHE, orgId, c.env).catch(logBannerPushFailure(orgId))
             : undefined,
         ),

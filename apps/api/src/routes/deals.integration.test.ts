@@ -3,6 +3,7 @@ import { and, eq, isNotNull } from "drizzle-orm";
 import worker from "../index";
 import { analyticsRollups, coupons, deals } from "../db/schema";
 import { refreshBannerConfigForOrg, type CachedBannerConfig } from "../services/banner-cache.service";
+import { syncDealCouponsForCampaign } from "../services/deal.service";
 import { MAX_DEALS_PER_CAMPAIGN } from "@gopaylocal/shared/deals";
 import { createExecutionContext, createTestBindings, createTestClient, type TestClient } from "../test/helpers";
 import { as, seedTenant, type TestTenant } from "../test/auth";
@@ -498,6 +499,31 @@ describe("Holiday deals (full Worker, real Postgres, fake payment provider)", ()
     expect(listed).toMatchObject({ id: deal.id, codeReady: true });
     expect(listed.code).not.toBe(deal.code);
     expect(await banner(rawKey, "US")).toMatchObject({ show: true, discount: 50, code: listed.code });
+  });
+
+  it("saving the campaign with the integration it already has leaves the deal's code alone", async () => {
+    const { integrationId, campaignId } = await setUp();
+    const deal = (await (await createDeal(campaignId, runningDeal())).json()).data;
+    const created = fake.state.created.length;
+
+    // The dashboard's settings form sends the integration on every save.
+    expect((await api(`/campaigns/${campaignId}`, { method: "PATCH", json: { integrationId, name: "Renamed" } })).status).toBe(200);
+    expect(fake.state.created).toHaveLength(created);
+    expect(fake.state.deleted).toEqual([]);
+    const [listed] = (await (await api(`/campaigns/${campaignId}/deals`)).json()).data;
+    expect(listed.code).toBe(deal.code);
+
+    // Nothing to bring in line: no code changed, so the caller writes no document.
+    const db = getTestDb();
+    expect(await syncDealCouponsForCampaign(db, client.env, t.orgId, campaignId)).toBe(false);
+    // A campaign without deals, or one that does not exist: the same.
+    expect(await syncDealCouponsForCampaign(db, client.env, t.orgId, "no_such_campaign")).toBe(false);
+
+    // A code that went missing is created again, and that is reported.
+    await db.delete(coupons).where(eq(coupons.dealId, deal.id));
+    expect(await syncDealCouponsForCampaign(db, client.env, t.orgId, campaignId)).toBe(true);
+    expect(fake.state.created).toHaveLength(created + 1);
+    expect(await syncDealCouponsForCampaign(db, client.env, t.orgId, campaignId)).toBe(false);
   });
 
   it("the stored document is left alone while its deals match Postgres, and rewritten once a deal is over", async () => {

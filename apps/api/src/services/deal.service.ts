@@ -176,8 +176,9 @@ export async function createDealCode(
  * whose code cannot be created is simply not offered, and the failure is on
  * the integration's health.
  *
- * Returns whether the campaign has such deals, that is, whether the banner
- * document can have changed and should be written again.
+ * Returns whether a code was created or removed, that is, whether the banner
+ * document has to be written again. A campaign saved with the integration and
+ * environment it already had changes nothing here, and nothing is written.
  */
 export async function syncDealCouponsForCampaign(
   db: Database,
@@ -208,6 +209,8 @@ export async function syncDealCouponsForCampaign(
           .limit(1)
       : [];
 
+    const dealIds = open.map((deal) => deal.id);
+    const before = await activeCouponIds(db, dealIds);
     for (const deal of open) {
       if (integration && integration.status === "active") {
         await createDealCode(db, env, campaign, integration, deal).catch(() => {});
@@ -215,9 +218,20 @@ export async function syncDealCouponsForCampaign(
         await retireDealCoupons(db, env, deal.id, organizationId);
       }
     }
-    return true;
+    return (await activeCouponIds(db, dealIds)) !== before;
   } catch (err) {
     console.error("deals: code sync failed", { organizationId, campaignId, error: errorSummary(err) });
+    // Not known whether a code changed: write the document to be safe.
     return true;
   }
+}
+
+/** The ids of some deals' active coupons, as one comparable string. */
+async function activeCouponIds(db: Database, dealIds: string[]): Promise<string> {
+  const byDeal = await activeCouponsByDeal(db, dealIds);
+  return [...byDeal.values()]
+    .flat()
+    .map((coupon) => coupon.id)
+    .sort()
+    .join(",");
 }
