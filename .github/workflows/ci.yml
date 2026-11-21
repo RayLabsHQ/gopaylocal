@@ -7,6 +7,9 @@ name: CI
 #   - Node.js comes from .nvmrc.
 #   - pnpm comes from the "packageManager" field of the root package.json.
 # Node is set up first so pnpm always runs on the project's Node version.
+#
+# pnpm/action-setup is the only action here that GitHub does not publish, so it is
+# pinned to a commit (its version is in the comment after it).
 
 on:
   pull_request:
@@ -36,7 +39,7 @@ jobs:
 
       # No `version` input: read from "packageManager" in package.json.
       # `cache: true` caches the pnpm store, keyed on pnpm-lock.yaml.
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
           cache: true
 
@@ -86,7 +89,7 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
           cache: true
 
@@ -115,7 +118,7 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
           cache: true
 

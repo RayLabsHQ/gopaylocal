@@ -3,7 +3,7 @@
 // Lives under src/ only because the `api` vitest project includes
 // src/**/*.test.ts. Nothing here starts the tool or touches the network.
 
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
@@ -154,6 +154,37 @@ describe('the report', () => {
     expect(renderBroken('polar', 'The tool exited with status 2 without printing a report.', 'boom')).toContain(
       '### Polar: FAILED (the check itself did not finish)',
     );
+  });
+});
+
+describe('actions used by the workflows', () => {
+  const dir = fileURLToPath(new URL('../../../../.github/workflows/', import.meta.url));
+  const workflows = readdirSync(dir)
+    .filter((name) => name.endsWith('.yml'))
+    .map((name) => ({ name, text: readFileSync(`${dir}${name}`, 'utf8') }));
+  const usesOf = (text: string) => [...text.matchAll(/^\s*-?\s*uses:\s*(\S+)/gm)].map((m) => m[1]!);
+  const pinned = (ref: string) => /@[0-9a-f]{40}$/.test(ref);
+
+  it('finds the workflows', () => {
+    expect(workflows.map((w) => w.name).sort()).toEqual(
+      ['ci.yml', 'provider-checks.yml', 'vpn-refresh.yml', 'woocommerce-store.yml'].sort(),
+    );
+  });
+
+  it('pins every action to a commit in a workflow that holds secrets', () => {
+    const withSecrets = workflows.filter((w) => /\$\{\{\s*secrets\b/.test(w.text));
+    expect(withSecrets.map((w) => w.name).sort()).toEqual(['provider-checks.yml', 'vpn-refresh.yml']);
+    for (const w of withSecrets) {
+      expect(usesOf(w.text).length).toBeGreaterThan(0);
+      expect(usesOf(w.text).filter((ref) => !pinned(ref)), w.name).toEqual([]);
+    }
+  });
+
+  it('pins every action GitHub does not publish, in every workflow', () => {
+    for (const w of workflows) {
+      const thirdParty = usesOf(w.text).filter((ref) => !ref.startsWith('actions/'));
+      expect(thirdParty.filter((ref) => !pinned(ref)), w.name).toEqual([]);
+    }
   });
 });
 
