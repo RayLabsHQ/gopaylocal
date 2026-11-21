@@ -12,7 +12,12 @@ import { resetFxCacheForTests } from "../services/fx-cache";
 import { FX_RATES_KEY } from "../services/fx-refresh.service";
 import type { UsageRow } from "../services/usage-meter";
 import type { ImpressionRow } from "../services/impression-meter";
-import { BANNER_HOT_CACHE_TTL_MS, configureBannerHotCache } from "../services/banner-hot-cache";
+import {
+  BANNER_DOC_MEMORY_TTL_MS,
+  BANNER_HOT_CACHE_TTL_MS,
+  bannerDocCache,
+  configureBannerHotCache,
+} from "../services/banner-hot-cache";
 
 // The route imports the pre-built browser bundle as a wrangler text module;
 // stub it so the browser code never runs under Node.
@@ -521,6 +526,51 @@ describe("missing or old document: answered from Postgres and rebuilt", () => {
       expect.objectContaining({ error: expect.stringContaining("connection refused") }),
     );
   });
+
+  describe("with the document memory on (services/banner-hot-cache.ts)", () => {
+    /** How many times `run` made the route read the banner document from KV. */
+    async function docReads(env: Bindings, run: () => Promise<void>): Promise<number> {
+      const get = vi.spyOn(env.CACHE, "get");
+      await run();
+      return get.mock.calls.filter(([key]) => String(key).startsWith("banner-config:")).length;
+    }
+
+    it("a missing document is not remembered: the one a rebuild writes is used by the next request", async () => {
+      configureBannerHotCache({ ttlMs: BANNER_HOT_CACHE_TTL_MS });
+      const env = await seededEnv({ org: "org_mem_missing", doc: null });
+      // No document: answered from Postgres, and KV is asked again on every
+      // request until it has one.
+      const reads = await docReads(env, async () => {
+        for (let i = 0; i < 2; i++) {
+          state.db = dbPath([campaignRow("C1", "P1")], "C1").db;
+          expect((await call(env)).body).toMatchObject({ show: true, campaignId: "C1" });
+        }
+      });
+      expect(reads).toBe(2);
+      expect(bannerDocCache.size()).toBe(0);
+
+      await env.CACHE.put(
+        `banner-config:${API_KEY_ID}`,
+        JSON.stringify(bannerDocForCampaign({ organizationId: "org_mem_missing" })),
+      );
+      expect((await call(env)).body).toMatchObject({ show: true, campaignId: "camp_1", discount: 40 });
+      expect(bannerDocCache.size()).toBe(1);
+    });
+
+    it("a document of an older version is not remembered either", async () => {
+      configureBannerHotCache({ ttlMs: BANNER_HOT_CACHE_TTL_MS });
+      const old = { ...bannerDocForCampaign({ organizationId: "org_mem_old" }), v: 2 };
+      const env = await seededEnv({ org: "org_mem_old", doc: old });
+      const reads = await docReads(env, async () => {
+        for (let i = 0; i < 2; i++) {
+          state.db = dbPath([campaignRow("C1", "P1")], "C1").db;
+          expect((await call(env)).body).toMatchObject({ show: true, campaignId: "C1" });
+        }
+      });
+      expect(reads).toBe(2);
+      expect(bannerDocCache.size()).toBe(0);
+    });
+  });
 });
 
 // ── Refresh of an aging document (backstop for a rebuild race) ────────────
@@ -1019,7 +1069,7 @@ describe("remembered lookups (services/banner-hot-cache.ts)", () => {
     vi.useRealTimers();
   });
 
-  it("the first request reads the key mapping, the quota and the document; the next reads the document only", async () => {
+  it("the first request reads the key mapping, the quota and the document; the next ones read nothing", async () => {
     const env = await seededEnv({ usage: "pro" });
     const keyHash = await sha256Hex(PUBLIC_KEY);
     const reads = watchReads(env);
@@ -1030,16 +1080,68 @@ describe("remembered lookups (services/banner-hot-cache.ts)", () => {
     reads.length = 0;
     expect((await call(env)).body.show).toBe(true);
     expect((await call(env)).body.show).toBe(true);
-    expect(strip(reads)).toEqual([`banner-config:${API_KEY_ID}`, `banner-config:${API_KEY_ID}`]);
+    expect(strip(reads)).toEqual([]);
   });
 
-  it("the document itself is never remembered: an edit shows on the next request", async () => {
+  it("the document is read again after 15 seconds, the key and the quota after a minute", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const env = await seededEnv({ usage: "pro" });
+    const keyHash = await sha256Hex(PUBLIC_KEY);
+    const reads = watchReads(env);
+    const start = Date.now();
+    await call(env);
+
+    reads.length = 0;
+    vi.setSystemTime(start + BANNER_DOC_MEMORY_TTL_MS - 1);
+    await call(env);
+    expect(strip(reads)).toEqual([]);
+    vi.setSystemTime(start + BANNER_DOC_MEMORY_TTL_MS);
+    await call(env);
+    expect(strip(reads)).toEqual([`banner-config:${API_KEY_ID}`]);
+
+    reads.length = 0;
+    vi.setSystemTime(start + BANNER_HOT_CACHE_TTL_MS);
+    await call(env);
+    expect(strip(reads)).toEqual([`apikey:${keyHash}`, usageKey("org_1"), `banner-config:${API_KEY_ID}`]);
+  });
+
+  it("a dashboard change shows once the 15 seconds are over, not before", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
     const env = await seededEnv();
+    const start = Date.now();
     expect((await call(env)).body.discount).toBe(40);
-    const edited = bannerDocForCampaign({});
+    const edited = structuredClone(bannerDocForCampaign({}));
     edited.campaigns.camp_1!.countries.IN!.discount = 55;
     await env.CACHE.put(`banner-config:${API_KEY_ID}`, JSON.stringify(edited));
+
+    vi.setSystemTime(start + BANNER_DOC_MEMORY_TTL_MS - 1);
+    expect((await call(env)).body.discount).toBe(40);
+    vi.setSystemTime(start + BANNER_DOC_MEMORY_TTL_MS);
     expect((await call(env)).body.discount).toBe(55);
+  });
+
+  it("with the document memory off, a change shows on the next request (the key and quota stay remembered)", async () => {
+    configureBannerHotCache({ ttlMs: BANNER_HOT_CACHE_TTL_MS, docTtlMs: 0 });
+    const env = await seededEnv();
+    const reads = watchReads(env);
+    expect((await call(env)).body.discount).toBe(40);
+    const edited = structuredClone(bannerDocForCampaign({}));
+    edited.campaigns.camp_1!.countries.IN!.discount = 55;
+    await env.CACHE.put(`banner-config:${API_KEY_ID}`, JSON.stringify(edited));
+    reads.length = 0;
+    expect((await call(env)).body.discount).toBe(55);
+    expect(strip(reads)).toEqual([`banner-config:${API_KEY_ID}`]);
+  });
+
+  it("the remembered document is frozen and answers every request the same", async () => {
+    const env = await seededEnv();
+    const first = (await call(env)).body;
+    const second = (await call(env, { country: "IN" })).body;
+    expect(second).toEqual(first);
+    const remembered = bannerDocCache.get(`banner-config:${API_KEY_ID}`)!;
+    expect(Object.isFrozen(remembered)).toBe(true);
+    expect(Object.isFrozen(remembered.campaigns.camp_1!.countries.IN)).toBe(true);
+    expect(Object.isFrozen(remembered.campaigns.camp_1!.banner)).toBe(true);
   });
 
   it("a quota that was just reached applies once the minute is over, not before", async () => {

@@ -36,7 +36,7 @@ import {
 } from "../services/banner-selection";
 import { usageMeter, writeUsageRows } from "../services/usage-meter";
 import { impressionMeter, writeImpressionRows } from "../services/impression-meter";
-import { apiKeyCache, quotaCache } from "../services/banner-hot-cache";
+import { apiKeyCache, bannerDocCache, quotaCache, rememberBannerDoc } from "../services/banner-hot-cache";
 import { enforceRateLimit } from "../lib/rate-limit";
 import { errorSummary, logBannerPushFailure } from "../lib/log";
 import { SECRET_KEY_NOT_ALLOWED, isSecretKey } from "../lib/public-key";
@@ -49,11 +49,10 @@ const app = new Hono<AppEnv>();
  * GET /v1/banner/script.js and GET /v1/banner/bundle.js: the banner itself.
  *
  * In a deployment these two paths are static assets (wrangler.toml [assets],
- * filled by scripts/build-assets.mjs from packages/banner/dist): Cloudflare
- * answers them before the Worker runs, and requests for static assets are not
- * billed. These handlers answer only where the assets are absent (the tests, a
- * deployment whose wrangler.toml has no [assets]), with the same file and the
- * same cache times as assets/_headers.
+ * filled by scripts/build-static.mjs from packages/banner/dist): Cloudflare
+ * answers them before the Worker runs. These handlers answer only where the
+ * assets are absent (the tests, a deployment whose wrangler.toml has no
+ * [assets]), with the same file and the same cache times as static/_headers.
  *
  * script.js used to be a loader that injected bundle.js. Both are the banner
  * now, so a visitor fetches one script instead of two; bundle.js stays for
@@ -135,8 +134,8 @@ function meterApiCall(
 
 /**
  * Count one impression: this request is answered with an offer (`show: true`)
- * for `campaignId`. Counted here, not reported by the client, so serving a
- * visitor costs one request (services/impression-meter.ts). Memory only on the
+ * for `campaignId`. Counted here, not reported by the client, so a visitor is
+ * served with one request (services/impression-meter.ts). Memory only on the
  * request path; never throws: an analytics fault must not affect the banner.
  */
 function countImpression(
@@ -536,7 +535,15 @@ app.get("/v1/banner/config/:publicKey", async (c) => {
 
     // 4. Campaign resolution.
     const deps: ResolverDeps = { c, organizationId, db: getDb };
-    const doc = await kvGet<unknown>(c.env.CACHE, bannerDocKey(apiKey.apiKeyId));
+    // The document comes from memory when this isolate read it in the last
+    // seconds (services/banner-hot-cache.ts), otherwise from KV. Only a
+    // current document is remembered.
+    const docKey = bannerDocKey(apiKey.apiKeyId);
+    let doc: unknown = bannerDocCache.get(docKey);
+    if (doc === undefined) {
+      doc = await kvGet<unknown>(c.env.CACHE, docKey);
+      if (isCurrentBannerDoc(doc)) doc = rememberBannerDoc(docKey, doc);
+    }
     let resolver: Resolver;
     if (isCurrentBannerDoc(doc)) {
       // Still served; refreshed in the background (no KV or database work here).

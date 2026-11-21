@@ -238,6 +238,6 @@ The config response has no `Cache-Control` header, so browsers and Cloudflare do
 | JavaScript SDK | Only responses with `show: true` |
 | React SDK | Only responses with `show: true` |
 
-On the server, every change that affects the banner (campaigns, banner settings, products, parity groups, A/B tests, plan) rebuilds the organization's cached answer and discards cached discounts. A change normally applies within seconds, and within about a minute in every location. In the worst case (for example, two changes saved at almost the same moment) it can take up to about 16 minutes. The visitor's own 5-minute copy in `sessionStorage` comes on top.
+On the server, every change that affects the banner (campaigns, banner settings, products, parity groups, A/B tests, plan) rebuilds the organization's cached answer and discards cached discounts. The API also keeps the cached answer in its own memory for 15 seconds, so a change normally applies within about 15 seconds, and within a little over a minute in every location. During those seconds a visitor can get the old answer on one request and the new one on the next. In the worst case (for example, two changes saved at almost the same moment) it can take up to about 16 minutes. The visitor's own 5-minute copy in `sessionStorage` comes on top.
 
 Exchange rates are refreshed every 6 hours; new rates reach visitors within about 15 minutes of a refresh.

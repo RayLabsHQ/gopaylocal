@@ -19,6 +19,7 @@ import { assignVariant, visitorKey } from "../services/banner-selection";
 import { bannerDocKey, isCurrentBannerDoc } from "../services/banner-cache.service";
 import { usageMeter, utcDay } from "../services/usage-meter";
 import { writeImpressionRows } from "../services/impression-meter";
+import { BANNER_HOT_CACHE_TTL_MS, bannerDocCache, configureBannerHotCache } from "../services/banner-hot-cache";
 import { recomputeUsageForAllOrgs, usageKey } from "../services/usage.service";
 import bannerScriptRoute from "./banner-script";
 
@@ -304,6 +305,31 @@ describe("banner serving (Postgres)", () => {
         redemptions: 0,
       });
       expect(rows[0]!.periodStart.toISOString()).toBe(todayStart().toISOString());
+    });
+
+    it("requests answered from the remembered document are still metered and counted, one each", async () => {
+      const product = await seedProduct(ORG, "p");
+      const campaignId = await seedCampaign(ORG, product, { discountIN: 40 });
+      const { rawKey } = await seedKey(ORG);
+      const client = createTestClient(bannerScriptRoute);
+      await banner(client, rawKey); // from Postgres; its rebuild writes the document
+      configureBannerHotCache({ ttlMs: BANNER_HOT_CACHE_TTL_MS });
+
+      const kvGet = vi.spyOn(client.env.CACHE, "get");
+      const answers = [];
+      for (let i = 0; i < 4; i++) answers.push(await banner(client, rawKey));
+      // One read of the document (by the first of the four), then memory.
+      expect(kvGet.mock.calls.filter(([key]) => String(key).startsWith("banner-config:"))).toHaveLength(1);
+      expect(bannerDocCache.size()).toBe(1);
+      for (const answer of answers) expect(answer).toEqual(answers[0]);
+      expect(answers[0]).toMatchObject({ show: true, campaignId, discount: 40 });
+
+      const [usage] = await usageRows(ORG);
+      expect(usage!.count).toBe(5);
+      const rows = await rollupRows(ORG);
+      expect(rows.map((r) => ({ campaignId: r.campaignId, impressions: r.impressions }))).toEqual([
+        { campaignId, impressions: 5 },
+      ]);
     });
 
     it("a Pro organization's impressions (the buffered path) are written too", async () => {

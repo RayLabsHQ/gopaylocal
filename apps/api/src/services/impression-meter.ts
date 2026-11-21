@@ -4,9 +4,9 @@
  * An impression is one offer served: a banner config request answered with
  * `show: true`. The config endpoint counts it here, in the same request,
  * for the campaign it served and the visitor's country (request.cf.country).
- * Clients do not report impressions: a second request per visitor would cost
- * as much as the one that served the offer, and anyone holding a public key
- * could post as many as they liked.
+ * Clients do not report impressions: the request that serves the offer already
+ * knows everything an impression needs, a second request per visitor adds
+ * nothing, and anyone holding a public key could post as many as they liked.
  *
  * What this means for the number: a visitor who gets the offer counts once per
  * config request. The script-tag banner keeps the answer for five minutes per

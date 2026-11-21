@@ -6,8 +6,8 @@
  *   static/v1/banner/bundle.js   <- the same file (what the old loader asked for)
  *
  * Cloudflare answers a path that matches a file in that directory before the
- * Worker runs, and does not bill requests for static assets, so a visitor
- * loading the banner costs nothing. wrangler.toml runs this script before
+ * Worker runs, from the location nearest the visitor. wrangler.toml runs this
+ * script before
  * every `wrangler dev` and `wrangler deploy` ([build] command); it can also be
  * run by hand: node scripts/build-static.mjs
  *

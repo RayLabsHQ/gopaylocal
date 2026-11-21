@@ -9,7 +9,7 @@ GoPayLocal counts an impression itself, each time the API serves an offer. The b
 
 ## Impressions
 
-An impression is one offer served: a [banner config](/api/banner/) request answered with `show: true`. The API counts it in that same request, for the campaign it served and the visitor's country. The browser sends nothing for it, so an impression costs no second request per visitor.
+An impression is one offer served: a [banner config](/api/banner/) request answered with `show: true`. The API counts it in that same request, for the campaign it served and the visitor's country. The browser sends nothing for it.
 
 - The banner script and the SDKs keep an answer with a discount for 5 minutes per browser tab, so the page views a visitor makes in those 5 minutes are one impression.
 - A discount fetched by an SDK counts as an impression whether or not you render a banner with it.

@@ -107,7 +107,7 @@ cd apps/api
 pnpm run deploy
 ```
 
-`pnpm build:banner` creates `packages/banner/dist/banner.js`. The deploy copies it into `apps/api/static`, which Cloudflare serves as static files (`/v1/banner/script.js`), so loading the banner does not use a Worker request. Without the build, the deploy stops with a message that says to run it. Build it again after every update.
+`pnpm build:banner` creates `packages/banner/dist/banner.js`. The deploy copies it into `apps/api/static`, which Cloudflare serves as static files (`/v1/banner/script.js`). Without the build, the deploy stops with a message that says to run it. Build it again after every update.
 
 <Aside type="caution">
 Type `pnpm run deploy`, not `pnpm deploy`. `pnpm deploy` is a built-in pnpm command that does something else.

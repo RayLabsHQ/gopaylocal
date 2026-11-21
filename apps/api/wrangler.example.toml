@@ -33,9 +33,8 @@ globs = ["**/banner/dist/*.js"]
 fallthrough = false
 
 # Recommended. Serves the banner script (/v1/banner/script.js and bundle.js) as static
-# assets: Cloudflare answers them before the Worker runs and does not bill requests for
-# static assets, so loading the banner costs no Worker request. Without these two
-# blocks the Worker serves the same file itself. The build command copies
+# assets: Cloudflare answers them before the Worker runs, from the location nearest the
+# visitor. Without these two blocks the Worker serves the same file itself. The build command copies
 # packages/banner/dist/banner.js into ./static before every `wrangler dev` and
 # `wrangler deploy`; static/_headers sets the cache time.
 [assets]

@@ -91,8 +91,9 @@ When a visitor loads your page with the GoPayLocal script, here is what happens:
 
 | Layer | What's cached | How long |
 |---|---|---|
-| **Cloudflare KV** | Each workspace's banner document | Until the next change in the dashboard, which normally applies within seconds and reaches every location within about a minute (in the worst case, about 16 minutes) |
+| **Cloudflare KV** | Each workspace's banner document | Until the next change in the dashboard, which normally reaches every location within about a minute (in the worst case, about 16 minutes) |
 | **Browser sessionStorage** | The config response, per key and product | 5 minutes (the banner script keeps every answer; the SDKs only answers with a discount) |
+| **API memory** | The banner document | 15 seconds |
 | **API memory** | Which workspace a public key belongs to, and whether the workspace is over its quota | 1 minute |
 | **Browser HTTP cache** | `script.js` / `bundle.js` | 1 hour / 1 day |
 
