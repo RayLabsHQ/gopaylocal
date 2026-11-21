@@ -24,6 +24,7 @@ import { DEFAULT_BANNER_MESSAGE, DEFAULT_CTA_TEXT } from "@gopaylocal/shared/con
 import { countryDiscount, workspaceParityGroups } from "@gopaylocal/shared/parity";
 import { pushBannerConfigForOrg } from "../services/banner-cache.service";
 import { createCouponForCountry } from "../services/coupon.service";
+import { syncDealCouponsForCampaign } from "../services/deal.service";
 import {
   assertCampaignNotInRunningExperiment,
   campaignUpdateBlockedByExperiment,
@@ -553,6 +554,20 @@ app.patch("/v1/teams/:orgId/campaigns/:id", requirePermission("campaigns.update"
     c.executionCtx.waitUntil(
       pushBannerConfigForOrg(db, c.env.CACHE, orgId, c.env).catch(logBannerPushFailure(orgId)),
     );
+
+    // The codes of the campaign's holiday deals belong to its integration and
+    // environment: after either changed, they are created there (and the old
+    // ones removed). Only a campaign that has such deals gets its document
+    // written again, with the new codes.
+    if (integrationChanged || environmentChanged) {
+      c.executionCtx.waitUntil(
+        syncDealCouponsForCampaign(db, c.env, orgId, campaignId).then((hadDeals) =>
+          hadDeals
+            ? pushBannerConfigForOrg(db, c.env.CACHE, orgId, c.env).catch(logBannerPushFailure(orgId))
+            : undefined,
+        ),
+      );
+    }
 
     // Auto-generate coupons only when transitioning to active
     const isTransitionToActive =

@@ -11,6 +11,7 @@ import {
   type CachedBannerConfig,
   type CachedCampaign,
   type CachedCountryData,
+  type CachedDeal,
   type CampaignPricing,
 } from "./banner-cache.service";
 
@@ -59,6 +60,8 @@ export function bannerDocForCampaign(opts: {
   showBranding?: boolean;
   environment?: "live" | "test";
   pricing?: CampaignPricing;
+  /** The campaign's holiday deals; left out of the document when not given. */
+  deals?: CachedDeal[];
   /** Defaults to now: a fresh document, not due for a refresh. */
   builtAt?: number;
 } = {}): CachedBannerConfig {
@@ -79,6 +82,7 @@ export function bannerDocForCampaign(opts: {
         countries: opts.countries ?? TEST_COUNTRIES,
         banner: opts.banner ?? TEST_BANNER,
         pricing: opts.pricing ?? TEST_PRICING,
+        ...(opts.deals ? { deals: opts.deals } : {}),
       }),
     },
   };

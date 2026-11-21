@@ -4,3 +4,4 @@ export * from './parity/index.js';
 export * from './validation/index.js';
 export * from './permissions/index.js';
 export * from './workspace/index.js';
+export * from './deals/index.js';

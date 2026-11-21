@@ -29,6 +29,7 @@ export type {
   PPPConfig,
   PPPResponse,
   PPPBannerDesign,
+  PPPDeal,
   PPPContextValue,
   PPPTrackableEvent,
   CharmStrategy,

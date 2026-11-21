@@ -6,7 +6,8 @@ import { createSqlRecorder, type SqlRecorder } from "../lib/sql-recorder-test-he
 import { usageKey } from "../services/usage.service";
 import { discountCacheKey } from "../services/parity.service";
 import { assignVariant, visitorKey } from "../services/banner-selection";
-import type { CachedBannerConfig } from "../services/banner-cache.service";
+import type { BannerConfig } from "@gopaylocal/shared/types";
+import type { CachedBannerConfig, CachedDeal } from "../services/banner-cache.service";
 import { TEST_BANNER, TEST_COUNTRIES, bannerDocForCampaign, cachedCampaign } from "../services/banner-doc-test-helpers";
 import { resetFxCacheForTests } from "../services/fx-cache";
 import { FX_RATES_KEY } from "../services/fx-refresh.service";
@@ -449,7 +450,7 @@ describe("missing or old document: answered from Postgres and rebuilt", () => {
 
   /**
    * loadServingInputs (campaigns joined with their product's price and
-   * currency, then experiments), getDiscountForCountry, subscription.
+   * currency, then experiments, then deals), getDiscountForCountry, subscription.
    */
   function dbPath(
     rows: Array<ReturnType<typeof campaignRow>>,
@@ -459,6 +460,7 @@ describe("missing or old document: answered from Postgres and rebuilt", () => {
     const served = rows.find((r) => r.id === servedId)!;
     return createSqlRecorder([
       rows.map((campaign) => ({ campaign, banner: bannerRow(campaign.id), product })),
+      [],
       [],
       [served],
       [],
@@ -490,6 +492,9 @@ describe("missing or old document: answered from Postgres and rebuilt", () => {
     expect(r.queries[0]!.sql).toContain('from "campaigns" inner join "products"');
     expect(r.queries[0]!.sql).toContain('left join "banner_configs"');
     expect(r.queries[1]!.sql).toContain('from "experiments"');
+    // Deals that have not ended, with their active coupon.
+    expect(r.queries[2]!.sql).toContain('from "deals" left join "coupons"');
+    expect(r.queries[2]!.sql).toContain('"deals"."ends_at" >');
     expect(pushBannerConfigForOrg).toHaveBeenCalledWith(state.db, env.CACHE, "org_db", env);
   });
 
@@ -870,6 +875,7 @@ describe("local prices", () => {
     };
     state.db = createSqlRecorder([
       [{ campaign: row, banner: { id: "b1", campaignId: "camp_1", ...TEST_BANNER }, product: { currency: "USD", basePrice: 19 } }],
+      [],
       [],
       [row],
       [],
@@ -1301,5 +1307,147 @@ describe("remembered lookups (services/banner-hot-cache.ts)", () => {
     await env.CACHE.delete(`apikey:${await sha256Hex(PUBLIC_KEY)}`);
     expect((await call(env)).body.show).toBe(true);
     expect(r.queries.filter((q) => /from "api_keys"/.test(q.sql)).length).toBe(lookups);
+  });
+});
+
+// ── Holiday deals ──────────────────────────────────────────────────────────
+
+describe("holiday deals", () => {
+  const NOW = Date.parse("2026-11-27T12:00:00Z");
+  const HOUR = 3_600_000;
+
+  const deal = (overrides: Partial<CachedDeal> = {}): CachedDeal => ({
+    id: "deal_1",
+    name: "Black Friday",
+    discount: 50,
+    code: "BLACKFRIDAY50K7QX",
+    startsAt: NOW - HOUR,
+    endsAt: Date.parse("2026-12-01T00:00:00Z"),
+    message: "{{deal}}: {{discount}}% off with code {{code}}. Ends {{ends}}.",
+    ...overrides,
+  });
+
+  /** A request at `at` against a document with these deals (India: 40% with PPP40). */
+  async function at(time: number, deals: CachedDeal[], opts: CallOptions = {}, seed: Seed = {}) {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(time);
+      const r = createSqlRecorder();
+      state.db = r.db;
+      const env = await seededEnv({ doc: bannerDocForCampaign({ deals }), ...seed });
+      const { body } = await call(env, opts);
+      return { body, queries: r.queries };
+    } finally {
+      vi.useRealTimers();
+    }
+  }
+
+  it("a running deal larger than the country's discount is offered in its place, without touching Postgres", async () => {
+    const { body, queries } = await at(NOW, [deal()]);
+    expect(body).toMatchObject({
+      show: true,
+      country: "IN",
+      countryName: "India",
+      discount: 50,
+      code: "BLACKFRIDAY50K7QX",
+      campaignId: "camp_1",
+      deal: { id: "deal_1", name: "Black Friday", endsAt: "2026-12-01T00:00:00.000Z" },
+    });
+    // The campaign's banner, with the deal's message (its name and last day
+    // filled in; the rest is left for the banner script) and without the flag.
+    expect(body.banner).toEqual({
+      ...TEST_BANNER,
+      messageTemplate: "Black Friday: {{discount}}% off with code {{code}}. Ends 30 November.",
+      showFlag: false,
+    });
+    expect(queries).toHaveLength(0);
+  });
+
+  it("a visitor whose country has no discount is offered the deal", async () => {
+    const { body } = await at(NOW, [deal({ discount: 10 })], { country: "US" });
+    expect(body).toMatchObject({ show: true, country: "US", countryName: "United States", discount: 10, deal: { id: "deal_1" } });
+  });
+
+  it("a smaller deal leaves the country's discount alone", async () => {
+    const { body } = await at(NOW, [deal({ discount: 30 })]);
+    expect(body).toMatchObject({ show: true, discount: 40, code: "PPP40", banner: TEST_BANNER });
+    expect(body).not.toHaveProperty("deal");
+  });
+
+  it("on a tie the deal is offered", async () => {
+    const { body } = await at(NOW, [deal({ discount: 40 })]);
+    expect(body).toMatchObject({ discount: 40, code: "BLACKFRIDAY50K7QX", deal: { id: "deal_1" } });
+  });
+
+  it("a deal is offered from its start up to, not including, its end, by the clock of the request", async () => {
+    const d = deal({ startsAt: NOW, endsAt: NOW + HOUR });
+    expect((await at(NOW - 1, [d])).body).toMatchObject({ discount: 40, code: "PPP40" });
+    expect((await at(NOW, [d])).body).toMatchObject({ discount: 50, deal: { id: "deal_1" } });
+    expect((await at(NOW + HOUR - 1, [d])).body).toMatchObject({ discount: 50, deal: { id: "deal_1" } });
+    // The stored document still lists the deal; it is not offered any more.
+    const after = await at(NOW + HOUR, [d]);
+    expect(after.body).toMatchObject({ discount: 40, code: "PPP40" });
+    expect(after.body).not.toHaveProperty("deal");
+    expect((await at(NOW + HOUR, [d], { country: "US" })).body).toEqual({ show: false, reason: "no_discount" });
+  });
+
+  it("of several running deals the largest is offered", async () => {
+    const { body } = await at(NOW, [
+      deal({ id: "small", discount: 45, code: "SMALL" }),
+      deal({ id: "big", discount: 60, code: "BIG" }),
+      deal({ id: "later", discount: 90, code: "LATER", startsAt: NOW + HOUR }),
+    ]);
+    expect(body).toMatchObject({ discount: 60, code: "BIG", deal: { id: "big" } });
+  });
+
+  it("a deal without a code answers with code null", async () => {
+    const { body } = await at(NOW, [deal({ code: null, message: "{{deal}}: {{discount}}% off. Ends {{ends}}." })]);
+    expect(body).toMatchObject({ show: true, discount: 50, code: null });
+    expect((body.banner as BannerConfig).messageTemplate).toBe("Black Friday: {{discount}}% off. Ends 30 November.");
+  });
+
+  it("prices are computed from the deal's percentage", async () => {
+    // TEST_PRICING: a $19 product. Without exchange rates the price stays in USD.
+    const { body } = await at(NOW, [deal()], { country: "US" });
+    expect(body).toMatchObject({ localOriginalPrice: 19, localPrice: 9.5, currencyCode: "USD" });
+  });
+
+  it("a deal's impression is counted on its campaign and the visitor's country", async () => {
+    const { body } = await at(NOW, [deal()], { country: "US" });
+    expect(body.deal).toBeDefined();
+    expect(state.impressions.flat()).toEqual([
+      expect.objectContaining({ campaignId: "camp_1", countryCode: "US", count: 1 }),
+    ]);
+  });
+
+  it("the checks that come first still apply: quota and allowed domains", async () => {
+    expect((await at(NOW, [deal()], {}, { usage: "over" })).body).toEqual({ show: false, reason: "quota_exceeded" });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(NOW);
+      const env = await seededEnv({ doc: bannerDocForCampaign({ deals: [deal()], allowedDomains: ["shop.example"] }) });
+      expect((await call(env)).body).toEqual({ show: false, reason: "domain_not_allowed" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a larger deal is offered without resolving a provider-backed country's code", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(NOW);
+      const r = createSqlRecorder();
+      state.db = r.db;
+      const doc = bannerDocForCampaign({
+        deals: [deal()],
+        countries: { IN: { discount: 40, tier: 3, code: null, countryName: "India", resolve: true } },
+      });
+      const { body } = await call(await seededEnv({ doc }));
+      expect(body).toMatchObject({ discount: 50, code: "BLACKFRIDAY50K7QX", deal: { id: "deal_1" } });
+      // No lookup of the country's code: nothing read from Postgres.
+      expect(r.queries).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

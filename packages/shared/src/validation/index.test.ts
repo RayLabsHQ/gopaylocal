@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
+  createDealSchema,
+  updateDealSchema,
+  dealWindowError,
   createProductSchema,
   updateProductSchema,
   createCampaignSchema,
@@ -913,5 +916,76 @@ describe('analyticsEventBatchSchema', () => {
       ],
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('holiday deal schemas', () => {
+  const deal = {
+    name: 'Black Friday',
+    discountPercent: 40,
+    startsAt: '2026-11-27T00:00:00Z',
+    endsAt: '2026-12-01T00:00:00Z',
+  };
+
+  it('accepts a name, a whole percentage and a window; trims the name', () => {
+    const result = createDealSchema.safeParse({ ...deal, name: '  Black Friday  ' });
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.name).toBe('Black Friday');
+  });
+
+  it('accepts instants with an offset and refuses ones without a time zone', () => {
+    expect(createDealSchema.safeParse({ ...deal, startsAt: '2026-11-27T00:00:00+05:30' }).success).toBe(true);
+    expect(createDealSchema.safeParse({ ...deal, startsAt: '2026-11-27T00:00:00' }).success).toBe(false);
+    expect(createDealSchema.safeParse({ ...deal, startsAt: '2026-11-27' }).success).toBe(false);
+  });
+
+  it('refuses a percentage that is not a whole number from 1 to 100', () => {
+    for (const discountPercent of [0, -5, 101, 12.5, '40']) {
+      expect(createDealSchema.safeParse({ ...deal, discountPercent }).success).toBe(false);
+    }
+    expect(createDealSchema.safeParse({ ...deal, discountPercent: 1 }).success).toBe(true);
+    expect(createDealSchema.safeParse({ ...deal, discountPercent: 100 }).success).toBe(true);
+  });
+
+  it('refuses an empty name and one that is too long', () => {
+    expect(createDealSchema.safeParse({ ...deal, name: '   ' }).success).toBe(false);
+    expect(createDealSchema.safeParse({ ...deal, name: 'x'.repeat(61) }).success).toBe(false);
+    expect(createDealSchema.safeParse({ ...deal, name: 'x'.repeat(60) }).success).toBe(true);
+  });
+
+  it('refuses a window that is empty, backwards or longer than 366 days', () => {
+    expect(createDealSchema.safeParse({ ...deal, endsAt: deal.startsAt }).success).toBe(false);
+    expect(createDealSchema.safeParse({ ...deal, endsAt: '2026-11-26T00:00:00Z' }).success).toBe(false);
+    expect(createDealSchema.safeParse({ ...deal, endsAt: '2027-11-28T00:00:01Z' }).success).toBe(false);
+    expect(createDealSchema.safeParse({ ...deal, endsAt: '2027-11-28T00:00:00Z' }).success).toBe(true);
+
+    expect(dealWindowError('2026-11-27T00:00:00Z', '2026-11-27T00:00:00Z')).toBe('A deal must end after it starts');
+    expect(dealWindowError('2026-11-27T00:00:00Z', '2028-01-01T00:00:00Z')).toBe('A deal can run for at most 366 days');
+    expect(dealWindowError(new Date('2026-11-27T00:00:00Z'), new Date('2026-11-28T00:00:00Z'))).toBeNull();
+    expect(dealWindowError('nonsense', '2026-11-28T00:00:00Z')).toBe('startsAt and endsAt must be dates');
+  });
+
+  it('a typed code is letters, digits, dashes and underscores, at most 40', () => {
+    expect(createDealSchema.safeParse({ ...deal, code: 'MY-CODE_25' }).success).toBe(true);
+    expect(createDealSchema.safeParse({ ...deal, code: null }).success).toBe(true);
+    for (const code of ['', 'has space', 'x'.repeat(41), '<b>', 'ÜBER']) {
+      expect(createDealSchema.safeParse({ ...deal, code }).success).toBe(false);
+    }
+  });
+
+  it('a message is optional, not empty, and at most as long as a banner message', () => {
+    expect(createDealSchema.safeParse({ ...deal, messageTemplate: '{{deal}} ends {{ends}}' }).success).toBe(true);
+    expect(createDealSchema.safeParse({ ...deal, messageTemplate: '' }).success).toBe(false);
+    expect(createDealSchema.safeParse({ ...deal, messageTemplate: 'x'.repeat(501) }).success).toBe(false);
+  });
+
+  it('an update takes the name, the window and the message, and nothing else', () => {
+    expect(updateDealSchema.safeParse({ name: 'Cyber Week' }).success).toBe(true);
+    expect(updateDealSchema.safeParse({ endsAt: '2026-12-02T00:00:00Z' }).success).toBe(true);
+    expect(updateDealSchema.safeParse({}).success).toBe(false);
+    // The percentage and the code are fixed: they are not part of an update.
+    const parsed = updateDealSchema.safeParse({ name: 'x', discountPercent: 90, code: 'NEW' });
+    expect(parsed.success && parsed.data).toEqual({ name: 'x' });
+    expect(updateDealSchema.safeParse({ discountPercent: 90 }).success).toBe(false);
   });
 });

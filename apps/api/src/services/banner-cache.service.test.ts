@@ -14,8 +14,11 @@ import {
   refreshBannerConfigForOrg,
   type BannerDocInput,
   type CachedBannerConfig,
+  servableDeals,
   type CouponForDisplay,
+  type DealCouponForDisplay,
   type ServingCampaign,
+  type ServingDeal,
 } from "./banner-cache.service";
 import { discountEpochKey } from "./parity.service";
 import { TEST_BANNER, bannerDocForCampaign } from "./banner-doc-test-helpers";
@@ -644,5 +647,159 @@ describe("pushBannerConfigForOrg: concurrent rebuilds", () => {
     // One epoch write (the first pass); each pass writes both documents.
     expect(puts.filter((k) => k === discountEpochKey("org_1"))).toHaveLength(1);
     expect(puts.filter((k) => k.startsWith("banner-config:"))).toHaveLength(2 * (1 + BANNER_REBUILD_EXTRA_PASSES));
+  });
+});
+
+// ── Holiday deals ──────────────────────────────────────────────────────────
+
+const DEAL_START = Date.parse("2026-11-27T00:00:00Z");
+const DEAL_END = Date.parse("2026-12-01T00:00:00Z");
+
+function servingDeal(overrides: Partial<ServingDeal> = {}): ServingDeal {
+  return {
+    id: "deal_1",
+    name: "Black Friday",
+    discountPercent: 50,
+    startsAt: DEAL_START,
+    endsAt: DEAL_END,
+    messageTemplate: "{{deal}}: {{discount}}% off with code {{code}}. Ends {{ends}}.",
+    codeSource: "provider",
+    manualCode: null,
+    coupons: [],
+    ...overrides,
+  };
+}
+
+function dealCoupon(overrides: Partial<DealCouponForDisplay> = {}): DealCouponForDisplay {
+  return {
+    code: "BLACKFRIDAY50K7QX",
+    status: "active",
+    integrationId: "int_1",
+    environment: "live",
+    discountPercent: 50,
+    ...overrides,
+  };
+}
+
+describe("servableDeals", () => {
+  const provider = (deal: ServingDeal) =>
+    servableDeals({ integrationId: "int_1", environment: "live", deals: [deal] });
+
+  it("a provider deal is offered with its active code of the campaign's integration and environment", () => {
+    expect(provider(servingDeal({ coupons: [dealCoupon()] }))).toEqual([
+      {
+        id: "deal_1",
+        name: "Black Friday",
+        discount: 50,
+        code: "BLACKFRIDAY50K7QX",
+        startsAt: DEAL_START,
+        endsAt: DEAL_END,
+        message: "{{deal}}: {{discount}}% off with code {{code}}. Ends {{ends}}.",
+      },
+    ]);
+  });
+
+  it("a provider deal without a code that works is left out", () => {
+    expect(provider(servingDeal())).toEqual([]);
+    for (const wrong of [
+      dealCoupon({ integrationId: "int_other" }),
+      dealCoupon({ environment: "test" }),
+      dealCoupon({ discountPercent: 40 }),
+      dealCoupon({ status: "retiring" }),
+      dealCoupon({ status: "deleted" }),
+    ]) {
+      expect(provider(servingDeal({ coupons: [wrong] }))).toEqual([]);
+    }
+    // The campaign no longer has an integration.
+    expect(
+      servableDeals({ integrationId: null, environment: "live", deals: [servingDeal({ coupons: [dealCoupon()] })] }),
+    ).toEqual([]);
+  });
+
+  it("the matching code is used when an older row is still around", () => {
+    const deal = servingDeal({ coupons: [dealCoupon({ integrationId: "int_old", code: "OLD" }), dealCoupon()] });
+    expect(provider(deal).map((d) => d.code)).toEqual(["BLACKFRIDAY50K7QX"]);
+  });
+
+  it("a manual deal carries the typed code, with or without an integration; without a code it is left out", () => {
+    const manual = servingDeal({ codeSource: "manual", manualCode: "MYCODE" });
+    expect(servableDeals({ integrationId: null, environment: "live", deals: [manual] })[0]!.code).toBe("MYCODE");
+    expect(servableDeals({ integrationId: "int_1", environment: "live", deals: [manual] })[0]!.code).toBe("MYCODE");
+    expect(
+      servableDeals({ integrationId: null, environment: "live", deals: [servingDeal({ codeSource: "manual" })] }),
+    ).toEqual([]);
+  });
+
+  it("a deal without a code is offered with code null", () => {
+    const none = servingDeal({ codeSource: "none" });
+    expect(servableDeals({ integrationId: null, environment: "live", deals: [none] })[0]!.code).toBeNull();
+  });
+
+  it("orders by start, then id, whatever order the rows came in", () => {
+    const deals = [
+      servingDeal({ id: "b", codeSource: "none", startsAt: DEAL_START }),
+      servingDeal({ id: "c", codeSource: "none", startsAt: DEAL_START - 1 }),
+      servingDeal({ id: "a", codeSource: "none", startsAt: DEAL_START }),
+    ];
+    const ids = (list: ServingDeal[]) =>
+      servableDeals({ integrationId: null, environment: "live", deals: list }).map((d) => d.id);
+    expect(ids(deals)).toEqual(["c", "a", "b"]);
+    expect(ids([...deals].reverse())).toEqual(["c", "a", "b"]);
+  });
+
+  it("no deals: an empty list", () => {
+    expect(servableDeals({ integrationId: null, environment: "live" })).toEqual([]);
+    expect(servableDeals({ integrationId: null, environment: "live", deals: [] })).toEqual([]);
+  });
+});
+
+describe("buildBannerDoc: holiday deals", () => {
+  it("a campaign without servable deals has no `deals` key, so its document is what it was before deals existed", () => {
+    const without = buildBannerDoc(input());
+    expect(without.campaigns.C1).not.toHaveProperty("deals");
+
+    // A deal that cannot be offered (its code is missing) changes nothing either.
+    const unservable = buildBannerDoc(
+      input({ inputs: { campaigns: [campaign("C1", { integrationId: "int_1", deals: [servingDeal()] })], experiments: [] } }),
+    );
+    expect(unservable.campaigns.C1).not.toHaveProperty("deals");
+    expect(JSON.stringify(buildBannerDoc(input({ inputs: { campaigns: [campaign("C1", { deals: [] })], experiments: [] } })))).toBe(
+      JSON.stringify(without),
+    );
+  });
+
+  it("stores the campaign's servable deals next to its countries", () => {
+    const doc = buildBannerDoc(
+      input({
+        inputs: {
+          campaigns: [
+            campaign("C1", {
+              integrationId: "int_1",
+              deals: [servingDeal({ coupons: [dealCoupon()] }), servingDeal({ id: "deal_2", coupons: [] })],
+            }),
+          ],
+          experiments: [],
+        },
+      }),
+    );
+    expect(doc.campaigns.C1!.deals).toEqual([
+      expect.objectContaining({ id: "deal_1", discount: 50, code: "BLACKFRIDAY50K7QX", startsAt: DEAL_START, endsAt: DEAL_END }),
+    ]);
+    // The countries are untouched: which offer a visitor gets is decided per request.
+    expect(Object.keys(doc.campaigns.C1!.countries).sort()).toEqual(["BR", "IN"]);
+  });
+
+  it("the same rows give the same content whenever the document is built (nothing depends on builtAt)", () => {
+    const withDeal = (builtAt: number) =>
+      buildBannerDoc(
+        input({
+          builtAt,
+          inputs: { campaigns: [campaign("C1", { deals: [servingDeal({ codeSource: "none" })] })], experiments: [] },
+        }),
+      );
+    // Long before the deal, during it, and after it: ended deals are left out
+    // by the loader (loadServingInputs), never by the builder.
+    expect(bannerDocContent(withDeal(DEAL_START - 86_400_000))).toBe(bannerDocContent(withDeal(DEAL_END + 86_400_000)));
+    expect(withDeal(DEAL_END + 1).campaigns.C1!.deals).toHaveLength(1);
   });
 });

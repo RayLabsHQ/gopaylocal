@@ -15,7 +15,8 @@
  * every referenced campaign to its servable data, including what its local
  * prices are computed from (the product's price and currency and the campaign's
  * charm strategy; the exchange rates are read per request, see
- * services/fx-cache.ts). Which campaign serves a
+ * services/fx-cache.ts), and its holiday deals that have not ended
+ * (servableDeals; which one runs now is decided per request). Which campaign serves a
  * product is decided by selectAllServings (banner-selection.ts): the database
  * fallback in routes/banner-script.ts calls the same selection on the same
  * loader output (loadServingInputs), so the two paths cannot disagree.
@@ -28,7 +29,7 @@
  * backstop for two rebuilds racing (see pushBannerConfigForOrg) and for a
  * rebuild that failed.
  *
- * Triggered by: campaign create/update/delete, banner-config update,
+ * Triggered by: campaign create/update/delete, banner-config update, deal create/update/delete,
  * product update/delete, parity-group changes, api-key create, experiment changes, plan changes, and
  * by the endpoint itself on a missing or outdated document, or on one that no
  * longer matches the database. Every rebuild also
@@ -36,7 +37,7 @@
  * discount:{epoch}:{campaignId}:{cc} entry of the organization.
  */
 
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, gt, inArray } from "drizzle-orm";
 import { ulid } from "ulid";
 import type { Database } from "../db";
 import {
@@ -47,6 +48,7 @@ import {
   parityGroups,
   countryParityMappings,
   coupons,
+  deals,
   subscriptions,
   experiments,
 } from "../db/schema";
@@ -61,6 +63,7 @@ import {
 import { COUNTRY_NAMES } from "@gopaylocal/shared/constants";
 import { isCharmStrategy, type CharmStrategy } from "@gopaylocal/shared/currency";
 import type { BannerConfig } from "@gopaylocal/shared/types";
+import type { DealCodeSource } from "@gopaylocal/shared/deals";
 import { isDisplayableCoupon, COUPON_STATUS } from "./coupon.service";
 import { discountEpochKey, readDiscountEpoch } from "./parity.service";
 import { BANNER_DOC_MAX_AGE_MS } from "./banner-hot-cache";
@@ -105,6 +108,21 @@ export interface CampaignPricing {
   charm: CharmStrategy;
 }
 
+/** A holiday deal of a campaign, as the endpoint offers it. */
+export interface CachedDeal {
+  id: string;
+  name: string;
+  /** The deal's percentage. */
+  discount: number;
+  /** The deal's code; null for a deal without one (`codeSource: "none"`). */
+  code: string | null;
+  /** The deal runs in [startsAt, endsAt), milliseconds since the epoch. */
+  startsAt: number;
+  endsAt: number;
+  /** Its message template; `{{deal}}` and `{{ends}}` are filled per request. */
+  message: string;
+}
+
 /** One campaign's servable data. */
 export interface CachedCampaign {
   environment: BannerEnvironment;
@@ -112,6 +130,12 @@ export interface CachedCampaign {
   banner: BannerConfig;
   pricing: CampaignPricing;
   countries: Record<string, CachedCountryData>;
+  /**
+   * The campaign's deals that had not ended when the rows were read and whose
+   * code works (servableDeals), by start. Absent when there are none, so a
+   * workspace without deals has the document it had before deals existed.
+   */
+  deals?: CachedDeal[];
 }
 
 /** The KV document stored under `banner-config:{apiKeyId}`. */
@@ -212,7 +236,28 @@ export interface ServingCampaign extends SelectableCampaign {
   /** null when the campaign has no banner_configs row (then not servable). */
   banner: BannerConfig | null;
   pricing: CampaignPricing;
+  /** The campaign's deals that have not ended, with their active coupon rows. */
+  deals?: ServingDeal[];
 }
+
+/** A deal row with what decides whether it can be shown. */
+export interface ServingDeal {
+  id: string;
+  name: string;
+  discountPercent: number;
+  startsAt: number;
+  endsAt: number;
+  messageTemplate: string;
+  codeSource: DealCodeSource;
+  manualCode: string | null;
+  /** The deal's active coupon rows (the unique index allows one). */
+  coupons: DealCouponForDisplay[];
+}
+
+export type DealCouponForDisplay = Pick<
+  CouponForDisplay,
+  "code" | "status" | "integrationId" | "environment" | "discountPercent"
+>;
 
 export interface ServingInputs {
   campaigns: ServingCampaign[];
@@ -236,13 +281,22 @@ function toBannerConfig(row: BannerConfigRow): BannerConfig {
 }
 
 /**
- * Everything selection needs for one organization, in two queries: its active
+ * Everything selection needs for one organization, in three queries: its active
  * campaigns (with their banner config, if any, and their product's price and
- * currency) and its running experiments. Used by the cache builder and by the
+ * currency), its running experiments, and its deals that have not ended at
+ * `now` (with their active coupon). Used by the cache builder and by the
  * endpoint's database fallback.
+ *
+ * Deals that have ended are left out here, not by the document builder: the
+ * comparison of a stored document with the database (refreshBannerConfigForOrg)
+ * then sees the same deals a rebuild would write.
  */
-export async function loadServingInputs(db: Database, organizationId: string): Promise<ServingInputs> {
-  const [campaignRows, experimentRows] = await Promise.all([
+export async function loadServingInputs(
+  db: Database,
+  organizationId: string,
+  now: Date = new Date(),
+): Promise<ServingInputs> {
+  const [campaignRows, experimentRows, dealRows] = await Promise.all([
     db
       .select({
         campaign: campaigns,
@@ -259,7 +313,44 @@ export async function loadServingInputs(db: Database, organizationId: string): P
       .select()
       .from(experiments)
       .where(and(eq(experiments.organizationId, organizationId), eq(experiments.status, "running"))),
+    db
+      .select({
+        deal: deals,
+        coupon: {
+          code: coupons.code,
+          status: coupons.status,
+          integrationId: coupons.integrationId,
+          environment: coupons.environment,
+          discountPercent: coupons.discountPercent,
+        },
+      })
+      .from(deals)
+      .leftJoin(coupons, and(eq(coupons.dealId, deals.id), eq(coupons.status, COUPON_STATUS.active)))
+      .where(and(eq(deals.organizationId, organizationId), gt(deals.endsAt, now))),
   ]);
+
+  // Campaign id -> its deals, each with its coupon rows.
+  const dealsByCampaign = new Map<string, Map<string, ServingDeal>>();
+  for (const { deal, coupon } of dealRows) {
+    let ofCampaign = dealsByCampaign.get(deal.campaignId);
+    if (!ofCampaign) dealsByCampaign.set(deal.campaignId, (ofCampaign = new Map()));
+    let entry = ofCampaign.get(deal.id);
+    if (!entry) {
+      entry = {
+        id: deal.id,
+        name: deal.name,
+        discountPercent: deal.discountPercent,
+        startsAt: new Date(deal.startsAt).getTime(),
+        endsAt: new Date(deal.endsAt).getTime(),
+        messageTemplate: deal.messageTemplate,
+        codeSource: deal.codeSource,
+        manualCode: deal.manualCode,
+        coupons: [],
+      };
+      ofCampaign.set(deal.id, entry);
+    }
+    if (coupon) entry.coupons.push(coupon);
+  }
 
   return {
     campaigns: campaignRows.map(({ campaign, banner, product }) => ({
@@ -280,6 +371,7 @@ export async function loadServingInputs(db: Database, organizationId: string): P
         basePrice: product.basePrice,
         charm: isCharmStrategy(campaign.charmPricingStrategy) ? campaign.charmPricingStrategy : "none",
       },
+      deals: [...(dealsByCampaign.get(campaign.id)?.values() ?? [])],
     })),
     experiments: experimentRows.map((e) => ({
       id: e.id,
@@ -389,6 +481,51 @@ function campaignCountries(
   return out;
 }
 
+/**
+ * The deals of a campaign that can be offered, by start then id. Pure, so the
+ * document builder and the endpoint's database fallback apply the same rule.
+ *
+ *  - `provider`: only with an active coupon of the campaign's current
+ *    integration and environment for the deal's percentage (the rule a
+ *    country's code follows). A deal whose code is missing is left out: the
+ *    banner never offers a deal with a code that does not work.
+ *  - `manual`: with the code the merchant typed.
+ *  - `none`: without a code.
+ */
+export function servableDeals(
+  campaign: Pick<ServingCampaign, "integrationId" | "environment" | "deals">,
+): CachedDeal[] {
+  const environment = campaignEnvironmentOf(campaign.environment);
+  const out: CachedDeal[] = [];
+  for (const deal of campaign.deals ?? []) {
+    let code: string | null = null;
+    if (deal.codeSource === "provider") {
+      const coupon = deal.coupons.find((c) =>
+        isDisplayableCoupon(c, {
+          integrationId: campaign.integrationId,
+          environment,
+          discountPercent: deal.discountPercent,
+        }),
+      );
+      if (!coupon) continue;
+      code = coupon.code;
+    } else if (deal.codeSource === "manual") {
+      if (!deal.manualCode) continue;
+      code = deal.manualCode;
+    }
+    out.push({
+      id: deal.id,
+      name: deal.name,
+      discount: deal.discountPercent,
+      code,
+      startsAt: deal.startsAt,
+      endsAt: deal.endsAt,
+      message: deal.messageTemplate,
+    });
+  }
+  return out.sort((a, b) => a.startsAt - b.startsAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
 /** The ids of every campaign a set of servings can serve. */
 export function referencedCampaignIds(servings: Record<string, ProductServing>): string[] {
   const ids = new Set<string>();
@@ -426,6 +563,8 @@ export function buildBannerDoc(input: BannerDocInput): CachedBannerConfig {
       pricing: campaign.pricing,
       countries: campaignCountries(campaign, input.parityGroups, couponsByCampaign.get(id) ?? []),
     };
+    const dealsOfCampaign = servableDeals(campaign);
+    if (dealsOfCampaign.length > 0) cachedCampaigns[id]!.deals = dealsOfCampaign;
   }
 
   return {

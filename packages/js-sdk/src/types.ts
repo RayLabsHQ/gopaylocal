@@ -71,6 +71,15 @@ export interface BannerDesign {
   showCloseBtn: boolean;
 }
 
+/** A holiday deal: a sale with an end, offered in place of the visitor's country discount. */
+export interface DealInfo {
+  id: string;
+  /** The deal's name, such as "Black Friday". */
+  name: string;
+  /** When the deal ends (ISO 8601, UTC). */
+  endsAt: string;
+}
+
 /** Purchasing Power Parity data for the current visitor. */
 export interface PPPData {
   /** Always true: the SDK returns null instead of data when no discount applies. */
@@ -121,6 +130,11 @@ export interface PPPData {
   variant: 'a' | 'b' | null;
   /** The campaign's banner design, used by `showBanner()`. */
   banner: BannerDesign | null;
+  /**
+   * Set when the offer is a holiday deal: `discount` and `code` are then the
+   * deal's, not the visitor's country discount. Null otherwise.
+   */
+  deal: DealInfo | null;
   /** Whether a "Powered by GoPayLocal" link is shown (Free plan). Set by the API. */
   showBranding: boolean;
 }
@@ -220,4 +234,5 @@ export interface ApiResponse {
   variant?: 'a' | 'b';
   showBranding?: boolean;
   banner?: BannerDesign;
+  deal?: unknown;
 }

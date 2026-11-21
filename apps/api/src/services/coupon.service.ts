@@ -15,11 +15,11 @@
 // if that delete fails, parked as `retiring` (never displayed, retried on the
 // next reconcile, still matched by redemption webhooks).
 
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, asc, inArray, isNotNull, isNull, lte, or } from 'drizzle-orm';
 import { ulid } from 'ulid';
 import type { Database } from '../db';
 import type { Bindings } from '../bindings';
-import { campaigns, coupons, integrations } from '../db/schema';
+import { campaigns, coupons, deals, integrations } from '../db/schema';
 import {
   createProvider,
   ProviderError,
@@ -30,12 +30,14 @@ import {
 } from './providers';
 import { decrypt, tokenEncryptionSecret } from '../lib/crypto';
 import { generateCouponCode } from '../lib/coupon-code';
+import { generateDealCode } from '../lib/coupon-code';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
 type Campaign = typeof campaigns.$inferSelect;
 type Integration = typeof integrations.$inferSelect;
 type Coupon = typeof coupons.$inferSelect;
+type Deal = typeof deals.$inferSelect;
 type Environment = 'live' | 'test';
 
 /** Coupon row statuses. Only `active` rows may ever reach a banner. */
@@ -502,6 +504,205 @@ export async function listCouponsForCampaign(
     .select()
     .from(coupons)
     .where(and(...conditions));
+}
+
+// ── Deal coupons ────────────────────────────────────────────────────────────
+// The code of a holiday deal (db/schema.ts `deals`) is a coupon row with
+// `dealId` and no country: one code for every visitor. The same invariant as
+// for countries applies: only an `active` row of the campaign's current
+// integration and environment, for the deal's percentage, may be displayed.
+
+/** Partial unique index: one `active` coupon per deal. See db/schema.ts. */
+export const ACTIVE_DEAL_COUPON_INDEX = 'coupons_one_active_per_deal_idx';
+
+function dealExpectation(
+  campaign: Pick<Campaign, 'integrationId' | 'environment'>,
+  deal: Pick<Deal, 'discountPercent'>,
+): DisplayExpectation {
+  return {
+    integrationId: campaign.integrationId,
+    environment: campaignEnvironment(campaign),
+    discountPercent: deal.discountPercent,
+  };
+}
+
+/**
+ * Converge a deal on exactly one displayable code at the campaign's
+ * integration: reuse a matching one, retire every other one (another
+ * integration or environment, or already retiring), and create one if needed.
+ * Idempotent. Throws when a new code is needed and the provider refuses it.
+ */
+export async function ensureDealCoupon(
+  db: Database,
+  env: Bindings,
+  campaign: Campaign,
+  integration: Integration,
+  deal: Deal,
+): Promise<Coupon> {
+  const expected = dealExpectation({ integrationId: integration.id, environment: campaign.environment }, deal);
+  const rows = await db
+    .select()
+    .from(coupons)
+    .where(and(eq(coupons.dealId, deal.id), inArray(coupons.status, [COUPON_STATUS.active, COUPON_STATUS.retiring])));
+
+  const match = rows.find((c) => isDisplayableCoupon(c, expected));
+  for (const stale of rows) {
+    if (!isDisplayableCoupon(stale, expected)) {
+      await retireCoupon(db, env, stale, campaign.organizationId);
+    }
+  }
+  if (match) return match;
+
+  return insertDealCoupon(db, env, campaign, integration, deal, expected);
+}
+
+/** Tries at a code no other coupon has; each try draws a new random suffix. */
+const DEAL_CODE_ATTEMPTS = 3;
+
+async function insertDealCoupon(
+  db: Database,
+  env: Bindings,
+  campaign: Campaign,
+  integration: Integration,
+  deal: Deal,
+  expected: DisplayExpectation,
+): Promise<Coupon> {
+  const environment = campaignEnvironment(campaign);
+
+  let code: string | null = null;
+  for (let attempt = 0; attempt < DEAL_CODE_ATTEMPTS && !code; attempt++) {
+    const candidate = generateDealCode(deal.name, deal.discountPercent, integration.provider);
+    const [taken] = await db.select({ id: coupons.id }).from(coupons).where(eq(coupons.code, candidate)).limit(1);
+    if (!taken) code = candidate;
+  }
+  if (!code) throw serviceError('ALREADY_EXISTS', `No free code for the deal '${deal.name}'`);
+
+  const provider = await providerFor(env, integration, environment);
+
+  let providerDiscountId: string;
+  let providerCode: string;
+  let providerPromoCodeId: string | null;
+  try {
+    const result = await provider.createDiscount({
+      name: `${deal.name} ${deal.discountPercent}%`,
+      code,
+      discountType: 'percentage',
+      amount: deal.discountPercent,
+    });
+    providerDiscountId = result.providerDiscountId;
+    // As for a country's coupon: the code the provider accepted is the one stored and shown.
+    providerCode = result.code || code;
+    providerPromoCodeId = result.providerPromoCodeId ?? null;
+  } catch (err) {
+    throw toServiceError(err);
+  }
+
+  try {
+    const [coupon] = await db
+      .insert(coupons)
+      .values({
+        id: ulid(),
+        campaignId: campaign.id,
+        integrationId: integration.id,
+        countryCode: null,
+        dealId: deal.id,
+        environment,
+        code: providerCode,
+        discountPercent: deal.discountPercent,
+        providerCouponId: providerDiscountId,
+        providerPromoCodeId,
+        status: COUPON_STATUS.active,
+        createdAt: new Date(),
+      })
+      .returning();
+    return coupon!;
+  } catch (err) {
+    // Same as a country's coupon: without a row the provider discount would be
+    // live and untracked, so it is undone.
+    await provider.deleteDiscount(providerDiscountId).catch((undoErr: unknown) => {
+      console.error(`[coupon] orphaned provider discount ${providerDiscountId}:`, undoErr);
+    });
+    // Lost a race with a concurrent request for the same deal: use the winner's row.
+    if (violatedConstraint(err) === ACTIVE_DEAL_COUPON_INDEX) {
+      const [winner] = await db
+        .select()
+        .from(coupons)
+        .where(and(eq(coupons.dealId, deal.id), eq(coupons.status, COUPON_STATUS.active)));
+      if (winner && isDisplayableCoupon(winner, expected)) return winner;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Take every code of a deal out of service: deleted at its provider and from
+ * our table, or parked as `retiring` when the provider refuses (never shown;
+ * the scheduled job tries again). Never throws. Returns the codes that could
+ * not be removed at their provider, for the caller to tell the merchant.
+ */
+export async function retireDealCoupons(
+  db: Database,
+  env: Bindings,
+  dealId: string,
+  organizationId: string,
+): Promise<string[]> {
+  const rows = await db
+    .select()
+    .from(coupons)
+    .where(and(eq(coupons.dealId, dealId), inArray(coupons.status, [COUPON_STATUS.active, COUPON_STATUS.retiring])));
+  const notRemoved: string[] = [];
+  for (const coupon of rows) {
+    if (await retireCoupon(db, env, coupon, organizationId)) notRemoved.push(coupon.code);
+  }
+  return notRemoved;
+}
+
+/**
+ * Deal codes the scheduled job retires in one run. A few: each one is one or
+ * two calls to a payment platform, and the run shares its time with the usage
+ * job. The rest follow on the next runs.
+ */
+export const DEAL_COUPON_CLEANUP_BATCH = 5;
+
+/**
+ * Retire the codes of deals that are over: the deal has ended, or the deal row
+ * is gone (it was deleted while its code could not be removed). A deal's code
+ * stops being shown the moment the deal ends (the banner endpoint checks the
+ * time); this makes it stop working at the payment platform as well. Called by
+ * the scheduled usage job; a code whose provider keeps refusing is tried again
+ * on the next run. Never throws.
+ */
+export async function retireEndedDealCoupons(
+  db: Database,
+  env: Bindings,
+  now: Date = new Date(),
+  limit: number = DEAL_COUPON_CLEANUP_BATCH,
+): Promise<{ retired: number; failed: number }> {
+  const rows = await db
+    .select({ coupon: coupons, organizationId: campaigns.organizationId })
+    .from(coupons)
+    .innerJoin(campaigns, eq(campaigns.id, coupons.campaignId))
+    .leftJoin(deals, eq(deals.id, coupons.dealId))
+    .where(
+      and(
+        isNotNull(coupons.dealId),
+        inArray(coupons.status, [COUPON_STATUS.active, COUPON_STATUS.retiring]),
+        or(isNull(deals.id), lte(deals.endsAt, now)),
+      ),
+    )
+    // Codes not tried yet (`active`) before ones a provider refused to remove
+    // (`retiring`), oldest first: a provider that keeps refusing cannot hold
+    // up the others.
+    .orderBy(asc(coupons.status), asc(coupons.createdAt))
+    .limit(limit);
+
+  let retired = 0;
+  let failed = 0;
+  for (const { coupon, organizationId } of rows) {
+    if (await retireCoupon(db, env, coupon, organizationId)) failed++;
+    else retired++;
+  }
+  return { retired, failed };
 }
 
 /**

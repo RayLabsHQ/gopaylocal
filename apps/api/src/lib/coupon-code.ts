@@ -1,8 +1,8 @@
 // ── Coupon code generation ──────────────────────────────────────────────────
 // The one generator for every code GoPayLocal creates at a provider: banner
-// coupons (services/coupon.service.ts) and the verify tool's throwaway codes
-// (scripts/verify-provider/code.ts). No imports, so the Node-run script can
-// load it directly.
+// coupons and the codes of holiday deals (services/coupon.service.ts), and the
+// verify tool's throwaway codes (scripts/verify-provider/code.ts). No imports,
+// so the Node-run script can load it directly.
 //
 // Provider code-format constraints (official docs):
 //  - Paddle: ^[a-zA-Z0-9]{1,32}$
@@ -74,4 +74,34 @@ export function generateCouponCode(
     prefixPart = prefixPart.slice(0, Math.max(3, maxLen - fixed));
   }
   return `${prefixPart}${sep}${stem}${sep}${rand}`.toUpperCase();
+}
+
+/** Most characters of a deal's name that go into its code. */
+export const DEAL_SLUG_MAX_LENGTH = 12;
+
+/**
+ * Generate the code of a holiday deal from its name and percentage, plus the
+ * random suffix every code carries (codes are unique across all workspaces, so
+ * two "Black Friday" deals need different ones).
+ * Format: {NAME}{PERCENT}-{RANDOM}, the separator dropped for providers that
+ * only accept alphanumeric codes, the name cut to fit a provider's length cap.
+ * Example: BLACKFRIDAY40-K7QX (Chargebee), BLACKFRIDAY40K7QX (Stripe),
+ * BLACKFRID40-K7QX (Dodo, 16 characters). A name without letters or digits
+ * becomes DEAL.
+ */
+export function generateDealCode(
+  name: string,
+  discountPercent: number,
+  provider?: string,
+  randomBytes: RandomBytes = defaultRandomBytes,
+): string {
+  const alnumOnly = provider ? ALNUM_ONLY_PROVIDERS.has(provider) : false;
+  const sep = alnumOnly ? '' : '-';
+  const percent = String(Math.round(discountPercent));
+  const rand = randomCodeSuffix(randomBytes);
+  // NFKD splits accented letters into the letter and its mark; the mark is then dropped.
+  const slug = name.normalize('NFKD').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() || 'DEAL';
+  const maxLen = provider ? CODE_MAX_LENGTH[provider] : undefined;
+  const room = maxLen ? maxLen - percent.length - sep.length - rand.length : DEAL_SLUG_MAX_LENGTH;
+  return `${slug.slice(0, Math.max(3, Math.min(DEAL_SLUG_MAX_LENGTH, room)))}${percent}${sep}${rand}`;
 }

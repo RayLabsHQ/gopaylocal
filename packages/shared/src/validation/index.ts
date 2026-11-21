@@ -2,6 +2,14 @@ import { z } from 'zod';
 import { minorUnitExponent, normalizeCurrency } from '../currency/exponents';
 import { SUPPORTED_CURRENCIES } from '../currency/supported-currencies';
 import { normalizeWooCommerceStoreUrl, parseWooCommerceCredentials } from './woocommerce';
+import {
+  DEAL_MANUAL_CODE_PATTERN,
+  MAX_DEAL_DAYS,
+  MAX_DEAL_DURATION_MS,
+  MAX_DEAL_NAME_LENGTH,
+  MAX_DEAL_PERCENT,
+  MIN_DEAL_PERCENT,
+} from '../deals/index';
 
 export * from './woocommerce';
 
@@ -185,6 +193,57 @@ export const updateBannerConfigSchema = z.object({
   showFlag: z.boolean().optional(),
   showCloseBtn: z.boolean().optional(),
 });
+
+// ── Holiday deals ───────────────────────────────────────────────────────────
+// A deal's percentage and where its code comes from are fixed once it exists
+// (the code at the payment platform carries the percentage), so the update
+// schema has neither.
+
+/** An instant with a UTC offset, such as 2026-11-27T00:00:00Z. */
+const dealInstant = z.iso.datetime({ offset: true });
+
+const dealFields = {
+  name: z.string().trim().min(1).max(MAX_DEAL_NAME_LENGTH),
+  startsAt: dealInstant,
+  endsAt: dealInstant,
+  messageTemplate: z.string().min(1).max(MAX_BANNER_MESSAGE_LENGTH),
+};
+
+/** The message for a window that is empty, backwards or too long; null when fine. */
+export function dealWindowError(startsAt: string | Date, endsAt: string | Date): string | null {
+  const start = new Date(startsAt).getTime();
+  const end = new Date(endsAt).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return 'startsAt and endsAt must be dates';
+  if (end <= start) return 'A deal must end after it starts';
+  if (end - start > MAX_DEAL_DURATION_MS) return `A deal can run for at most ${MAX_DEAL_DAYS} days`;
+  return null;
+}
+
+export const createDealSchema = z
+  .object({
+    name: dealFields.name,
+    discountPercent: z.number().int().min(MIN_DEAL_PERCENT).max(MAX_DEAL_PERCENT),
+    startsAt: dealFields.startsAt,
+    endsAt: dealFields.endsAt,
+    messageTemplate: dealFields.messageTemplate.optional(),
+    /** Only for a campaign without a payment integration: a code you created yourself. */
+    code: z.string().regex(DEAL_MANUAL_CODE_PATTERN).nullable().optional(),
+  })
+  .superRefine((deal, ctx) => {
+    const message = dealWindowError(deal.startsAt, deal.endsAt);
+    if (message) ctx.addIssue({ code: 'custom', path: ['endsAt'], message });
+  });
+
+export const updateDealSchema = z
+  .object({
+    name: dealFields.name.optional(),
+    startsAt: dealFields.startsAt.optional(),
+    endsAt: dealFields.endsAt.optional(),
+    messageTemplate: dealFields.messageTemplate.optional(),
+  })
+  .refine((deal) => Object.values(deal).some((value) => value !== undefined), {
+    message: 'Nothing to update',
+  });
 
 // ── API Keys ────────────────────────────────────────────────────────────────
 

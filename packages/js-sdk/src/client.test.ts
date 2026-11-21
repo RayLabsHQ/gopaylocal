@@ -176,8 +176,19 @@ describe('toPPPData', () => {
       experimentId: EXP,
       variant: 'b',
       banner: BANNER,
+      deal: null,
       showBranding: true,
     });
+  });
+
+  it('carries a holiday deal, and reads a malformed one as none', () => {
+    const deal = { id: 'deal_1', name: 'Black Friday', endsAt: '2026-12-01T00:00:00.000Z' };
+    expect(toPPPData({ ...SHOW_IN, deal }, base)!.deal).toEqual(deal);
+    // Only the three known fields are kept.
+    expect(toPPPData({ ...SHOW_IN, deal: { ...deal, extra: 1 } }, base)!.deal).toEqual(deal);
+    for (const bad of [null, 'x', {}, { id: 'd', name: 'n' }, { ...deal, endsAt: 'soon' }, { ...deal, id: 7 }]) {
+      expect(toPPPData({ ...SHOW_IN, deal: bad }, base)!.deal).toBeNull();
+    }
   });
 
   it('uses nulls and base currency when optional fields are absent', () => {
@@ -370,6 +381,27 @@ describe('GoPayLocal cache', () => {
     fetchMock.mockResolvedValue(jsonResponse({ show: false }));
     await new GoPayLocal({ apiKey: 'k' }).init();
     expect(session.length).toBe(0);
+  });
+
+  it('a cached holiday deal is reused until the deal ends, then fetched again', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const end = Date.parse('2026-12-01T00:00:00Z');
+    vi.setSystemTime(end - 60_000);
+    const deal = { id: 'deal_1', name: 'Black Friday', endsAt: new Date(end).toISOString() };
+    fetchMock.mockResolvedValue(jsonResponse({ ...SHOW, deal }));
+
+    const first = await new GoPayLocal({ apiKey: 'k' }).init();
+    expect(first!.deal).toEqual(deal);
+    vi.setSystemTime(end - 1);
+    expect((await new GoPayLocal({ apiKey: 'k' }).init())!.deal).toEqual(deal);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // The deal is over: the cached answer (still inside its five minutes) is dropped.
+    vi.setSystemTime(end);
+    fetchMock.mockResolvedValue(jsonResponse(SHOW));
+    const after = await new GoPayLocal({ apiKey: 'k' }).init();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(after!.deal).toBeNull();
   });
 });
 

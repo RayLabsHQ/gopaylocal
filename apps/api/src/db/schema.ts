@@ -10,6 +10,7 @@ import type {
   IntegrationProvider,
   ApiKeyType,
 } from "@gopaylocal/shared/types";
+import type { DealCodeSource } from "@gopaylocal/shared/deals";
 
 // ── Postgres 18 Notes ───────────────────────────────────────────────────────
 // TODO: Switch from JS ulid() to Postgres-native uuidv7() for IDs once Drizzle
@@ -354,6 +355,45 @@ export const experiments = pgTable(
 
 // ── Coupons ─────────────────────────────────────────────────────────────────
 
+// ── Deals (holiday discounts) ───────────────────────────────────────────────
+// A named percentage with a start and an end, attached to a campaign, with one
+// discount code for every visitor (packages/shared/src/deals). While it runs,
+// the banner offers a visitor the larger of the deal and their country's
+// discount. A deal goes with its campaign.
+//
+// The code of a `provider` deal is a coupons row (coupons.deal_id, no country):
+// redemption webhooks, an integration's removal and the retiring of superseded
+// codes then treat it like any other coupon.
+export const deals = pgTable(
+  "deals",
+  {
+    id: t.text("id").primaryKey(),
+    organizationId: t.text("organization_id").notNull(),
+    campaignId: t
+      .text("campaign_id")
+      .references(() => campaigns.id, { onDelete: "cascade" })
+      .notNull(),
+    name: t.text("name").notNull(),
+    // Fixed once the deal exists: the code at the payment platform carries it.
+    discountPercent: t.integer("discount_percent").notNull(),
+    // The deal runs from starts_at (inclusive) to ends_at (exclusive), UTC.
+    startsAt: t.timestamp("starts_at").notNull(),
+    endsAt: t.timestamp("ends_at").notNull(),
+    messageTemplate: t.text("message_template").notNull(),
+    // provider: GoPayLocal creates the code at the campaign's integration;
+    // manual: manual_code, typed by the merchant; none: no code.
+    codeSource: t.text("code_source").$type<DealCodeSource>().notNull(),
+    manualCode: t.text("manual_code"),
+    createdAt: t.timestamp("created_at").defaultNow().notNull(),
+    updatedAt: t.timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    t.index("deals_campaign_idx").on(table.campaignId),
+    // The scheduled job looks for deals that have ended.
+    t.index("deals_ends_at_idx").on(table.endsAt),
+  ],
+);
+
 export const coupons = pgTable("coupons", {
   id: t.text("id").primaryKey(),
   campaignId: t
@@ -366,6 +406,11 @@ export const coupons = pgTable("coupons", {
   integrationId: t.text("integration_id").references(() => integrations.id, { onDelete: "cascade" }),
   parityGroupId: t.text("parity_group_id"),
   countryCode: t.text("country_code"),
+  // Set on the code of a holiday deal (then country_code is null). No foreign
+  // key, on purpose: a row whose deal is gone is a code that still has to be
+  // removed at the provider, and the scheduled job finds it by exactly that
+  // (retireEndedDealCoupons in services/coupon.service.ts).
+  dealId: t.text("deal_id"),
   environment: t.text("environment").$type<"live" | "test">().default("live").notNull(),
   code: t.text("code").unique().notNull(),
   discountPercent: t.real("discount_percent").notNull(),
@@ -383,6 +428,11 @@ export const coupons = pgTable("coupons", {
     .where(sql`"status" = 'active'`),
   // Redemption webhooks and integration deletes look coupons up by integration.
   t.index("coupons_integration_idx").on(table.integrationId),
+  // At most one active code per deal (rows without a deal are not compared:
+  // NULLs are distinct in a unique index).
+  t.uniqueIndex("coupons_one_active_per_deal_idx")
+    .on(table.dealId)
+    .where(sql`"status" = 'active'`),
 ]);
 
 // ── Banner Configs ──────────────────────────────────────────────────────────

@@ -112,9 +112,21 @@ export type BannerResponse = {
   // experiment and the visitor's sticky arm ('a' = control, 'b' = variant).
   experimentId?: string;
   variant?: 'a' | 'b';
+  // Present only when the offer is a holiday deal and not the visitor's country
+  // discount (packages/shared/src/deals): `discount` and `code` are then the
+  // deal's, and `banner.messageTemplate` is the deal's message.
+  deal?: BannerDeal;
   // Plan-derived, server-enforced (NOT a customer-editable banner setting):
   // Free plans render a "Powered by GoPayLocal" link; paid plans remove it.
   showBranding: boolean;
+};
+
+/** The holiday deal a `show: true` answer offers. */
+export type BannerDeal = {
+  id: string;
+  name: string;
+  /** When the deal ends, ISO 8601 (UTC). */
+  endsAt: string;
 };
 
 // ── Parity ──────────────────────────────────────────────────────────────────

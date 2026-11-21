@@ -177,6 +177,24 @@ describe('session cache', () => {
     expect(session.map.has('gpl_react_k_')).toBe(false);
   });
 
+  it('a cached holiday deal is dropped once the deal has ended', () => {
+    const key = cacheKey('k');
+    const withDeal = (endsAt: string) => ({ ...SHOW, deal: { id: 'deal_1', name: 'Black Friday', endsAt } });
+
+    const running = withDeal(new Date(Date.now() + 60_000).toISOString());
+    setCachedData(key, running);
+    expect(getCachedData(key)).toEqual(running);
+
+    // Cached a moment ago, but the deal is over: asked again.
+    setCachedData(key, withDeal(new Date(Date.now() - 1).toISOString()));
+    expect(getCachedData(key)).toBeNull();
+    expect(session.map.has('gpl_react_k_')).toBe(false);
+
+    // An end that is not a date is treated as over.
+    setCachedData(key, withDeal('soon'));
+    expect(getCachedData(key)).toBeNull();
+  });
+
   it('works without sessionStorage', () => {
     Object.defineProperty(globalThis, 'sessionStorage', {
       configurable: true,

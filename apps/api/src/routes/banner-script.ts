@@ -10,7 +10,8 @@ import { getQuotaState, usageKey, type QuotaState } from "../services/usage.serv
 import { bannerShowsBranding, resolveEntitlements } from "../lib/entitlements";
 import { COUNTRY_NAMES } from "@gopaylocal/shared/constants";
 import { localPricing } from "@gopaylocal/shared/currency";
-import type { BannerConfig, BannerResponse } from "@gopaylocal/shared/types";
+import type { BannerConfig, BannerDeal, BannerResponse } from "@gopaylocal/shared/types";
+import { dealReplacesCountryDiscount, fillDealMessage, pickActiveDeal } from "@gopaylocal/shared/deals";
 import {
   bannerDocKey,
   bannerDocRefreshDue,
@@ -19,8 +20,10 @@ import {
   pushApiKeyToKV,
   pushBannerConfigForOrg,
   refreshBannerConfigForOrg,
+  servableDeals,
   type CachedApiKey,
   type CachedBannerConfig,
+  type CachedDeal,
   type CampaignPricing,
   type ServingInputs,
 } from "../services/banner-cache.service";
@@ -228,6 +231,8 @@ interface ServedCampaign {
   allowedDomains: string[] | null;
   banner: BannerConfig;
   pricing: CampaignPricing;
+  /** The campaign's holiday deals that can be offered (servableDeals). */
+  deals?: readonly CachedDeal[];
 }
 
 interface CountryOffer {
@@ -239,6 +244,12 @@ interface CountryOffer {
 interface Resolver {
   serving(productId: string | null): ProductServing | null;
   campaign(campaignId: string): ServedCampaign | null;
+  /**
+   * The country's percentage when it is known without a lookup (0: no
+   * discount there), else null. Lets a running deal that is at least as large
+   * be offered without resolving the country's code.
+   */
+  countryPercent(campaignId: string, countryCode: string): number | null;
   country(campaignId: string, countryCode: string): Promise<CountryOffer | null>;
   showBranding(): Promise<boolean>;
 }
@@ -259,6 +270,12 @@ function documentResolver(doc: CachedBannerConfig, deps: ResolverDeps): Resolver
     },
     campaign(campaignId) {
       return Object.hasOwn(doc.campaigns, campaignId) ? doc.campaigns[campaignId]! : null;
+    },
+    countryPercent(campaignId, countryCode) {
+      const campaign = doc.campaigns[campaignId];
+      if (!campaign) return null;
+      // The document leaves out countries without a discount.
+      return Object.hasOwn(campaign.countries, countryCode) ? campaign.countries[countryCode]!.discount : 0;
     },
     async country(campaignId, countryCode) {
       const campaign = doc.campaigns[campaignId];
@@ -300,7 +317,12 @@ function databaseResolver(inputs: ServingInputs, deps: ResolverDeps): Resolver {
         allowedDomains: row.allowedDomains,
         banner: row.banner,
         pricing: row.pricing,
+        deals: servableDeals(row),
       };
+    },
+    countryPercent() {
+      // Not known without the lookup `country` does.
+      return null;
     },
     async country(campaignId, countryCode) {
       const row = byId.get(campaignId);
@@ -471,7 +493,11 @@ async function resolveKeyFromDatabase(
  *      the same selection and rebuilt in the background.
  *   5. The request is metered as one API call (services/usage-meter.ts).
  *   6. A running experiment assigns the visitor's arm; then the allowed-domain
- *      check and the visitor's country decide the answer.
+ *      check and the visitor's country decide the answer. While a holiday deal
+ *      of the served campaign runs, the visitor is offered the larger of the
+ *      deal and their country's discount (the deal on a tie): `deal` in the
+ *      answer, the deal's percentage, code and message
+ *      (packages/shared/src/deals).
  *   7. Local prices: the product's price after the discount, in the visitor's
  *      currency when a usable exchange rate exists (KV `fx:rates`, written by
  *      the FX cron), otherwise exactly in the product's currency.
@@ -601,8 +627,35 @@ app.get("/v1/banner/config/:publicKey", async (c) => {
       return c.json({ show: false, reason: "domain_not_allowed", ...(experiment ?? {}) });
     }
 
-    const offer = await resolver.country(campaignId, countryCode);
-    if (!offer || offer.discount <= 0) {
+    // A deal that runs now and is at least as large as the country's discount
+    // is offered in its place. When the document already says so, the country's
+    // code is not resolved at all.
+    const deal = pickActiveDeal(campaign.deals, Date.now());
+    const knownPercent = deal ? resolver.countryPercent(campaignId, countryCode) : null;
+    const dealWinsOutright =
+      !!deal && knownPercent !== null && dealReplacesCountryDiscount(deal.discount, knownPercent);
+    const countryOffer = dealWinsOutright ? null : await resolver.country(campaignId, countryCode);
+    const countryPercent = countryOffer && countryOffer.discount > 0 ? countryOffer.discount : 0;
+
+    let offer: { discount: number; code: string | null; countryName: string; banner: BannerConfig; deal?: BannerDeal };
+    if (deal && (dealWinsOutright || dealReplacesCountryDiscount(deal.discount, countryPercent))) {
+      offer = {
+        discount: deal.discount,
+        code: deal.code,
+        countryName: COUNTRY_NAMES[countryCode] ?? countryCode,
+        // The campaign's banner with the deal's message. No flag: the offer is
+        // not about the visitor's country.
+        banner: { ...campaign.banner, messageTemplate: fillDealMessage(deal.message, deal), showFlag: false },
+        deal: { id: deal.id, name: deal.name, endsAt: new Date(deal.endsAt).toISOString() },
+      };
+    } else if (countryOffer && countryPercent > 0) {
+      offer = {
+        discount: countryOffer.discount,
+        code: countryOffer.code,
+        countryName: countryOffer.countryName,
+        banner: campaign.banner,
+      };
+    } else {
       return c.json({ show: false, reason: "no_discount", ...(experiment ?? {}) });
     }
 
@@ -612,9 +665,10 @@ app.get("/v1/banner/config/:publicKey", async (c) => {
       countryName: offer.countryName,
       discount: offer.discount,
       code: offer.code,
-      banner: campaign.banner,
+      banner: offer.banner,
       ...(await priceFields(c, campaign.pricing, offer.discount, countryCode)),
       campaignId,
+      ...(offer.deal ? { deal: offer.deal } : {}),
       ...(experiment ?? {}),
       // Self-hosted deployments always get false, whatever the cache holds.
       showBranding: bannerShowsBranding(await resolver.showBranding(), c.env),

@@ -64,6 +64,15 @@ export interface PPPBannerDesign {
   showCloseBtn: boolean;
 }
 
+/** A holiday deal: a sale with an end, offered in place of the visitor's country discount. */
+export interface PPPDeal {
+  id: string;
+  /** The deal's name, such as "Black Friday". */
+  name: string;
+  /** When the deal ends (ISO 8601, UTC). */
+  endsAt: string;
+}
+
 /** A config response for a visitor who gets a discount (`show: true`). */
 export interface PPPResponse {
   show: true;
@@ -98,6 +107,11 @@ export interface PPPResponse {
   variant?: 'a' | 'b';
   /** Whether a "Powered by GoPayLocal" link is shown (Free plan). */
   showBranding?: boolean;
+  /**
+   * Present when the offer is a holiday deal: `discount` and `code` are then
+   * the deal's, not the visitor's country discount.
+   */
+  deal?: PPPDeal;
 }
 
 // ── Context Value ────────────────────────────────────────────────────────────

@@ -9,4 +9,5 @@ export type {
   PricingResult,
   BannerOptions,
   BannerDesign,
+  DealInfo,
 } from './types';

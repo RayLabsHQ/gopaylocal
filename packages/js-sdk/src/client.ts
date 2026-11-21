@@ -4,6 +4,7 @@ import type {
   PricingResult,
   BannerOptions,
   ApiResponse,
+  DealInfo,
 } from './types';
 import { countryToFlag, formatCurrency } from './utils';
 import { createBanner } from './banner';
@@ -37,6 +38,17 @@ interface ResolvedConfig {
   onLoad?: (data: PPPData) => void;
   onError?: (error: Error) => void;
   cacheTtl: number;
+}
+
+/** The `deal` of a config response, or null when there is none or it is malformed. */
+function readDeal(value: unknown): DealInfo | null {
+  const d = (value ?? {}) as { id?: unknown; name?: unknown; endsAt?: unknown };
+  return typeof d.id === 'string' &&
+    typeof d.name === 'string' &&
+    typeof d.endsAt === 'string' &&
+    Number.isFinite(Date.parse(d.endsAt))
+    ? { id: d.id, name: d.name, endsAt: d.endsAt }
+    : null;
 }
 
 /**
@@ -78,6 +90,7 @@ export function toPPPData(
     experimentId,
     variant,
     banner: json.banner ?? null,
+    deal: readDeal(json.deal),
     showBranding: json.showBranding === true,
   };
 }
@@ -546,7 +559,9 @@ export class GoPayLocal {
       if (
         !(Date.now() - parsed.timestamp < this.config.cacheTtl) ||
         !parsed.data ||
-        parsed.data.show !== true
+        parsed.data.show !== true ||
+        // A holiday deal is not shown from the cache past its end.
+        (parsed.data.deal != null && !(Date.now() < Date.parse(parsed.data.deal.endsAt)))
       ) {
         sessionStorage.removeItem(this.getCacheKey());
         return null;

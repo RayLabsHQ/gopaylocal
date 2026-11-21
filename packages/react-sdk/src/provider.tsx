@@ -185,7 +185,9 @@ export function getCachedData(key: string): PPPResponse | null {
     const raw = sessionStorage.getItem(key);
     if (!raw) return null;
     const entry: CacheEntry = JSON.parse(raw);
-    if (!(Date.now() - entry.timestamp < CACHE_TTL_MS)) {
+    // A holiday deal is not shown from the cache past its end.
+    const dealEnd = entry.data?.deal ? Date.parse(entry.data.deal.endsAt) : null;
+    if (!(Date.now() - entry.timestamp < CACHE_TTL_MS) || (dealEnd !== null && !(Date.now() < dealEnd))) {
       sessionStorage.removeItem(key);
       return null;
     }

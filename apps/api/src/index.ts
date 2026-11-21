@@ -3,6 +3,7 @@ import type { AppEnv, Bindings } from "./bindings";
 import { createDb } from "./db";
 import { recomputeUsageForAllOrgs } from "./services/usage.service";
 import { retryPendingRedemptions } from "./services/redemption-webhook.service";
+import { retireEndedDealCoupons } from "./services/coupon.service";
 import { isRetentionRun, runRetention } from "./services/retention.service";
 import { VPN_REFRESH_CRON, refreshVpnDataset } from "./services/vpn-refresh.service";
 import { FX_REFRESH_CRON, fxSourcesFromEnv, refreshFxRates } from "./services/fx-refresh.service";
@@ -15,6 +16,7 @@ import { apiKeyMiddleware, sessionOrApiKeyMiddleware } from "./middleware/api-ke
 import auth from "./routes/auth";
 import products from "./routes/products";
 import campaigns from "./routes/campaigns";
+import deals from "./routes/deals";
 import experiments from "./routes/experiments";
 import parityGroups from "./routes/parity-groups";
 import bannerConfigs from "./routes/banner-configs";
@@ -81,6 +83,7 @@ app.use("/v1/teams/:orgId/*", teamMiddleware);
 
 app.route("/", products);
 app.route("/", campaigns);
+app.route("/", deals);
 app.route("/", experiments);
 app.route("/", parityGroups);
 app.route("/", bannerConfigs);
@@ -113,6 +116,8 @@ app.onError((err, c) => {
 //    the same way; upstream problems never throw, a failed KV write does.
 //  - anything else (the */10 usage cron): recompute per-org API-hit usage snapshots
 //    (services/usage.service.ts). Kept as the default so its behavior is unchanged.
+//    It also retries unfinished redemption webhooks and removes the codes of
+//    holiday deals that have ended (retireEndedDealCoupons).
 //    The run scheduled at 03:00 UTC also deletes old data
 //    (services/retention.service.ts). It is here, not on the daily VPN cron,
 //    because that run cannot finish on Workers Free.
@@ -137,6 +142,11 @@ export default {
         // down, DB hiccup, Gumroad's 5s window): see redemption-webhook.service.
         retryPendingRedemptions(db, env).catch((err) => {
           console.error("Redemption webhook retry failed:", err);
+        }),
+        // Codes of holiday deals that have ended (or were deleted while their
+        // code could not be removed) are removed at the payment platform.
+        retireEndedDealCoupons(db, env).catch((err) => {
+          console.error("Deal code clean-up failed:", err);
         }),
         isRetentionRun(controller.scheduledTime)
           ? runRetention(db, env).catch((err) => {
