@@ -11,6 +11,7 @@ import {
   countryParityMappings,
 } from "../db/schema";
 import { DEFAULT_BANNER_MESSAGE, DEFAULT_CTA_TEXT } from "@gopaylocal/shared/constants";
+import { BANNER_HOT_CACHE_TTL_MS, configureBannerHotCache } from "../services/banner-hot-cache";
 import bannerScriptRoute from "./banner-script";
 
 // The route imports the browser bundle as a wrangler text module; stub it so
@@ -261,12 +262,37 @@ describe("Banner Script API", () => {
     expect(typeof cached.apiKeyId).toBe("string");
   });
 
-  it("caches an unknown key as a miss so repeat lookups skip the database", async () => {
+  it("remembers an unknown key in memory so repeat lookups skip the database, and writes nothing to KV", async () => {
     await seedBannerData();
     const app = createBannerTestApp();
-    const badKey = "gpl_pk_not_a_real_key";
+    const badKey = `gpl_pk_test${ulid()}`;
+    const put = vi.spyOn(app.env.CACHE, "put");
+    // The memory is off in integration tests unless a test turns it on.
+    configureBannerHotCache({ ttlMs: BANNER_HOT_CACHE_TTL_MS });
+    try {
+      expect((await app.request(bannerUrl(badKey), { cf: { country: "IN" } })).status).toBe(401);
+      expect(put).not.toHaveBeenCalled();
 
-    expect((await app.request(bannerUrl(badKey), { cf: { country: "IN" } })).status).toBe(401);
-    expect(await app.env.CACHE.get(`apikey-miss:${await hashKey(badKey)}`)).toBe("1");
+      // Give the key a row in Postgres. The remembered miss still answers, so
+      // the second request cannot have asked the database.
+      await getTestDb().insert(apiKeys).values({
+        id: ulid(),
+        organizationId: TEST_ORG_ID,
+        name: "Created after the miss",
+        keyType: "public",
+        keyHash: await hashKey(badKey),
+        keyPrefix: `${badKey.substring(0, 15)}...`,
+        createdAt: new Date(),
+      });
+      expect((await app.request(bannerUrl(badKey), { cf: { country: "IN" } })).status).toBe(401);
+      expect(put).not.toHaveBeenCalled();
+
+      // Once the miss is forgotten (a minute later in production) the key is found.
+      configureBannerHotCache({ ttlMs: BANNER_HOT_CACHE_TTL_MS });
+      expect((await app.request(bannerUrl(badKey), { cf: { country: "IN" } })).status).toBe(200);
+    } finally {
+      configureBannerHotCache({ ttlMs: 0 });
+      put.mockRestore();
+    }
   });
 });

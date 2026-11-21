@@ -168,8 +168,9 @@ describe an integration as verified beyond what it says.
   `pushBannerConfigForOrg` on a change; one older than 15 minutes is compared with the
   database in the background and rewritten only if it differs
   (`refreshBannerConfigForOrg`). The usage job writes an organization's snapshot only when
-  its limit, its over-quota state or its branding changes. Do not add a write that runs
-  whether or not anything changed.
+  its limit, its over-quota state or its branding changes. An unknown public key is
+  remembered in isolate memory only. Do not add a KV write that runs whether or not
+  anything changed, or one that an anonymous request can cause.
 
 ### Toolchain notes
 

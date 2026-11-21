@@ -39,6 +39,7 @@ import { usageMeter, writeUsageRows } from "../services/usage-meter";
 import { impressionMeter, writeImpressionRows } from "../services/impression-meter";
 import {
   apiKeyCache,
+  apiKeyMissCache,
   bannerDocCache,
   bannerDocCheckCache,
   quotaCache,
@@ -386,8 +387,10 @@ function domainAllowed(allowedDomains: string[] | null, origin: string): boolean
 }
 
 /**
- * Resolve the key on a KV miss: negative cache, the cold-path rate limit, then
- * Postgres. Returns the key mapping or the response to send.
+ * Resolve the key on a KV miss: the cold-path rate limit, then Postgres.
+ * Returns the key mapping or the response to send. An unknown key is
+ * remembered in this isolate's memory (apiKeyMissCache), which the caller
+ * checks first, so repeated requests with it skip KV and Postgres.
  */
 async function resolveKeyFromDatabase(
   c: Context<AppEnv>,
@@ -395,15 +398,9 @@ async function resolveKeyFromDatabase(
   clientIp: string,
   db: () => Database,
 ): Promise<CachedApiKey | Response> {
-  // Cached negative result (invalid key) prevents DB abuse.
-  const negativeKey = `apikey-miss:${keyHash}`;
-  if (await c.env.CACHE.get(negativeKey)) {
-    return c.json({ error: "Invalid API key" }, 401);
-  }
-
   // Tight per-IP gate on the unknown-key path ONLY. A flood of DISTINCT invalid
-  // keys each produces a fresh apikey-miss, so the 60s negative cache above
-  // doesn't help — every request would otherwise reach Postgres. This caps
+  // keys is a fresh miss each time, so the remembered misses don't help:
+  // every request would otherwise reach Postgres. This caps
   // cold DB lookups per IP (20/min, see wrangler.toml RL_BANNER_MISS_IP). Legit
   // sites use ~1 key and never trip it. Keyed IP-WIDE (NOT per publicKey) on
   // purpose — it must bound an attacker's total cold lookups across ALL the
@@ -422,14 +419,15 @@ async function resolveKeyFromDatabase(
       .limit(1)
       .then((rows) => rows[0]);
   } catch (err) {
-    // DB error: don't write the negative cache, just fail this request.
+    // DB error: don't remember a miss, just fail this request.
     console.error("banner: API key lookup failed", { error: errorSummary(err) });
     return c.json({ show: false, reason: "internal_error" }, 500);
   }
 
   if (!row || row.keyType !== "public") {
-    // Cache the miss for 60s to prevent repeated DB lookups for invalid keys
-    await c.env.CACHE.put(negativeKey, "1", { expirationTtl: 60 }).catch(() => {});
+    // Remember the miss for a minute, so repeated requests with this key do
+    // no lookup. In memory, not in KV: an unknown key must not cause a write.
+    apiKeyMissCache.set(keyHash, true);
     return c.json({ error: "Invalid API key" }, 401);
   }
 
@@ -529,6 +527,7 @@ app.get("/v1/banner/config/:publicKey", async (c) => {
     const keyHash = await hashPublicKey(publicKey);
     let apiKey = apiKeyCache.get(keyHash) ?? null;
     if (!apiKey) {
+      if (apiKeyMissCache.get(keyHash)) return c.json({ error: "Invalid API key" }, 401);
       apiKey = await kvGet<CachedApiKey>(c.env.CACHE, `apikey:${keyHash}`);
       if (!apiKey) {
         const resolved = await resolveKeyFromDatabase(c, keyHash, clientIp, getDb);

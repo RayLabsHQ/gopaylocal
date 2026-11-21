@@ -16,6 +16,7 @@ import {
   BANNER_DOC_CHECK_TTL_MS,
   BANNER_DOC_MEMORY_TTL_MS,
   BANNER_HOT_CACHE_TTL_MS,
+  apiKeyMissCache,
   bannerDocCache,
   configureBannerHotCache,
 } from "../services/banner-hot-cache";
@@ -887,7 +888,8 @@ describe("local prices", () => {
 describe("API key not in KV", () => {
   const keyRow = { id: API_KEY_ID, organizationId: "org_1", keyType: "public" };
 
-  it("B-4: a failing key lookup is logged, answered 500, and not negative-cached", async () => {
+  it("B-4: a failing key lookup is logged, answered 500, and not remembered as a miss", async () => {
+    configureBannerHotCache({ ttlMs: BANNER_HOT_CACHE_TTL_MS });
     state.db = createSqlRecorder([new Error("too many connections")]).db;
     const env = await seededEnv({ keyInKv: false });
     const { status, body } = await call(env);
@@ -897,14 +899,56 @@ describe("API key not in KV", () => {
       "banner: API key lookup failed",
       expect.objectContaining({ error: expect.stringContaining("too many connections") }),
     );
-    expect(await env.CACHE.get(`apikey-miss:${await sha256Hex(PUBLIC_KEY)}`)).toBeNull();
+    expect(apiKeyMissCache.size()).toBe(0);
+    // The next request asks the database again.
+    state.db = createSqlRecorder([[keyRow], []]).db;
+    expect((await call(env)).status).toBe(200);
   });
 
-  it("an unknown key is refused and negative-cached", async () => {
-    state.db = createSqlRecorder([[]]).db;
+  it("an unknown key is refused, remembered in memory for a minute, and writes nothing to KV", async () => {
+    configureBannerHotCache({ ttlMs: BANNER_HOT_CACHE_TTL_MS });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const T = Date.parse("2026-11-21T10:00:00Z");
+      vi.setSystemTime(T);
+      const r = createSqlRecorder([[], []]);
+      state.db = r.db;
+      const env = await seededEnv({ keyInKv: false });
+      const put = vi.spyOn(env.CACHE, "put");
+      const get = vi.spyOn(env.CACHE, "get");
+
+      expect((await call(env)).status).toBe(401);
+      expect(r.queries).toHaveLength(1);
+      const readsOfFirst = get.mock.calls.length;
+
+      // 500 more requests in the same minute: no database, no KV read, no KV write.
+      for (let i = 1; i <= 500; i++) {
+        vi.setSystemTime(T + i * 100);
+        const res = await call(env);
+        expect(res.status).toBe(401);
+        expect(res.body).toEqual({ error: "Invalid API key" });
+      }
+      expect(r.queries).toHaveLength(1);
+      expect(get.mock.calls.length).toBe(readsOfFirst);
+      expect(put).not.toHaveBeenCalled();
+
+      // A minute after the lookup the database is asked once more.
+      vi.setSystemTime(T + BANNER_HOT_CACHE_TTL_MS);
+      expect((await call(env)).status).toBe(401);
+      expect(r.queries).toHaveLength(2);
+      expect(put).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("with the memory off, an unknown key still writes nothing to KV", async () => {
+    state.db = createSqlRecorder([[], []]).db;
     const env = await seededEnv({ keyInKv: false });
+    const put = vi.spyOn(env.CACHE, "put");
     expect((await call(env)).status).toBe(401);
-    expect(await env.CACHE.get(`apikey-miss:${await sha256Hex(PUBLIC_KEY)}`)).toBe("1");
+    expect((await call(env)).status).toBe(401);
+    expect(put).not.toHaveBeenCalled();
   });
 
   it("B-6: lastUsedAt is written inside waitUntil, so the runtime keeps it alive after the response", async () => {

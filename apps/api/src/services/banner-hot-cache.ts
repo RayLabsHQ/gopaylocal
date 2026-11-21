@@ -3,7 +3,8 @@
  * isolate's memory (lib/isolate-cache.ts), so that a busy key is answered
  * without a lookup:
  *
- *   apikey:{hash}              -> which organization a public key belongs to
+ *   apikey:{hash}              -> which organization a public key belongs to,
+ *                                 or that no public key has this hash
  *   usage:{orgId}:{YYYYMM}     -> whether the organization is over its monthly
  *                                 cap, and whether it has a cap at all
  *   banner-config:{apiKeyId}   -> the organization's banner document
@@ -13,6 +14,9 @@
  * itself takes to carry a write to every location:
  *
  *  - a revoked public key is still answered for up to a minute longer;
+ *  - an unknown key is refused from memory for a minute (apiKeyMissCache),
+ *    without a lookup. A key's value does not exist before the key is created,
+ *    so a new key is never held back by this;
  *  - a quota that was just reached, or just lifted (upgrade, new month's
  *    first snapshot), takes up to a minute longer to apply. The quota is
  *    recomputed every 10 minutes to begin with;
@@ -50,6 +54,12 @@ export const BANNER_DOC_MEMORY_MAX_WEIGHT = 100_000;
 
 /** Key hash -> the key's mapping. Only valid public keys are stored. */
 export const apiKeyCache = new IsolateCache<CachedApiKey>(BANNER_HOT_CACHE_TTL_MS);
+
+/**
+ * Key hash -> no public key has this hash (the database was asked). Kept in
+ * memory only: a request with a key that does not exist writes nothing.
+ */
+export const apiKeyMissCache = new IsolateCache<true>(BANNER_HOT_CACHE_TTL_MS);
 
 /** `usage:` KV key (it carries the month) -> the quota state read from it. */
 export const quotaCache = new IsolateCache<QuotaState>(BANNER_HOT_CACHE_TTL_MS);
@@ -102,7 +112,7 @@ export function rememberBannerDoc(key: string, doc: CachedBannerConfig): CachedB
  * `{ ttlMs: 0 }` turns everything off.
  */
 export function configureBannerHotCache(options: { ttlMs: number; docTtlMs?: number; checkTtlMs?: number }): void {
-  for (const cache of [apiKeyCache, quotaCache]) {
+  for (const cache of [apiKeyCache, apiKeyMissCache, quotaCache]) {
     cache.configure({ ttlMs: options.ttlMs });
     cache.clear();
   }

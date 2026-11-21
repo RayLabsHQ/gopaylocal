@@ -97,8 +97,8 @@ namespace_id = "1001"
   period = 60
 
 # Banner DB-fallback per IP, consumed ONLY when both KV caches miss (unknown key),
-# BEFORE the Postgres lookup. A flood of DISTINCT invalid keys defeats the 60s
-# apikey-miss negative cache (each distinct key is a fresh miss), so this caps how
+# BEFORE the Postgres lookup. A flood of DISTINCT invalid keys is not helped by
+# remembering unknown keys (each distinct key is a fresh miss), so this caps how
 # many cold DB lookups one IP can force. Valid cached traffic never touches it.
 # 20/min/IP: a legit site has ~1 key, so it never trips; an attacker rotating keys
 # is throttled to 20 DB hits/min/IP.
