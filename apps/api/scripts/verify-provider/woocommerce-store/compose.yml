@@ -1,0 +1,75 @@
+# A throwaway WooCommerce store for run.sh (see that file). Nothing here is
+# meant to stay up: run.sh starts it, checks the integration and removes it.
+#
+#   db         MariaDB for WordPress
+#   wordpress  WordPress on Apache, plain HTTP on 127.0.0.1:8080
+#   proxy      Caddy on the host's port 443: HTTPS for the store and for the
+#              webhook receiver, with the certificate run.sh generates.
+#              WooCommerce only accepts API keys over HTTPS.
+#   cli        WP-CLI, sharing WordPress's files (only via `compose run`)
+#
+# store.example.com and hook.example.com are reserved documentation names with
+# no public address. Inside the containers they point at the host, where the
+# proxy listens; run.sh checks that on the host they point at 127.0.0.1.
+
+name: gopaylocal-woocommerce-check
+
+x-wordpress-env: &wordpress-env
+  WORDPRESS_DB_HOST: db
+  WORDPRESS_DB_USER: wordpress
+  WORDPRESS_DB_PASSWORD: wordpress
+  WORDPRESS_DB_NAME: wordpress
+
+x-hosts: &hosts
+  - "store.example.com:host-gateway"
+  - "hook.example.com:host-gateway"
+
+services:
+  db:
+    image: mariadb:11
+    environment:
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: wordpress
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
+  wordpress:
+    image: wordpress:apache
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:80"
+    extra_hosts: *hosts
+    environment: *wordpress-env
+    volumes:
+      - wordpress:/var/www/html
+
+  proxy:
+    image: caddy:2
+    network_mode: host
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${WOO_CERT_DIR:?run.sh sets this}:/certs:ro
+
+  cli:
+    image: wordpress:cli
+    profiles: [tools]
+    # The WordPress image's www-data, so files WP-CLI writes stay writable by Apache.
+    user: "33:33"
+    extra_hosts: *hosts
+    environment:
+      <<: *wordpress-env
+      # User 33 has no home directory in this image.
+      HOME: /tmp
+    volumes:
+      - wordpress:/var/www/html
+      - ./:/gopaylocal-check:ro
+
+volumes:
+  wordpress:

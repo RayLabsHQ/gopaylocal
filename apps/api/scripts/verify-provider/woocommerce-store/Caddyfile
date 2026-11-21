@@ -1,0 +1,16 @@
+# HTTPS in front of the throwaway store and of the webhook receiver (run.sh).
+# The certificate is generated per run and trusted only by that run.
+{
+	admin off
+	auto_https disable_redirects
+}
+
+https://store.example.com {
+	tls /certs/cert.pem /certs/key.pem
+	reverse_proxy 127.0.0.1:8080
+}
+
+https://hook.example.com {
+	tls /certs/cert.pem /certs/key.pem
+	reverse_proxy 127.0.0.1:8787
+}

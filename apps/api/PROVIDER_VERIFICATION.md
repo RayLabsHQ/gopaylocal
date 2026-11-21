@@ -13,14 +13,18 @@ back, builds a checkout URL you can buy with, provisions a webhook, and cleans
 everything up. It can also replay a captured webhook delivery through the
 production `verifyWebhook()` and `parseRedemption()` code.
 
-None of the nine integrations (nor Stripe's Managed Payments mode) has been run against a real merchant account yet.
-The status table below is the record. Update it when you run the tool.
+WooCommerce is checked every night, end to end, against a real WooCommerce store
+that CI starts for the purpose (see [the store check](#the-store-check-no-account-needed)).
+None of the other eight integrations (nor Stripe's Managed Payments mode) has been
+run against a real merchant account yet. The status table below is the record.
+Update it when you run the tool.
 
 - [Status](#status)
 - [Before you start](#before-you-start)
 - [What the tool checks](#what-the-tool-checks)
 - [Safety](#safety)
 - [Nightly checks](#nightly-checks)
+- [The store check (no account needed)](#the-store-check-no-account-needed)
 - [Capturing and replaying a webhook](#capturing-and-replaying-a-webhook)
 - Providers: [Stripe](#stripe) · [Paddle](#paddle-billing) · [Gumroad](#gumroad) · [Chargebee](#chargebee) · [Dodo Payments](#dodo-payments) · [Polar](#polar) · [Whop](#whop) · [Creem](#creem) · [WooCommerce](#woocommerce)
 - [Adding a provider](#adding-a-provider)
@@ -44,7 +48,7 @@ in its header (commit plus whether the tree was dirty).
 | Polar | Not yet verified live (not implemented; reports SKIPPED) | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | | | |
 | Whop | Not yet verified live (not implemented; reports SKIPPED) | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | | | |
 | Creem | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | | | |
-| WooCommerce | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | | | |
+| WooCommerce | Verified by the store check | Verified by the store check | Verified by the store check | Verified by the store check | Verified by the store check | Verified by the store check | Verified by the store check | Verified by the store check | Verified by the store check | Every night since 2026-11-21 | `woocommerce-store.yml` | The run's own |
 
 "Test purchase with discount" is a manual step: open the printed URL, pay with
 the provider's test card and confirm the discount was applied. The tool can't
@@ -235,6 +239,40 @@ testing, never one that sells to real buyers.
 
 GitHub pauses scheduled workflows in a repository with no activity for 60 days;
 the Actions page then shows a button to turn them back on.
+
+## The store check (no account needed)
+
+WooCommerce runs on the merchant's own server, so CI can start a real store.
+`.github/workflows/woocommerce-store.yml` does that every night, and for every
+pull request that touches the WooCommerce integration or this tool. It uses no
+secrets. `scripts/verify-provider/woocommerce-store/run.sh` is the whole check:
+
+1. Starts the current WordPress and WooCommerce releases in Docker, over HTTPS,
+   and creates one product and one Read/Write API key.
+2. Runs the standard checks (list products, create a coupon, read it back, build
+   the checkout link, delete, confirm).
+3. Creates a second coupon and the two webhooks, then opens the checkout link
+   the way a visitor's browser would and checks that the cart holds the product
+   with the coupon applied.
+4. Places the order through the store's own checkout (Cash on delivery, which
+   makes it Processing) and receives the webhook the store sends.
+5. Replays that delivery through `verifyWebhook()` and `parseRedemption()`,
+   expecting the coupon code, and checks that a wrong secret is rejected.
+6. Deletes the webhooks and the coupon with `--delete-webhook` and
+   `--delete-discount`, and confirms the store has none left.
+
+The first run (2026-11-21, WordPress 7.1.5, WooCommerce 11.3.1) passed every
+step: a 17% coupon took a 100.00 USD cart to 83.00, and the `order.updated`
+delivery parsed as charged 8300, discount 1700, USD.
+
+**What it does not show.** The store is a plain install on Apache with no
+caching, security plugin or CDN in front, taxes are off, and the requests come
+from Node, not from a Cloudflare Worker. A merchant's server that drops the
+`Authorization` header, a firewall that blocks Cloudflare's addresses, and
+tax-inclusive prices are still only covered by a run against that store.
+
+To run it yourself you need Docker, port 443 free and two host names pointed at
+your machine; the header of `run.sh` has the line to add to `/etc/hosts`.
 
 ## Capturing and replaying a webhook
 
@@ -1049,17 +1087,26 @@ GPL_VERIFY_WEBHOOK_SECRET=<secret printed by --print-secret> \
 **What a pass looks like.** Every verify and replay step PASSes. The parsed
 code is lower case (the store lower-cases coupon codes).
 
-**Only a real run will show:**
-- That the store accepts Basic auth. Some servers drop the `Authorization`
-  header; the docs call that a server issue ("Consumer key is missing") and
-  offer query-string keys as a workaround, which GoPayLocal never uses.
-- That the `gopaylocal` coupon meta and `individual_use` come back as sent, and
-  that `_fields` is honoured.
-- That `date_expires` sent as `…Z` is stored as that UTC time.
-- That both webhooks are created `active` with the `wp_api_v3` payload, and the
-  order body signs as described.
+**The store check shows, every night** (on a plain install; see
+[the store check](#the-store-check-no-account-needed)):
+- That the `gopaylocal` coupon meta comes back as sent, so `listDiscounts`
+  finds the coupon.
+- That both webhooks are created and send their ping, and that the
+  `order.updated` delivery for a paid order signs as described.
 - That the checkout link applies the coupon (WooCommerce 10.0+) and the order
-  carries it in `coupon_lines` with `discount` excluding tax.
+  carries it in `coupon_lines`.
+
+**Not shown by any automatic run yet:**
+- That the merchant's server accepts Basic auth. Some servers drop the
+  `Authorization` header; the docs call that a server issue ("Consumer key is
+  missing") and offer query-string keys as a workaround, which GoPayLocal never
+  uses.
+- That `individual_use` is stored as sent and `_fields` trims the response
+  (the tool reads neither back).
+- That `date_expires` sent as `…Z` is stored as that UTC time.
+- That `discount` in `coupon_lines` excludes tax when the store charges tax.
+- That an `order.created` delivery arrives and signs the same way (the check
+  keeps the first delivery, which was `order.updated`).
 - How the store's security plugins, firewall or CDN treat requests from
   Cloudflare Workers.
 

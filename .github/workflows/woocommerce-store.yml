@@ -1,0 +1,63 @@
+name: WooCommerce store check
+
+# Checks the WooCommerce integration end to end against a real WooCommerce
+# store: apps/api/scripts/verify-provider/woocommerce-store/run.sh starts a
+# throwaway store inside the job (the current WordPress and WooCommerce
+# releases), creates a coupon through the provider code, buys with it through
+# the checkout link, and runs the store's webhook through verifyWebhook() and
+# parseRedemption().
+#
+# No account, no secrets: it is safe to run for pull requests, and it does
+# whenever the WooCommerce integration or the verification tool changes. It
+# also runs every night, so a WooCommerce release that breaks the integration
+# shows up here first.
+
+on:
+  schedule:
+    - cron: "53 2 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths: &paths
+      - apps/api/src/services/providers/woocommerce.ts
+      - packages/shared/src/validation/woocommerce.ts
+      - apps/api/scripts/verify-provider.ts
+      - apps/api/scripts/verify-provider/**
+      - .github/workflows/woocommerce-store.yml
+  push:
+    branches: [main]
+    paths: *paths
+
+permissions:
+  contents: read
+
+concurrency:
+  group: woocommerce-store-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  store:
+    name: Store, coupon, order, webhook
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - uses: pnpm/action-setup@v6
+        with:
+          cache: true
+
+      - run: pnpm install --frozen-lockfile
+
+      # Reserved documentation names with no public address; the store and the
+      # webhook receiver listen on this machine.
+      - name: Point the store's host names at this machine
+        run: echo "127.0.0.1 store.example.com hook.example.com" | sudo tee -a /etc/hosts
+
+      - name: Run the store check
+        run: apps/api/scripts/verify-provider/woocommerce-store/run.sh

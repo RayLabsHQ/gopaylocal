@@ -157,6 +157,27 @@ describe('the report', () => {
   });
 });
 
+describe('the WooCommerce store workflow', () => {
+  const STORE_WORKFLOW = readFileSync(
+    fileURLToPath(new URL('../../../../.github/workflows/woocommerce-store.yml', import.meta.url)),
+    'utf8',
+  );
+
+  it('uses no secrets, because it runs for pull requests', () => {
+    expect(STORE_WORKFLOW).toContain('pull_request:');
+    expect(STORE_WORKFLOW).not.toMatch(/\$\{\{\s*secrets\b/);
+    expect(STORE_WORKFLOW).toMatch(/permissions:\n  contents: read\n/);
+  });
+
+  it('runs the store script that exists', () => {
+    const script = 'apps/api/scripts/verify-provider/woocommerce-store/run.sh';
+    expect(STORE_WORKFLOW).toContain(`run: ${script}`);
+    expect(readFileSync(fileURLToPath(new URL(`../../../../${script}`, import.meta.url)), 'utf8')).toContain(
+      'set -euo pipefail',
+    );
+  });
+});
+
 describe('the nightly workflow', () => {
   const providers = Object.keys(PROVIDER_PROFILES);
 
