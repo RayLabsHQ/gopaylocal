@@ -410,14 +410,22 @@ describe("merchant webhook: Gumroad pings", () => {
   it("answers 503 within the 5 s window when the read-back is slow, and lets it finish afterwards", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     let release!: (v: RedemptionEvent | null) => void;
-    provider.parseRedemption.mockImplementationOnce(
-      () => new Promise<RedemptionEvent | null>((resolve) => (release = resolve)),
-    );
+    const readBackStarted = new Promise<void>((started) => {
+      provider.parseRedemption.mockImplementationOnce(
+        () =>
+          new Promise<RedemptionEvent | null>((resolve) => {
+            release = resolve;
+            started();
+          }),
+      );
+    });
     state.recorder = createSqlRecorder([[gumroad()], [], []]);
 
     const pending = post(client(), `/v1/webhooks/gumroad/${INTEGRATION}`, "sale_id=abc");
-    // Wait (on real macrotasks) until the read-back has started, then run out the budget.
-    for (let i = 0; i < 100 && !release; i++) await new Promise((r) => setImmediate(r));
+    // Wait until the read-back has started, however long the request takes to get
+    // there (counting event-loop turns was not enough on a busy CI runner), then run
+    // out the budget.
+    await readBackStarted;
     await vi.advanceTimersByTimeAsync(GUMROAD_ACK_BUDGET_MS);
     release(null); // the read-back eventually finishes (not a redemption)
     const res = await pending;
