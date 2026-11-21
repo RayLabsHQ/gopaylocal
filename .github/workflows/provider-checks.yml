@@ -1,0 +1,115 @@
+name: Provider checks
+
+# Checks every payment-provider integration against a sandbox account, through
+# the same provider code the API runs (apps/api/scripts/verify-provider.ts):
+# list products, create a throwaway discount, read it back, build a checkout
+# URL, delete the discount and confirm it is gone. Guide:
+# apps/api/PROVIDER_VERIFICATION.md.
+#
+# It runs every night and on demand (Actions > Provider checks > Run workflow,
+# or `gh workflow run provider-checks.yml -f provider=stripe`).
+#
+# Credentials are repository secrets (Settings > Secrets and variables > Actions).
+# For each provider, where <PROVIDER> is STRIPE, PADDLE, GUMROAD, CHARGEBEE,
+# DODOPAYMENTS, POLAR, WHOP, CREEM or WOOCOMMERCE:
+#   VERIFY_<PROVIDER>_API_KEY     the sandbox API key. Without it the provider
+#                                 is reported as "not set up" and nothing fails.
+#   VERIFY_<PROVIDER>_PRODUCT     product or price id for the checkout URL check.
+#                                 Required for Gumroad and WooCommerce.
+#   VERIFY_<PROVIDER>_ACCOUNT_ID  Chargebee: site name. WooCommerce: store URL.
+#                                 Whop: company id (optional).
+#
+# Only scheduled and manual runs, never pull requests: code from a fork can
+# never run with these secrets. The tool refuses a live key for every provider
+# that has a sandbox. Gumroad and WooCommerce have none, so their keys must
+# belong to an account or store that exists only for testing.
+
+on:
+  schedule:
+    - cron: "23 2 * * *"
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: Provider to check
+        type: choice
+        default: all
+        options: [all, stripe, paddle, gumroad, chargebee, dodopayments, polar, whop, creem, woocommerce]
+      dry_run:
+        description: Only check the settings (no API calls)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provider-checks
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Choose providers
+    # The secrets exist only in this repository; a fork has nothing to check.
+    if: github.repository == 'RayLabsHQ/gopaylocal'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - id: matrix
+        env:
+          WANT: ${{ inputs.provider || 'all' }}
+          # Keep in step with PROVIDER_PROFILES in
+          # apps/api/scripts/verify-provider/profiles.ts (a test checks it).
+          ALL: >-
+            [
+            {"provider": "stripe", "key": "STRIPE", "real_account": "false"},
+            {"provider": "paddle", "key": "PADDLE", "real_account": "false"},
+            {"provider": "gumroad", "key": "GUMROAD", "real_account": "true"},
+            {"provider": "chargebee", "key": "CHARGEBEE", "real_account": "false"},
+            {"provider": "dodopayments", "key": "DODOPAYMENTS", "real_account": "false"},
+            {"provider": "polar", "key": "POLAR", "real_account": "false"},
+            {"provider": "whop", "key": "WHOP", "real_account": "false"},
+            {"provider": "creem", "key": "CREEM", "real_account": "false"},
+            {"provider": "woocommerce", "key": "WOOCOMMERCE", "real_account": "true"}
+            ]
+        run: |
+          if [ "$WANT" = "all" ]; then
+            matrix=$(jq -c '{include: .}' <<<"$ALL")
+          else
+            matrix=$(jq -c --arg want "$WANT" '{include: [.[] | select(.provider == $want)]}' <<<"$ALL")
+          fi
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  check:
+    name: ${{ matrix.provider }}
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - uses: pnpm/action-setup@v6
+        with:
+          cache: true
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Check ${{ matrix.provider }}
+        env:
+          VERIFY_PROVIDER: ${{ matrix.provider }}
+          VERIFY_REAL_ACCOUNT: ${{ matrix.real_account }}
+          VERIFY_DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          GPL_VERIFY_API_KEY: ${{ secrets[format('VERIFY_{0}_API_KEY', matrix.key)] }}
+          GPL_VERIFY_ACCOUNT_ID: ${{ secrets[format('VERIFY_{0}_ACCOUNT_ID', matrix.key)] }}
+          VERIFY_PRODUCT: ${{ secrets[format('VERIFY_{0}_PRODUCT', matrix.key)] }}
+        run: pnpm -s --filter @gopaylocal/api verify:provider:ci

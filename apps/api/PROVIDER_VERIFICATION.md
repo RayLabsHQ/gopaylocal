@@ -20,6 +20,7 @@ The status table below is the record. Update it when you run the tool.
 - [Before you start](#before-you-start)
 - [What the tool checks](#what-the-tool-checks)
 - [Safety](#safety)
+- [Nightly checks](#nightly-checks)
 - [Capturing and replaying a webhook](#capturing-and-replaying-a-webhook)
 - Providers: [Stripe](#stripe) · [Paddle](#paddle-billing) · [Gumroad](#gumroad) · [Chargebee](#chargebee) · [Dodo Payments](#dodo-payments) · [Polar](#polar) · [Whop](#whop) · [Creem](#creem) · [WooCommerce](#woocommerce)
 - [Adding a provider](#adding-a-provider)
@@ -188,6 +189,52 @@ can never delete a real integration's subscription.
 **What the tool never does.** It never touches the database, KV or any deployed
 worker. The only file it writes is the `--capture` output: a new file (never an
 overwrite) with mode 0600.
+
+## Nightly checks
+
+`.github/workflows/provider-checks.yml` runs the checks above for every provider
+each night, and on demand:
+
+```sh
+gh workflow run provider-checks.yml                      # all providers
+gh workflow run provider-checks.yml -f provider=stripe   # one provider
+gh workflow run provider-checks.yml -f dry_run=true      # check the settings only, no API calls
+```
+
+Each provider is a separate job, and its report (the same PASS / FAIL table)
+appears on the run's summary page. A failed night emails whoever last changed
+the workflow's schedule.
+
+**Turning a provider on.** Add repository secrets (Settings > Secrets and
+variables > Actions). `<PROVIDER>` is `STRIPE`, `PADDLE`, `GUMROAD`,
+`CHARGEBEE`, `DODOPAYMENTS`, `POLAR`, `WHOP`, `CREEM` or `WOOCOMMERCE`:
+
+| Secret | Value |
+|---|---|
+| `VERIFY_<PROVIDER>_API_KEY` | The sandbox API key, as in the provider's section below. Without it the provider is reported as "not set up" and the night still passes |
+| `VERIFY_<PROVIDER>_PRODUCT` | The id to build a checkout URL for (what `--product` takes). Optional, except for Gumroad and WooCommerce, where it is required |
+| `VERIFY_<PROVIDER>_ACCOUNT_ID` | Chargebee: the site name. WooCommerce: the store URL. Whop: the company id (optional) |
+
+```sh
+gh secret set VERIFY_STRIPE_API_KEY      # paste the key when asked; it is not echoed
+```
+
+**What it covers.** list-products, create-discount, list-discounts,
+checkout-url, delete-discount and confirm-deleted. It does not buy anything
+and does not provision a webhook, so "Test purchase with discount",
+"Provision webhook" and the two replay columns of the status table still need
+a run by hand.
+
+**Keys.** The workflow runs only on its schedule and on manual runs, never for
+pull requests, so code from a fork cannot reach the secrets. This repository's
+workflow logs are public: the tool masks credentials, but product names and
+discount codes from the sandbox account appear in them. For every provider
+with a sandbox the tool refuses a live key. Gumroad and WooCommerce have no
+sandbox; give those two a key from an account or store that exists only for
+testing, never one that sells to real buyers.
+
+GitHub pauses scheduled workflows in a repository with no activity for 60 days;
+the Actions page then shows a button to turn them back on.
 
 ## Capturing and replaying a webhook
 
