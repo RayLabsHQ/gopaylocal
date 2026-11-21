@@ -18,6 +18,7 @@ import {
   loadServingInputs,
   pushApiKeyToKV,
   pushBannerConfigForOrg,
+  refreshBannerConfigForOrg,
   type CachedApiKey,
   type CachedBannerConfig,
   type CampaignPricing,
@@ -36,7 +37,13 @@ import {
 } from "../services/banner-selection";
 import { usageMeter, writeUsageRows } from "../services/usage-meter";
 import { impressionMeter, writeImpressionRows } from "../services/impression-meter";
-import { apiKeyCache, bannerDocCache, quotaCache, rememberBannerDoc } from "../services/banner-hot-cache";
+import {
+  apiKeyCache,
+  bannerDocCache,
+  bannerDocCheckCache,
+  quotaCache,
+  rememberBannerDoc,
+} from "../services/banner-hot-cache";
 import { enforceRateLimit } from "../lib/rate-limit";
 import { errorSummary, logBannerPushFailure } from "../lib/log";
 import { SECRET_KEY_NOT_ALLOWED, isSecretKey } from "../lib/public-key";
@@ -176,32 +183,41 @@ async function quotaState(c: Context<AppEnv>, organizationId: string): Promise<Q
 }
 
 /**
- * Isolate-local throttle for rebuilds the endpoint starts: a missing document,
- * one of an older version, or one due for a refresh (bannerDocRefreshDue:
- * older than 15 minutes, or without builtAt). One rebuild per organization per
- * isolate per REBUILD_THROTTLE_MS, however many requests see the document, so
- * a busy workspace never gets a rebuild per request.
+ * Isolate-local throttle for the background work the endpoint starts on a
+ * document: a rebuild (a missing document, or one of an older version) or a
+ * check (a current document older than 15 minutes, or without builtAt). One
+ * per organization per isolate per REBUILD_THROTTLE_MS, however many requests
+ * see the document, so a busy workspace never gets one per request.
  *
- * The 15-minute refresh is the backstop for two rebuilds racing in different
- * locations (pushBannerConfigForOrg repairs a race it can see). The worst case
- * for a stale document is about 15 minutes plus about 60 seconds after the
- * last write: the age limit, then the time KV takes to carry the rebuilt
- * document to every location.
+ * A check compares the stored document with the database and rewrites it only
+ * when it differs (refreshBannerConfigForOrg), so a document that nothing
+ * changed is not written again. After a check this isolate leaves the
+ * organization alone for BANNER_DOC_CHECK_TTL_MS; a check that failed is not
+ * remembered and is tried again after the throttle.
+ *
+ * The check is the backstop for two rebuilds racing in different locations
+ * (pushBannerConfigForOrg repairs a race it can see) and for a rebuild that
+ * failed. The worst case for a stale document is about 15 minutes plus about
+ * 60 seconds after the last write: the age limit, then the time KV takes to
+ * carry the rebuilt document to every location.
  */
 const REBUILD_THROTTLE_MS = 60_000;
 const lastRebuildAt = new Map<string, number>();
 
-function scheduleRebuild(c: Context<AppEnv>, organizationId: string): void {
+function scheduleDocWork(c: Context<AppEnv>, organizationId: string, work: "rebuild" | "check"): void {
+  if (work === "check" && bannerDocCheckCache.get(organizationId)) return;
   const now = Date.now();
   if (now - (lastRebuildAt.get(organizationId) ?? 0) < REBUILD_THROTTLE_MS) return;
   if (lastRebuildAt.size > 10_000) lastRebuildAt.clear();
   lastRebuildAt.set(organizationId, now);
-  background(
-    c,
-    pushBannerConfigForOrg(createDb(c.env), c.env.CACHE, organizationId, c.env).catch(
-      logBannerPushFailure(organizationId),
-    ),
-  );
+  const db = createDb(c.env);
+  const done =
+    work === "rebuild"
+      ? pushBannerConfigForOrg(db, c.env.CACHE, organizationId, c.env)
+      : refreshBannerConfigForOrg(db, c.env.CACHE, organizationId, c.env).then(() => {
+          bannerDocCheckCache.set(organizationId, true);
+        });
+  background(c, done.catch(logBannerPushFailure(organizationId)));
 }
 
 // ── Campaign resolution: KV document or database, same selection ────────────
@@ -546,11 +562,12 @@ app.get("/v1/banner/config/:publicKey", async (c) => {
     }
     let resolver: Resolver;
     if (isCurrentBannerDoc(doc)) {
-      // Still served; refreshed in the background (no KV or database work here).
-      if (bannerDocRefreshDue(doc, Date.now())) scheduleRebuild(c, organizationId);
+      // Still served; compared with the database in the background (no KV or
+      // database work here), and rewritten only if it differs.
+      if (bannerDocRefreshDue(doc, Date.now())) scheduleDocWork(c, organizationId, "check");
       resolver = documentResolver(doc, deps);
     } else {
-      scheduleRebuild(c, organizationId);
+      scheduleDocWork(c, organizationId, "rebuild");
       resolver = databaseResolver(await loadServingInputs(getDb(), organizationId), deps);
     }
 

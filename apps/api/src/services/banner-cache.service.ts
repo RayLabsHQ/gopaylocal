@@ -23,12 +23,15 @@
  * A document whose `v` is not BANNER_DOC_VERSION is treated as a cache miss by
  * the endpoint (answered from the database, then rebuilt). A current document
  * older than BANNER_DOC_MAX_AGE_MS (or without `builtAt`) is still served, and
- * the endpoint rebuilds it in the background: the backstop for two rebuilds
- * racing (see pushBannerConfigForOrg).
+ * the endpoint has it compared with the database in the background
+ * (refreshBannerConfigForOrg). It is rewritten only when it differs: the
+ * backstop for two rebuilds racing (see pushBannerConfigForOrg) and for a
+ * rebuild that failed.
  *
  * Triggered by: campaign create/update/delete, banner-config update,
  * product update/delete, parity-group changes, api-key create, experiment changes, plan changes, and
- * by the endpoint itself on a missing or old document. Every rebuild also
+ * by the endpoint itself on a missing or outdated document, or on one that no
+ * longer matches the database. Every rebuild also
  * starts a new discount-cache epoch, which invalidates every
  * discount:{epoch}:{campaignId}:{cc} entry of the organization.
  */
@@ -60,6 +63,7 @@ import { isCharmStrategy, type CharmStrategy } from "@gopaylocal/shared/currency
 import type { BannerConfig } from "@gopaylocal/shared/types";
 import { isDisplayableCoupon, COUPON_STATUS } from "./coupon.service";
 import { discountEpochKey, readDiscountEpoch } from "./parity.service";
+import { BANNER_DOC_MAX_AGE_MS } from "./banner-hot-cache";
 import {
   selectAllServings,
   type BannerEnvironment,
@@ -161,16 +165,9 @@ export function isCurrentBannerDoc(doc: unknown): doc is CachedBannerConfig {
   );
 }
 
-/**
- * Age at which the endpoint refreshes a served document in the background.
- * The refresh is the backstop for a rebuild race the writer could not see
- * (pushBannerConfigForOrg); it goes through the endpoint's per-isolate
- * rebuild throttle, so a busy workspace gets one rebuild per isolate per
- * throttle window, not one per request.
- */
-export const BANNER_DOC_MAX_AGE_MS = 15 * 60_000;
+export { BANNER_DOC_MAX_AGE_MS };
 
-/** True when a served document is due for a background refresh: older than BANNER_DOC_MAX_AGE_MS, or without builtAt. */
+/** True when a served document is due for a comparison with the database: older than BANNER_DOC_MAX_AGE_MS, or without builtAt. */
 export function bannerDocRefreshDue(doc: CachedBannerConfig, now: number): boolean {
   const builtAt = doc.builtAt;
   if (typeof builtAt !== "number" || !Number.isFinite(builtAt)) return true;
@@ -473,10 +470,10 @@ export const BANNER_REBUILD_EXTRA_PASSES = 2;
  * (or long enough ago: KV takes up to about 60 s to reach other locations),
  * and only when R2's machine clock is not behind this one's by more than the
  * time between the two epochs.
- * Otherwise the endpoint's refresh of documents older than
- * BANNER_DOC_MAX_AGE_MS repairs it (routes/banner-script.ts). A stale document
- * therefore lives at most about 15 minutes plus about 60 seconds after the
- * last write.
+ * Otherwise the endpoint's comparison of documents older than
+ * BANNER_DOC_MAX_AGE_MS with the database repairs it
+ * (refreshBannerConfigForOrg). A stale document therefore lives at most about
+ * 15 minutes plus about 60 seconds after the last write.
  */
 export async function pushBannerConfigForOrg(
   db: Database,
@@ -512,12 +509,32 @@ async function writeBannerDocs(
   env: DeploymentEnv,
   epoch: string,
 ): Promise<boolean> {
-  // 1. Public keys: nothing to write without one.
+  const source = await loadBannerDocSource(db, organizationId, env);
+  if (!source) return false;
+  const json = JSON.stringify(source.build(epoch, Date.now()));
+  await Promise.all(source.keyIds.map((id) => kv.put(bannerDocKey(id), json)));
+  return true;
+}
+
+/** The rows of one organization's document, read once; `build` is pure. */
+interface BannerDocSource {
+  /** Ids of the organization's public keys (one stored document each). */
+  keyIds: string[];
+  build(epoch: string, builtAt: number): CachedBannerConfig;
+}
+
+/** Read every row the document is built from. Null when the organization has no public key. */
+async function loadBannerDocSource(
+  db: Database,
+  organizationId: string,
+  env: DeploymentEnv,
+): Promise<BannerDocSource | null> {
+  // 1. Public keys: no document without one.
   const orgApiKeys = await db
     .select({ id: apiKeys.id })
     .from(apiKeys)
     .where(and(eq(apiKeys.organizationId, organizationId), eq(apiKeys.keyType, "public")));
-  if (orgApiKeys.length === 0) return false;
+  if (orgApiKeys.length === 0) return null;
 
   // 2. Inputs.
   const [inputs, groupRows, sub] = await Promise.all([
@@ -566,17 +583,80 @@ async function writeBannerDocs(
           .orderBy(desc(coupons.createdAt))
       : [];
 
-  // 4. Build and push.
-  const doc = buildBannerDoc({
-    organizationId,
-    epoch,
-    builtAt: Date.now(),
-    showBranding: resolveEntitlements(sub, env).showBranding,
-    inputs,
-    parityGroups: workspaceParityGroups(groupRows),
-    coupons: couponRows,
-  });
-  const json = JSON.stringify(doc);
-  await Promise.all(orgApiKeys.map((key) => kv.put(bannerDocKey(key.id), json)));
-  return true;
+  // 4. The builder, over the rows just read.
+  const showBranding = resolveEntitlements(sub, env).showBranding;
+  const groups = workspaceParityGroups(groupRows);
+  return {
+    keyIds: orgApiKeys.map((key) => key.id),
+    build: (epoch, builtAt) =>
+      buildBannerDoc({ organizationId, epoch, builtAt, showBranding, inputs, parityGroups: groups, coupons: couponRows }),
+  };
+}
+
+/** What refreshBannerConfigForOrg found. */
+export type BannerDocRefresh =
+  /** Every stored document matches the database. Nothing was written. */
+  | "current"
+  /** A stored document was missing, outdated or different: rebuilt (pushBannerConfigForOrg). */
+  | "rebuilt"
+  /** The organization has no public key, so no document. Nothing was written. */
+  | "no_keys";
+
+/**
+ * Compare an organization's stored documents with what the database says now,
+ * and rebuild them only when one differs.
+ *
+ * The endpoint calls this for a served document older than
+ * BANNER_DOC_MAX_AGE_MS. A document is written when something changes
+ * (pushBannerConfigForOrg), so in the usual case the stored one still matches
+ * and this reads (the rows, one KV value per public key) and writes nothing:
+ * no new document, no new discount-cache epoch. It finds what a rebuild could
+ * not guarantee: a rebuild that lost a race another location could not see, a
+ * rebuild that failed after its change was saved, and anything in the document
+ * that depends on the date.
+ *
+ * `epoch` and `builtAt` are left out of the comparison (they differ between
+ * two rebuilds of the same rows), and so is the order of object keys.
+ */
+export async function refreshBannerConfigForOrg(
+  db: Database,
+  kv: KVNamespace,
+  organizationId: string,
+  env: DeploymentEnv,
+): Promise<BannerDocRefresh> {
+  const source = await loadBannerDocSource(db, organizationId, env);
+  if (!source) return "no_keys";
+
+  const expected = bannerDocContent(source.build("", 0));
+  const stored = await Promise.all(source.keyIds.map((id) => readStoredBannerDoc(kv, id)));
+  if (stored.every((doc) => doc !== null && bannerDocContent(doc) === expected)) return "current";
+
+  await pushBannerConfigForOrg(db, kv, organizationId, env);
+  return "rebuilt";
+}
+
+/** The stored document of one public key; null when missing, unreadable or of another version. */
+async function readStoredBannerDoc(kv: KVNamespace, apiKeyId: string): Promise<CachedBannerConfig | null> {
+  try {
+    const raw = await kv.get(bannerDocKey(apiKeyId));
+    const doc: unknown = raw ? JSON.parse(raw) : null;
+    return isCurrentBannerDoc(doc) ? doc : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A document as text for comparison: without `epoch` and `builtAt`, with the
+ * keys of every object sorted. It goes through JSON like a stored document
+ * does, so a value JSON drops or changes (undefined, NaN) compares equal to
+ * what was stored for it.
+ */
+export function bannerDocContent(doc: CachedBannerConfig): string {
+  const { epoch: _epoch, builtAt: _builtAt, ...content } = doc;
+  return JSON.stringify(content, (_key, value: unknown) =>
+    value !== null && typeof value === "object" && !Array.isArray(value)
+      ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : value,
+  );
 }

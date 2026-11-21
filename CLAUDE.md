@@ -164,6 +164,12 @@ describe an integration as verified beyond what it says.
   banner document for 15 s. A revoked public key can therefore keep working for about
   two minutes, and a dashboard change can take 15 s longer to show. The docs state both;
   change the numbers there when you change them in the code.
+- KV is written when something changes, not on a timer. A banner document is written by
+  `pushBannerConfigForOrg` on a change; one older than 15 minutes is compared with the
+  database in the background and rewritten only if it differs
+  (`refreshBannerConfigForOrg`). The usage job writes an organization's snapshot only when
+  its limit, its over-quota state or its branding changes. Do not add a write that runs
+  whether or not anything changed.
 
 ### Toolchain notes
 

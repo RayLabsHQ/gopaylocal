@@ -25,6 +25,11 @@
  * remembered, so the document a rebuild writes is used by the next request,
  * and a workspace that was just set up is not held back.
  *
+ * A fourth entry is not a lookup: bannerDocCheckCache remembers that this
+ * isolate compared an organization's stored document with the database, so
+ * the comparison runs once per BANNER_DOC_CHECK_TTL_MS, not on every request
+ * that sees an old document (routes/banner-script.ts).
+ *
  * This module imports types only, so a test setup file can load it without
  * loading the route.
  */
@@ -55,6 +60,25 @@ export const bannerDocCache = new IsolateCache<CachedBannerConfig>(
   BANNER_DOC_MEMORY_MAX_WEIGHT,
 );
 
+/**
+ * Age from which the endpoint has a served document compared with the
+ * database, in the background (refreshBannerConfigForOrg). The comparison
+ * rewrites the document only when it differs: after a rebuild that lost a
+ * race, or one that failed after the change was saved.
+ */
+export const BANNER_DOC_MAX_AGE_MS = 15 * 60_000;
+
+/**
+ * How long an isolate remembers that it compared an organization's document.
+ * A minute less than BANNER_DOC_MAX_AGE_MS: a comparison can read a document
+ * that another location replaced up to a minute before (KV), and that minute
+ * must not come on top of the 15.
+ */
+export const BANNER_DOC_CHECK_TTL_MS = BANNER_DOC_MAX_AGE_MS - 60_000;
+
+/** Organization id -> its stored document was compared with the database. */
+export const bannerDocCheckCache = new IsolateCache<true>(BANNER_DOC_CHECK_TTL_MS);
+
 /** A document's size for the memory bound: 1, plus 1 per campaign, plus 1 per country entry. */
 export function bannerDocWeight(doc: CachedBannerConfig): number {
   let weight = 1;
@@ -73,14 +97,17 @@ export function rememberBannerDoc(key: string, doc: CachedBannerConfig): CachedB
 
 /**
  * Empty the caches and set their time limits (0 turns one off). `docTtlMs`
- * defaults to the document's own limit, or to `ttlMs` when that is shorter, so
+ * defaults to the document's own limit, or to `ttlMs` when that is shorter;
+ * `checkTtlMs` defaults to its own limit, or to 0 when `ttlMs` is 0. So
  * `{ ttlMs: 0 }` turns everything off.
  */
-export function configureBannerHotCache(options: { ttlMs: number; docTtlMs?: number }): void {
+export function configureBannerHotCache(options: { ttlMs: number; docTtlMs?: number; checkTtlMs?: number }): void {
   for (const cache of [apiKeyCache, quotaCache]) {
     cache.configure({ ttlMs: options.ttlMs });
     cache.clear();
   }
   bannerDocCache.configure({ ttlMs: options.docTtlMs ?? Math.min(options.ttlMs, BANNER_DOC_MEMORY_TTL_MS) });
   bannerDocCache.clear();
+  bannerDocCheckCache.configure({ ttlMs: options.checkTtlMs ?? (options.ttlMs > 0 ? BANNER_DOC_CHECK_TTL_MS : 0) });
+  bannerDocCheckCache.clear();
 }

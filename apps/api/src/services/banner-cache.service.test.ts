@@ -5,11 +5,13 @@ import {
   BANNER_DOC_VERSION,
   BANNER_DOC_MAX_AGE_MS,
   BANNER_REBUILD_EXTRA_PASSES,
+  bannerDocContent,
   bannerDocKey,
   bannerDocRefreshDue,
   buildBannerDoc,
   isCurrentBannerDoc,
   pushBannerConfigForOrg,
+  refreshBannerConfigForOrg,
   type BannerDocInput,
   type CachedBannerConfig,
   type CouponForDisplay,
@@ -382,7 +384,7 @@ describe("pushBannerConfigForOrg", () => {
     expect(puts).toEqual([discountEpochKey("org_1")]);
   });
 
-  it("stamps builtAt (the endpoint refreshes documents older than BANNER_DOC_MAX_AGE_MS)", async () => {
+  it("stamps builtAt (the endpoint has documents older than BANNER_DOC_MAX_AGE_MS checked)", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
       vi.setSystemTime(T0);
@@ -405,6 +407,138 @@ function editedOrg(discount: number) {
   org.campaigns[0]!.campaign = { ...campaignRow, discountOverrides: { IN: discount } };
   return org;
 }
+
+// ── The check of an aging document: written only when it differs ───────────
+
+describe("refreshBannerConfigForOrg", () => {
+  afterEach(() => vi.useRealTimers());
+
+  /** A KV holding the documents of a rebuild at T0, with every later read and write recorded. */
+  async function builtAtT0(org = fullOrg()) {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(T0);
+    const { kv, puts } = recordingKV();
+    await pushBannerConfigForOrg(routedRecorder(org).db, kv, "org_1", {});
+    puts.length = 0;
+    const gets: string[] = [];
+    const get = kv.get.bind(kv);
+    kv.get = (async (key: string, opts?: unknown) => {
+      gets.push(key);
+      return get(key, opts as "text");
+    }) as KVNamespace["get"];
+    vi.setSystemTime(T0 + BANNER_DOC_MAX_AGE_MS);
+    return { kv, puts, gets, before: { epoch: await get(discountEpochKey("org_1")), k1: await get(bannerDocKey("K1")) } };
+  }
+
+  it("nothing changed: reads one stored document per public key and writes nothing, not even a new epoch", async () => {
+    const { kv, puts, gets, before } = await builtAtT0();
+    const r = routedRecorder(fullOrg());
+
+    expect(await refreshBannerConfigForOrg(r.db, kv, "org_1", {})).toBe("current");
+
+    expect(puts).toEqual([]);
+    expect(gets.sort()).toEqual([bannerDocKey("K1"), bannerDocKey("K2")]);
+    expect(await kv.get(discountEpochKey("org_1"))).toBe(before.epoch);
+    // The stored document is the one from T0, builtAt included.
+    expect(await kv.get(bannerDocKey("K1"))).toBe(before.k1);
+    expect(JSON.parse(before.k1!).builtAt).toBe(T0);
+    // The same rows a rebuild reads, once.
+    expect(r.queries.filter((q) => q.sql.includes(' from "campaigns"'))).toHaveLength(1);
+  });
+
+  it("checked again and again, an unchanged workspace is never written", async () => {
+    const { kv, puts } = await builtAtT0();
+    for (let i = 1; i <= 96; i++) {
+      vi.setSystemTime(T0 + i * BANNER_DOC_MAX_AGE_MS);
+      expect(await refreshBannerConfigForOrg(routedRecorder(fullOrg()).db, kv, "org_1", {})).toBe("current");
+    }
+    expect(puts).toEqual([]);
+  });
+
+  it("the database differs from the stored document (a rebuild was lost): rebuilt under a new epoch", async () => {
+    const { kv, puts, before } = await builtAtT0();
+
+    expect(await refreshBannerConfigForOrg(routedRecorder(editedOrg(55)).db, kv, "org_1", {})).toBe("rebuilt");
+
+    expect(puts).toEqual([discountEpochKey("org_1"), bannerDocKey("K1"), bannerDocKey("K2")]);
+    const doc = JSON.parse((await kv.get(bannerDocKey("K1")))!);
+    expect(doc.campaigns.C1.countries.IN.discount).toBe(55);
+    expect(doc.builtAt).toBe(T0 + BANNER_DOC_MAX_AGE_MS);
+    expect(doc.epoch).not.toBe(before.epoch);
+    expect(await kv.get(discountEpochKey("org_1"))).toBe(doc.epoch);
+    // The next check finds it current again.
+    puts.length = 0;
+    expect(await refreshBannerConfigForOrg(routedRecorder(editedOrg(55)).db, kv, "org_1", {})).toBe("current");
+    expect(puts).toEqual([]);
+  });
+
+  it("a plan change the document missed (branding) counts as a difference", async () => {
+    const { kv } = await builtAtT0();
+    const pro = fullOrg([{ plan: "pro", status: "active", currentPeriodEnd: new Date(T0 + 30 * 86_400_000) }]);
+    expect(await refreshBannerConfigForOrg(routedRecorder(pro).db, kv, "org_1", {})).toBe("rebuilt");
+    expect(JSON.parse((await kv.get(bannerDocKey("K1")))!).showBranding).toBe(false);
+  });
+
+  it("one public key's document is missing, unreadable or of another version: rebuilt", async () => {
+    for (const broken of [null, "not json", JSON.stringify({ v: BANNER_DOC_VERSION - 1 })]) {
+      const { kv, puts } = await builtAtT0();
+      if (broken === null) await kv.delete(bannerDocKey("K2"));
+      else await kv.put(bannerDocKey("K2"), broken);
+      puts.length = 0;
+      expect(await refreshBannerConfigForOrg(routedRecorder(fullOrg()).db, kv, "org_1", {})).toBe("rebuilt");
+      expect(puts).toEqual([discountEpochKey("org_1"), bannerDocKey("K1"), bannerDocKey("K2")]);
+      expect(isCurrentBannerDoc(JSON.parse((await kv.get(bannerDocKey("K2")))!))).toBe(true);
+      vi.useRealTimers();
+    }
+  });
+
+  it("a stored document without builtAt, under another epoch, or with its keys in another order is still current", async () => {
+    const { kv, puts } = await builtAtT0();
+    const doc = JSON.parse((await kv.get(bannerDocKey("K1")))!) as Record<string, unknown>;
+    delete doc.builtAt;
+    doc.epoch = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
+    const reversed = (value: unknown): unknown =>
+      value !== null && typeof value === "object" && !Array.isArray(value)
+        ? Object.fromEntries(Object.entries(value).reverse().map(([k, v]) => [k, reversed(v)]))
+        : value;
+    const reordered = JSON.stringify(reversed(doc));
+    expect(reordered).not.toBe(JSON.stringify(doc));
+    await kv.put(bannerDocKey("K1"), reordered);
+    await kv.put(bannerDocKey("K2"), reordered);
+    puts.length = 0;
+
+    expect(await refreshBannerConfigForOrg(routedRecorder(fullOrg()).db, kv, "org_1", {})).toBe("current");
+    expect(puts).toEqual([]);
+  });
+
+  it("no public key: nothing is read from KV or written", async () => {
+    const { kv, puts, gets } = await builtAtT0();
+    expect(await refreshBannerConfigForOrg(routedRecorder({ ...fullOrg(), api_keys: [] }).db, kv, "org_1", {})).toBe("no_keys");
+    expect(puts).toEqual([]);
+    expect(gets).toEqual([]);
+  });
+
+  it("a database failure rejects and writes nothing", async () => {
+    const { kv, puts } = await builtAtT0();
+    const r = createSqlRecorder();
+    r.results = {
+      shift: () => {
+        throw new Error("connection reset");
+      },
+    } as unknown as SqlRecorder["results"];
+    await expect(refreshBannerConfigForOrg(r.db, kv, "org_1", {})).rejects.toThrow();
+    expect(puts).toEqual([]);
+  });
+
+  it("bannerDocContent leaves out epoch and builtAt and nothing else", () => {
+    const a = bannerDocForCampaign({ organizationId: "org_1", builtAt: 1 });
+    expect(bannerDocContent({ ...a, epoch: "x", builtAt: 2 })).toBe(bannerDocContent(a));
+    expect(bannerDocContent({ ...a, showBranding: !a.showBranding })).not.toBe(bannerDocContent(a));
+    expect(bannerDocContent({ ...a, defaultProductId: "other" })).not.toBe(bannerDocContent(a));
+    expect(bannerDocContent(a)).not.toContain("builtAt");
+    expect(bannerDocContent(a)).not.toContain('"epoch"');
+  });
+});
 
 /**
  * A view of `store` whose banner-document writes wait for `gate`; `reached`

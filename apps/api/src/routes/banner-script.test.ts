@@ -13,6 +13,7 @@ import { FX_RATES_KEY } from "../services/fx-refresh.service";
 import type { UsageRow } from "../services/usage-meter";
 import type { ImpressionRow } from "../services/impression-meter";
 import {
+  BANNER_DOC_CHECK_TTL_MS,
   BANNER_DOC_MEMORY_TTL_MS,
   BANNER_HOT_CACHE_TTL_MS,
   bannerDocCache,
@@ -62,13 +63,17 @@ vi.mock("../services/impression-meter", async (importOriginal) => {
 // covers the builder).
 vi.mock("../services/banner-cache.service", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/banner-cache.service")>();
-  return { ...actual, pushBannerConfigForOrg: vi.fn(async () => {}) };
+  return {
+    ...actual,
+    pushBannerConfigForOrg: vi.fn(async () => {}),
+    refreshBannerConfigForOrg: vi.fn(async () => "current" as const),
+  };
 });
 
 const { default: bannerScriptRoute } = await import("./banner-script");
 const { usageMeter } = await import("../services/usage-meter");
 const { impressionMeter } = await import("../services/impression-meter");
-const { pushBannerConfigForOrg } = await import("../services/banner-cache.service");
+const { pushBannerConfigForOrg, refreshBannerConfigForOrg } = await import("../services/banner-cache.service");
 
 const PUBLIC_KEY = "gpl_pk_test_fastpath";
 const API_KEY_ID = "key_fastpath";
@@ -157,6 +162,8 @@ beforeEach(() => {
   // orgs are unlimited); the coalescing tests set their own.
   usageMeter.configure({ unlimitedFlushDelayMs: 5, unlimitedFlushThreshold: 1_000, failureBackoffMs: 5_000 });
   vi.mocked(pushBannerConfigForOrg).mockClear();
+  vi.mocked(refreshBannerConfigForOrg).mockReset();
+  vi.mocked(refreshBannerConfigForOrg).mockResolvedValue("current");
   errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -573,9 +580,9 @@ describe("missing or old document: answered from Postgres and rebuilt", () => {
   });
 });
 
-// ── Refresh of an aging document (backstop for a rebuild race) ────────────
+// ── Check of an aging document (backstop for a lost rebuild) ───────────────
 
-describe("a served document older than 15 minutes is refreshed in the background", () => {
+describe("a served document older than 15 minutes is checked against the database in the background", () => {
   const BUILT = Date.parse("2026-11-19T12:00:00Z");
   const MIN = 60_000;
 
@@ -597,15 +604,16 @@ describe("a served document older than 15 minutes is refreshed in the background
     return { env, reads, r };
   }
 
-  it("a fresh document: no rebuild", async () => {
+  it("a fresh document: no check and no rebuild", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(BUILT + 15 * MIN - 1);
     const { env } = await aged("org_fresh", BUILT);
     expect((await call(env)).body).toMatchObject({ show: true, campaignId: "camp_1" });
+    expect(refreshBannerConfigForOrg).not.toHaveBeenCalled();
     expect(pushBannerConfigForOrg).not.toHaveBeenCalled();
   });
 
-  it("at 15 minutes: still answered from the document, a rebuild is scheduled, and the request does no extra KV or database work", async () => {
+  it("at 15 minutes: still answered from the document, a check (not a rebuild) is scheduled, and the request does no extra KV or database work", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(BUILT + 15 * MIN - 1);
     const fresh = await aged("org_aging_fresh", BUILT);
@@ -615,8 +623,10 @@ describe("a served document older than 15 minutes is refreshed in the background
     resetFxCacheForTests(); // the FX document is memoised per isolate; read it again like the first request
     const due = await aged("org_aging", BUILT);
     expect((await call(due.env)).body).toMatchObject({ show: true, campaignId: "camp_1", discount: 40 });
-    expect(pushBannerConfigForOrg).toHaveBeenCalledTimes(1);
-    expect(pushBannerConfigForOrg).toHaveBeenCalledWith(state.db, due.env.CACHE, "org_aging", due.env);
+    expect(refreshBannerConfigForOrg).toHaveBeenCalledTimes(1);
+    expect(refreshBannerConfigForOrg).toHaveBeenCalledWith(state.db, due.env.CACHE, "org_aging", due.env);
+    // The document is only rewritten by the check, and only if it differs.
+    expect(pushBannerConfigForOrg).not.toHaveBeenCalled();
     expect(due.r.queries).toHaveLength(0);
     // Same KV keys read as for a fresh document (the org part differs).
     expect(due.reads.map((k) => k.replace("org_aging", "ORG"))).toEqual(
@@ -627,24 +637,85 @@ describe("a served document older than 15 minutes is refreshed in the background
   it("a document without builtAt (written before the field existed) is served and due", async () => {
     const { env, r } = await aged("org_no_built_at", undefined);
     expect((await call(env)).body).toMatchObject({ show: true, campaignId: "camp_1" });
-    expect(pushBannerConfigForOrg).toHaveBeenCalledTimes(1);
+    expect(refreshBannerConfigForOrg).toHaveBeenCalledTimes(1);
+    expect(pushBannerConfigForOrg).not.toHaveBeenCalled();
     expect(r.queries).toHaveLength(0);
   });
 
-  it("a busy workspace: one rebuild per isolate per minute, not one per request", async () => {
+  it("a busy workspace whose document nothing changed: one check per isolate per 14 minutes, however many requests", async () => {
+    configureBannerHotCache({ ttlMs: BANNER_HOT_CACHE_TTL_MS });
+    expect(BANNER_DOC_CHECK_TTL_MS).toBe(14 * MIN);
     vi.useFakeTimers({ toFake: ["Date"] });
     const { env } = await aged("org_busy", BUILT);
-    // 200 requests over the first minute after the document turns 15 minutes old.
+    // The document stays as old as it is: a check that finds it current does
+    // not write it. A request every 3 seconds for the next hour.
+    const start = BUILT + 15 * MIN;
+    for (let t = 0; t < 60 * MIN; t += 3_000) {
+      vi.setSystemTime(start + t);
+      await call(env);
+    }
+    // At 0, 14, 28, 42 and 56 minutes.
+    expect(refreshBannerConfigForOrg).toHaveBeenCalledTimes(5);
+    expect(pushBannerConfigForOrg).not.toHaveBeenCalled();
+  });
+
+  it("a check that failed is not remembered: tried again after a minute, then quiet once one succeeds", async () => {
+    configureBannerHotCache({ ttlMs: BANNER_HOT_CACHE_TTL_MS });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const { env } = await aged("org_check_fails", BUILT);
+    vi.mocked(refreshBannerConfigForOrg).mockRejectedValueOnce(new Error("db down"));
+
+    // 200 requests over the first minute: one check (it fails).
     for (let i = 0; i < 200; i++) {
       vi.setSystemTime(BUILT + 15 * MIN + i * 299);
       await call(env);
     }
-    expect(pushBannerConfigForOrg).toHaveBeenCalledTimes(1);
-    // The document is still old a minute later (the rebuild failed, or has not
-    // reached this location yet): one more rebuild, then quiet again.
+    expect(refreshBannerConfigForOrg).toHaveBeenCalledTimes(1);
+    expect(console.error).toHaveBeenCalledWith(
+      "banner-cache: rebuild failed",
+      expect.objectContaining({ orgId: "org_check_fails", error: expect.stringContaining("db down") }),
+    );
+
+    // A minute later: one more (it succeeds), then nothing for 14 minutes.
     vi.setSystemTime(BUILT + 16 * MIN);
     for (let i = 0; i < 50; i++) await call(env);
-    expect(pushBannerConfigForOrg).toHaveBeenCalledTimes(2);
+    expect(refreshBannerConfigForOrg).toHaveBeenCalledTimes(2);
+    vi.setSystemTime(BUILT + 29 * MIN);
+    await call(env);
+    expect(refreshBannerConfigForOrg).toHaveBeenCalledTimes(2);
+    vi.setSystemTime(BUILT + 30 * MIN);
+    await call(env);
+    expect(refreshBannerConfigForOrg).toHaveBeenCalledTimes(3);
+  });
+
+  it("with the memory off, the per-minute throttle still bounds the checks", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const { env } = await aged("org_throttle", BUILT);
+    for (let i = 0; i < 200; i++) {
+      vi.setSystemTime(BUILT + 15 * MIN + i * 299);
+      await call(env);
+    }
+    expect(refreshBannerConfigForOrg).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(BUILT + 16 * MIN);
+    for (let i = 0; i < 50; i++) await call(env);
+    expect(refreshBannerConfigForOrg).toHaveBeenCalledTimes(2);
+  });
+
+  it("a missing document is rebuilt, not checked, also right after a check", async () => {
+    configureBannerHotCache({ ttlMs: BANNER_HOT_CACHE_TTL_MS, docTtlMs: 0 });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(BUILT + 15 * MIN);
+    const { env } = await aged("org_then_missing", BUILT);
+    await call(env);
+    expect(refreshBannerConfigForOrg).toHaveBeenCalledTimes(1);
+
+    // The document disappears; two minutes later (past the throttle) a request finds none.
+    await env.CACHE.delete(`banner-config:${API_KEY_ID}`);
+    vi.setSystemTime(BUILT + 17 * MIN);
+    await call(env);
+    expect(pushBannerConfigForOrg).toHaveBeenCalledTimes(1);
+    expect(refreshBannerConfigForOrg).toHaveBeenCalledTimes(1);
   });
 });
 

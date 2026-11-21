@@ -16,7 +16,13 @@ import {
 import type { Database } from "../db";
 import { DEFAULT_BANNER_MESSAGE, DEFAULT_CTA_TEXT, PLAN_LIMITS } from "@gopaylocal/shared/constants";
 import { assignVariant, visitorKey } from "../services/banner-selection";
-import { bannerDocKey, isCurrentBannerDoc } from "../services/banner-cache.service";
+import {
+  bannerDocKey,
+  isCurrentBannerDoc,
+  pushBannerConfigForOrg,
+  refreshBannerConfigForOrg,
+} from "../services/banner-cache.service";
+import { discountEpochKey } from "../services/parity.service";
 import { usageMeter, utcDay } from "../services/usage-meter";
 import { writeImpressionRows } from "../services/impression-meter";
 import { BANNER_HOT_CACHE_TTL_MS, bannerDocCache, configureBannerHotCache } from "../services/banner-hot-cache";
@@ -196,6 +202,47 @@ describe("banner serving (Postgres)", () => {
     expect(await banner(client, rawKey)).toMatchObject({ campaignId: c2 });
     // Unknown product: nothing, never another product's campaign.
     expect(await banner(client, rawKey, { product: ulid() })).toEqual({ show: false, reason: "no_active_campaign" });
+  });
+
+  it("a document older than 15 minutes is not written again while it matches Postgres, and is rebuilt once it does not", async () => {
+    const p1 = await seedProduct(ORG, "one");
+    const p2 = await seedProduct(ORG, "two");
+    const c1 = await seedCampaign(ORG, p1, { discountIN: 30, createdAt: new Date(Date.now() - 60_000) });
+    await seedCampaign(ORG, p2, { discountIN: 50 });
+    const { rawKey, apiKeyId } = await seedKey(ORG);
+    const client = createTestClient(bannerScriptRoute);
+    const kv = client.env.CACHE;
+    const docKey = bannerDocKey(apiKeyId);
+
+    // What a dashboard change leaves behind, made 16 minutes old.
+    await pushBannerConfigForOrg(db(), kv, ORG, client.env);
+    const epoch = await kv.get(discountEpochKey(ORG));
+    const aged = JSON.stringify({ ...JSON.parse((await kv.get(docKey))!), builtAt: Date.now() - 16 * 60_000 });
+    await kv.put(docKey, aged);
+    const put = vi.spyOn(kv, "put");
+    const docWrites = () => put.mock.calls.map((call) => String(call[0])).filter((k) => !k.startsWith("apikey:"));
+
+    // Nothing changed: the rows read from Postgres build the stored document, so nothing is written.
+    expect(await refreshBannerConfigForOrg(db(), kv, ORG, client.env)).toBe("current");
+    expect(docWrites()).toEqual([]);
+    expect(await kv.get(docKey)).toBe(aged);
+    expect(await kv.get(discountEpochKey(ORG))).toBe(epoch);
+
+    // A change is saved and its rebuild is lost. The next request is still
+    // answered from the old document; its background check sees the difference.
+    await getTestDb().update(campaigns).set({ discountOverrides: { IN: 45 } }).where(eq(campaigns.id, c1));
+    expect(await banner(client, rawKey, { product: p1 })).toMatchObject({ show: true, campaignId: c1, discount: 30 });
+    expect(docWrites()).toEqual([discountEpochKey(ORG), docKey]);
+    const rebuilt = JSON.parse((await kv.get(docKey))!);
+    expect(rebuilt.campaigns[c1].countries.IN.discount).toBe(45);
+    expect(rebuilt.builtAt).toBeGreaterThan(Date.now() - 60_000);
+    expect(await kv.get(discountEpochKey(ORG))).not.toBe(epoch);
+    expect(await banner(client, rawKey, { product: p1 })).toMatchObject({ show: true, campaignId: c1, discount: 45 });
+
+    // And the rebuilt document is current.
+    expect(await refreshBannerConfigForOrg(db(), kv, ORG, client.env)).toBe("current");
+    expect(docWrites()).toHaveLength(2);
+    put.mockRestore();
   });
 
   it("a running experiment assigns a sticky arm through the real route", async () => {
