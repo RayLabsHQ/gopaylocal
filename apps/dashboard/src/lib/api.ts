@@ -11,6 +11,7 @@ import type {
   ExperimentStatus,
 } from '@gopaylocal/shared'
 import type { FxRatesView } from '@gopaylocal/shared/currency'
+import type { DealCodeSource, DealPhase } from '@gopaylocal/shared/deals'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -310,6 +311,37 @@ export type ExperimentResults = {
 
 export type ExperimentWithResults = Experiment & { results: ExperimentResults }
 
+// A holiday deal of a campaign (GET /v1/teams/:orgId/campaigns/:campaignId/deals).
+export type Deal = {
+  id: string
+  campaignId: string
+  name: string
+  discountPercent: number
+  /** ISO 8601, UTC. The deal runs from startsAt up to, not including, endsAt. */
+  startsAt: string
+  endsAt: string
+  messageTemplate: string
+  codeSource: DealCodeSource
+  /** The code visitors are given; null for a deal without one, or while its code is missing. */
+  code: string | null
+  /** False when the deal should have a code at the payment platform and has none: it is not offered. */
+  codeReady: boolean
+  phase: DealPhase
+  createdAt: string
+  updatedAt: string
+}
+
+export type CreateDealInput = {
+  name: string
+  discountPercent: number
+  startsAt: string
+  endsAt: string
+  messageTemplate?: string
+  code?: string
+}
+
+export type UpdateDealInput = Partial<Pick<CreateDealInput, 'name' | 'startsAt' | 'endsAt' | 'messageTemplate'>>
+
 // ── API Client ───────────────────────────────────────────────────────────────
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8787'
@@ -489,6 +521,26 @@ export const api = {
     // group-mode campaigns then use the default tiers.
     list: (teamId: string) =>
       apiFetch<{ data: ParityGroup[] }>(`/v1/teams/${teamId}/parity-groups`).then((r) => r.data),
+  },
+
+  deals: {
+    list: (teamId: string, campaignId: string) =>
+      apiFetch<{ data: Deal[] }>(`/v1/teams/${teamId}/campaigns/${campaignId}/deals`).then((r) => r.data),
+    create: (teamId: string, campaignId: string, data: CreateDealInput) =>
+      apiFetch<{ data: Deal }>(`/v1/teams/${teamId}/campaigns/${campaignId}/deals`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }).then((r) => r.data),
+    update: (teamId: string, campaignId: string, dealId: string, data: UpdateDealInput) =>
+      apiFetch<{ data: Deal }>(`/v1/teams/${teamId}/campaigns/${campaignId}/deals/${dealId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }).then((r) => r.data),
+    // `warning` is set when the code could not be removed at the payment platform yet.
+    delete: (teamId: string, campaignId: string, dealId: string) =>
+      apiFetch<{ success: boolean; warning?: string }>(`/v1/teams/${teamId}/campaigns/${campaignId}/deals/${dealId}`, {
+        method: 'DELETE',
+      }),
   },
 
   banner: {

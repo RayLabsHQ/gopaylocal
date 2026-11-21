@@ -7,6 +7,7 @@ import { getActiveTeamId, useSession } from '~/lib/auth'
 import { usePermissions } from '~/lib/permissions'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
 import { BannerEditor } from '~/components/banner-editor'
+import { HolidayDeals } from '~/components/holiday-deals'
 import { CharmHelp } from '~/components/charm-help'
 import { DeliveryHelp } from '~/components/delivery-help'
 import type { PricingMode, DiscountDelivery, CharmPricingStrategy, CampaignStatus } from '@gopaylocal/shared'
@@ -18,7 +19,7 @@ export const Route = createFileRoute('/dashboard/campaigns/$id')({
 // Sentinel for the "no integration" Select option (Radix can't use an empty value).
 const NO_INTEGRATION = 'none'
 
-type Tab = 'setup' | 'settings'
+type Tab = 'setup' | 'deals' | 'settings'
 
 const CODE_TABS = ['Script Tag', 'React', 'Next.js', 'API'] as const
 type CodeTab = (typeof CODE_TABS)[number]
@@ -269,6 +270,14 @@ curl "${snippetApiBase}/v1/banner/config/${publicKey}${productQuery}"
 
   const nextStatus = getNextStatus()
 
+  // The campaign's payment platform, by name; null when it has no integration.
+  const linkedIntegration = integrations.find((i) => i.id === campaign.integrationId)
+  const linkedProviderLabel = campaign.integrationId
+    ? linkedIntegration
+      ? (PROVIDER_LABELS[linkedIntegration.provider] ?? linkedIntegration.provider)
+      : 'your payment platform'
+    : null
+
   // Activating an auto-apply campaign with no integration is rejected by the
   // server (it can't apply a discount at checkout). Disable the Activate/Resume
   // toggle so the user gets a co-located reason instead of a 400 dead-end.
@@ -343,6 +352,17 @@ curl "${snippetApiBase}/v1/banner/config/${publicKey}${productQuery}"
           }`}
         >
           Setup
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('deals')}
+          className={`border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+            activeTab === 'deals'
+              ? 'border-brand text-text-primary'
+              : 'border-transparent text-text-secondary hover:text-text-primary'
+          }`}
+        >
+          Holiday deals
         </button>
         <button
           type="button"
@@ -497,6 +517,19 @@ curl "${snippetApiBase}/v1/banner/config/${publicKey}${productQuery}"
               Provider integrations (Stripe, Paddle, etc.)
             </a>
           </div>
+        </div>
+      )}
+
+      {/* Holiday deals Tab (components/holiday-deals.tsx) */}
+      {activeTab === 'deals' && (
+        <div className="mt-6 max-w-3xl">
+          <HolidayDeals
+            teamId={teamId}
+            campaignId={campaignId}
+            providerLabel={linkedProviderLabel}
+            canEdit={can('campaigns.update')}
+            inRunningTest={runningExperiment !== null}
+          />
         </div>
       )}
 
