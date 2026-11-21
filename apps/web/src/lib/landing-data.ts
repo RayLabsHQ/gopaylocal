@@ -100,6 +100,10 @@ const faqItems = [
     question: 'How long does setup take?',
     answer: 'A few minutes. Connect your payment platform, create a campaign in the dashboard and add a single <script> tag (under 4KB gzipped), and you\'re live. No build step, no dependencies.',
   },
+  {
+    question: 'Can I run a Black Friday sale?',
+    answer: "Yes. A holiday deal is a sale with a first and a last day, one percentage and one code, which GoPayLocal creates in your payment platform. While it runs, each visitor is offered the larger of the deal and their country's discount, and visitors from countries without a discount see the deal. After the last day the code is removed from your payment platform. Holiday deals are on every plan.",
+  },
   // Pricing FAQs. Numbers come from the shared plan constants (see PRICING below).
   {
     question: 'What counts as an API call?',

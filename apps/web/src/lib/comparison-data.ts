@@ -43,6 +43,7 @@ export type RowKey =
   | 'platforms'
   | 'vpn'
   | 'abTesting'
+  | 'holidaySales'
   | 'currency';
 
 /** The rows of a head-to-head table, with GoPayLocal's side. */
@@ -87,6 +88,12 @@ export const comparisonRows: { key: RowKey; label: string; gopaylocal: string }[
     gopaylocal: 'Yes. Visitors on known VPN, Tor or datacenter networks get no banner and no code.',
   },
   { key: 'abTesting', label: 'A/B testing', gopaylocal: 'Yes: two discount campaigns compared side by side' },
+  {
+    key: 'holidaySales',
+    label: 'Holiday sales',
+    gopaylocal:
+      'Yes. A deal has a first and a last day and one code; each visitor gets the larger of the deal and their country\'s discount.',
+  },
   {
     key: 'currency',
     label: 'Prices in local currency',
@@ -171,11 +178,18 @@ export const competitors: Record<CompetitorSlug, Competitor> = {
       platforms: `Kelviq, Stripe, Lemon Squeezy, Gumroad, Chargebee, Whop, Paddle, Polar and Dodo Payments. ${LEMON_SQUEEZY_NOTE}`,
       vpn: 'Yes. A Tor, proxy and VPN blocker is on every plan.',
       abTesting: 'Not listed on its pricing page',
+      holidaySales:
+        'Yes. Holiday discounts, and time-based discounts whose percentage drops from day to day.',
       currency: 'Yes. Its site says prices can be shown in 135+ currencies.',
     },
     volume: ['Starter, $19', 'Builder, $49', 'Scale, $99', 'On request', 'On request'],
     extraSources: [
       { label: 'ParityDeals\' terms', href: 'https://www.paritydeals.com/terms-and-conditions/' },
+      { label: 'ParityDeals\' holiday discounts', href: 'https://www.paritydeals.com/features/holiday-based-discounts/' },
+      {
+        label: 'ParityDeals\' time-based discounts',
+        href: 'https://www.paritydeals.com/features/time-based-discounts/',
+      },
       LEMON_SQUEEZY_SOURCE,
     ],
     differences: [
@@ -198,8 +212,8 @@ export const competitors: Record<CompetitorSlug, Competitor> = {
         body: 'ParityDeals\' Scale plan is free when you sell through Kelviq, a merchant of record. GoPayLocal is not a payment provider; it works with the one you already use.',
       },
       {
-        title: 'You run holiday or time-based sales',
-        body: 'ParityDeals lists holiday discounts and time-based discounts as features. GoPayLocal\'s discounts are by country only.',
+        title: 'You run sales whose discount drops day by day',
+        body: 'ParityDeals lists time-based discounts: a sale whose percentage drops over its days, such as 30%, then 20%, then 10%. A GoPayLocal holiday deal has one percentage from its first day to its last.',
       },
       {
         title: 'You sell on a course or newsletter platform',
@@ -218,7 +232,7 @@ export const competitors: Record<CompetitorSlug, Competitor> = {
     listing: {
       price: 'From $19 a month',
       calls: '10,000 to 100,000 by plan',
-      goodFit: 'You want it bundled with a merchant of record, or you want holiday and time-based discounts.',
+      goodFit: 'You want it bundled with a merchant of record, or sales whose discount drops day by day.',
     },
   },
 
@@ -247,6 +261,7 @@ export const competitors: Record<CompetitorSlug, Competitor> = {
       platforms: 'None listed on its home or pricing page',
       vpn: 'Yes. Protection against VPN, Tor, bots, proxies and scrapers.',
       abTesting: 'Not listed on its home or pricing page',
+      holidaySales: 'Not listed on its home or pricing page',
       currency: 'Its API includes exchange rates for 170 currencies.',
     },
     volume: ['Basic, $19', 'Super, $49', 'Super, $49', 'Ultra, $99', 'More than its largest listed plan'],
@@ -313,6 +328,8 @@ export const competitors: Record<CompetitorSlug, Competitor> = {
       platforms: `Paddle, Lemon Squeezy, Polar and Stripe. ${LEMON_SQUEEZY_NOTE}`,
       vpn: 'Yes. A Tor, proxy and VPN blocker is on both plans.',
       abTesting: 'Listed as coming soon',
+      holidaySales:
+        'Yes. A campaign discount for a launch, a holiday or a flash sale is added on top of the country discount.',
       currency: 'Not listed on its site',
     },
     volume: ['$19.50 or $44.50', '$19.50 or $44.50', '$19.50 or $44.50', '$19.50 or $44.50', '$19.50 or $44.50'],
@@ -339,7 +356,7 @@ export const competitors: Record<CompetitorSlug, Competitor> = {
       },
       {
         title: 'You stack a campaign discount on top',
-        body: 'Parity Kit can add a launch or holiday discount on top of the country discount. GoPayLocal\'s discounts are by country only.',
+        body: 'Parity Kit can add a launch or holiday discount on top of the country discount. A GoPayLocal holiday deal is not added to the country discount: each visitor gets the larger of the two.',
       },
       {
         title: 'You want a stated support response time',
