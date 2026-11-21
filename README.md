@@ -156,6 +156,4 @@ private vulnerability reporting. [SECURITY.md](SECURITY.md) has the details.
 
 ## Credits
 
-GoPayLocal is built by [Arunavo Ray](https://github.com/arunavo4). The landing page was
-designed and built by [Abhrajit Ray](https://github.com/abhrajitray77); his commits are
-the first ones in this repository's history.
+GoPayLocal is built by the RayLabs team.
