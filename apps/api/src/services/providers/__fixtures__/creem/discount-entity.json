@@ -1,0 +1,15 @@
+{
+  "_source": "DiscountEntity, the 200 response of POST /v1/discounts at https://docs.creem.io/api-reference/endpoint/create-discount-code (field names, types and enums from that schema; required: id, mode, object, status, name, code, type). Values are the 30% code GoPayLocal would create; id prefix from the OrderEntity.discount example (dis_1234567890) in https://docs.creem.io/api-reference/openapi.json.",
+  "id": "dis_3e6Z6TzvHKdsjEgXnGDEp0",
+  "mode": "test",
+  "object": "discount",
+  "status": "active",
+  "name": "PPP NL 30%",
+  "code": "PPPNL30K7QX",
+  "type": "percentage",
+  "amount": 30,
+  "percentage": 30,
+  "duration": "forever",
+  "applies_to_products": ["prod_d1AY2Sadk9YAvLI0pj97f", "prod_AnVJ11ujp7x953ARpJvAF"],
+  "redeem_count": 0
+}

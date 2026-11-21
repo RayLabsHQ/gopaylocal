@@ -1,0 +1,99 @@
+---
+title: Framer
+description: Add GoPayLocal PPP discounts to your Framer site.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+Add GoPayLocal to Framer using the custom code feature.
+
+## Installation
+
+<Steps>
+
+1. **Get your API key** from the [GoPayLocal dashboard](https://app.gopaylocal.com)
+
+2. **Add the script to your site**
+
+   In Framer, go to **Site Settings > General > Custom Code**.
+
+   In the **End of `<body>` tag** section, paste:
+
+   ```html
+   <script
+     src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+     data-product="prod_abc123"
+     async
+   ></script>
+   ```
+
+   Save and publish.
+
+   `data-product` is the id of the product this site sells; the campaign page in the dashboard shows the snippet with your key and product filled in. You can leave it out if you have only one product. See [all script attributes](/banner/installation#script-attributes).
+
+3. **Configure discounts** in the GoPayLocal dashboard
+
+</Steps>
+
+## Page-Specific Installation
+
+To add the banner only on specific pages:
+
+1. Open the page in Framer
+2. Go to the page settings (gear icon)
+3. Add the script in the page's custom code section
+
+## Custom Code Component
+
+For more control, create a Framer code component:
+
+```tsx
+// GoPayLocalBanner.tsx (Framer Code Component)
+import { useEffect } from 'react';
+
+const SRC = 'https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+
+export default function GoPayLocalBanner() {
+  useEffect(() => {
+    // Load the banner once per page view. Removing the script later would not
+    // remove the banner, and adding it again would show a second one.
+    if (document.querySelector(`script[src="${SRC}"]`)) return;
+    const script = document.createElement('script');
+    script.src = SRC;
+    script.dataset.product = 'prod_abc123'; // data-product
+    script.async = true;
+    document.body.appendChild(script);
+  }, []);
+
+  return null;
+}
+```
+
+Add this component to your page in the Framer editor.
+
+## React SDK in Framer
+
+Since Framer supports React code components, you can use the React SDK directly:
+
+```tsx
+// PricingCard.tsx (Framer Code Component)
+import { GoPayLocalProvider, PPPPrice } from '@gopaylocal/react';
+
+export default function PricingCard() {
+  return (
+    <GoPayLocalProvider apiKey="gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" productId="prod_abc123">
+      <div style={{ textAlign: 'center' }}>
+        <h3>Pro Plan</h3>
+        <div style={{ fontSize: '2rem', fontWeight: 700 }}>
+          <PPPPrice price={9.99} />
+        </div>
+        <span>/month</span>
+      </div>
+    </GoPayLocalProvider>
+  );
+}
+```
+
+<Aside type="note">
+Framer code components run in an iframe during editing but render normally on the published site. Test the banner on your published site to see it working correctly.
+</Aside>

@@ -1,0 +1,145 @@
+---
+title: Stripe
+description: Integrate GoPayLocal with Stripe for automatic PPP discount coupons, including Stripe Managed Payments.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+Stripe is the most popular payment provider for SaaS. GoPayLocal creates Stripe coupons and promotion codes automatically, enabling both coupon-based and auto-apply discount flows.
+
+## Setup
+
+<Steps>
+
+1. **Get your Stripe secret key**
+
+   Go to [Stripe Dashboard](https://dashboard.stripe.com/apikeys) > **Developers > API keys**. Copy your **Secret key**.
+
+   For testing, use a test mode or sandbox key (starts with `sk_test_`).
+
+2. **Connect in GoPayLocal**
+
+   In your GoPayLocal dashboard, open **Integrations** in the sidebar and click **Connect** on the Stripe card. Enter your secret key in the dialog. The key is saved for the environment selected in the sidebar (**Test** or **Live**), so switch to **Test** first if you are using a test key.
+
+   Click **Test** after connecting to verify your credentials.
+
+3. **Create a campaign**
+
+   Create or edit a campaign and select **Stripe** as the payment provider. GoPayLocal creates:
+   - A **Coupon** for each discount percentage (e.g., 30% off)
+   - A **Promotion Code** for each coupon (e.g., `PPPIN30K7QX`)
+
+4. **Verify in Stripe**
+
+   Check the [Coupons](https://dashboard.stripe.com/coupons) page of your Stripe Dashboard to see the auto-created coupons and promotion codes.
+
+</Steps>
+
+## How Discounts Work
+
+GoPayLocal creates Stripe coupons and promotion codes via the Stripe API (API version `2026-10-28.endive`):
+
+```js
+// GoPayLocal creates a coupon whose id is the customer-facing code
+const coupon = await stripe.coupons.create({
+  id: 'PPPIN30K7QX',
+  duration: 'forever', // keeps the PPP price on every subscription renewal
+  percent_off: 30,
+  name: 'PPP IN 30%',
+  metadata: { gopaylocal: 'true' },
+});
+
+// And a promotion code for the coupon
+const promoCode = await stripe.promotionCodes.create({
+  promotion: { type: 'coupon', coupon: coupon.id },
+  code: 'PPPIN30K7QX',
+  metadata: { gopaylocal: 'true' },
+});
+```
+
+Stripe codes contain letters and digits only. GoPayLocal removes any other characters before creating them, so a code always looks like `PPPIN30K7QX`, never `PPP-IN30-K7QX`.
+
+## Auto-Apply
+
+### Stripe Checkout Sessions
+
+Look up the promotion code GoPayLocal gave the visitor, then pass its id in the `discounts` array when creating a Checkout Session:
+
+```js
+// `code` is the visitor's GoPayLocal code, e.g. from gpl.getCode()
+const { data } = await stripe.promotionCodes.list({ code, active: true, limit: 1 });
+
+const session = await stripe.checkout.sessions.create({
+  line_items: [{ price: 'price_xxx', quantity: 1 }],
+  mode: 'subscription',
+  ...(data[0] ? { discounts: [{ promotion_code: data[0].id }] } : {}),
+  success_url: 'https://yoursite.com/success',
+  cancel_url: 'https://yoursite.com/cancel',
+});
+```
+
+To let visitors type the code themselves instead, create the session with `allow_promotion_codes: true` and leave out `discounts`.
+
+### Stripe Payment Links
+
+Turn on promotion codes for the link (**Allow promotion codes** in the Dashboard, or `allow_promotion_codes: true` in the API), then append the code as a URL parameter ([Stripe docs](https://docs.stripe.com/payment-links/promotions)):
+
+```
+https://buy.stripe.com/xxx?prefilled_promo_code=PPPIN30K7QX
+```
+
+This pre-fills the promotion code in the Payment Link checkout, so the visitor sees the discount already applied.
+
+## Stripe Managed Payments
+
+[Managed Payments](https://docs.stripe.com/payments/managed-payments) makes Stripe the merchant of record for digital products: Stripe calculates, collects and remits sales tax, VAT and GST, and handles fraud and disputes. It is also where Stripe is moving Lemon Squeezy merchants; see [Moving from Lemon Squeezy](/guides/moving-from-lemon-squeezy/).
+
+<Aside type="caution">
+Status: **not yet verified live.** Everything below comes from Stripe's documentation and GoPayLocal's tests. Nobody has yet run it against a real Stripe account with Managed Payments turned on.
+</Aside>
+
+**There is no GoPayLocal setting for it.** You turn Managed Payments on in Stripe, and GoPayLocal works the same way either way:
+
+- **Your checkout opts in, not GoPayLocal.** Managed Payments is enabled per Checkout Session or Payment Link: `managed_payments: { enabled: true }` when you create a session, or **Enable Managed Payments** when you create a Payment Link. It has to be activated in your [Stripe Dashboard](https://dashboard.stripe.com/settings/managed-payments) first, and every product needs an [eligible tax code](https://docs.stripe.com/payments/managed-payments/eligibility#eligible-tax-codes) ([set up](https://docs.stripe.com/payments/managed-payments/set-up), [Payment Links](https://docs.stripe.com/payments/managed-payments/use-payment-links)). An existing Payment Link can't be switched over; you create a new one.
+- **Coupons and promotion codes are created the same way.** Nothing in Stripe's Managed Payments docs changes how coupons or promotion codes are created.
+- **Same webhook, same events.** Managed Payments sessions send the same `checkout.session.completed` and `checkout.session.async_payment_succeeded` events to the same endpoint, and each session says whether it was managed. GoPayLocal needs no extra configuration.
+- **Tax is reported, not counted as savings.** Under Managed Payments, Stripe always calculates tax, so the session total includes it. GoPayLocal reads the tax Stripe reports (`total_details.amount_tax`), so tax is never counted as revenue saved.
+- **Amounts stay in your price currency.** Managed Payments always shows prices in the customer's local currency ([Adaptive Pricing](https://docs.stripe.com/payments/currencies/localize-prices/adaptive-pricing)). The session still reports what the customer paid in your price's currency, and that is what GoPayLocal records.
+
+If you create Managed Payments Checkout Sessions in your own code, leave out the parameters Stripe [rejects for Managed Payments](https://docs.stripe.com/payments/managed-payments/update-checkout#remove-unsupported-parameters), such as `automatic_tax`, `tax_id_collection`, `payment_method_types` and `shipping_address_collection`.
+
+<Aside type="note">
+**Open question: promotion codes on Managed Payments sessions.** `discounts` and `allow_promotion_codes` are not on Stripe's list of parameters Managed Payments rejects. However, as of November 2026, no Stripe page says outright that promotion codes work on a Managed Payments checkout. GoPayLocal's verification tool checks exactly this against a test account: `verify:provider stripe --managed-payments` ([how to run it](https://github.com/RayLabsHQ/gopaylocal/blob/main/apps/api/PROVIDER_VERIFICATION.md#stripe-managed-payments)). Until it has been run, test one discounted purchase in your own Stripe test mode before relying on it.
+</Aside>
+
+Managed Payments is available to businesses based in [supported locations](https://docs.stripe.com/payments/managed-payments/eligibility#supported-business-locations) that sell eligible digital products. It doesn't support Connect platforms.
+
+## Test Mode
+
+Use Stripe test mode keys (`sk_test_*`) during development:
+
+- Coupons and promotion codes are created in test mode
+- Use Stripe test card numbers for payments
+- All data is isolated from your live environment
+
+## Webhooks
+
+When you save a key, GoPayLocal creates a webhook endpoint for that environment in your Stripe account: one in test mode for a test key, one in live mode for a live key. If you replace a key, GoPayLocal uses the old key to delete the old endpoint, then creates a new one. The endpoint listens for these events:
+
+| Event | Purpose |
+|---|---|
+| `checkout.session.completed` | Count a redemption when a paid session used a GoPayLocal coupon or promotion code |
+| `checkout.session.async_payment_succeeded` | Count it when a delayed payment method (e.g. a bank debit) settles |
+
+Redemptions are counted once per Checkout Session. Subscription renewals don't create a Checkout Session, so they are not counted again. The integration card shows whether redemption tracking is active.
+
+<Aside type="note">
+GoPayLocal uses Stripe's Promotion Codes (not raw Coupons) for the banner. Promotion Codes are customer-facing codes that map to internal Coupons. This lets visitors enter the code at checkout.
+</Aside>
+
+## Limitations
+
+- Stripe Checkout accepts one discount per session
+- Coupons can be percentage-off or fixed-amount (GoPayLocal uses percentage-off)
+- Promotion codes can have restrictions (first-time customers, minimum amount, etc.) — GoPayLocal does not set these by default
+- Stripe charges standard processing fees on the discounted amount

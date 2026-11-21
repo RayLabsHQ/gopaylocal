@@ -1,0 +1,253 @@
+# GoPayLocal API Worker: example configuration for a self-hosted deployment.
+#
+# Copy this file over wrangler.toml and fill in every <PLACEHOLDER>:
+#   cp apps/api/wrangler.example.toml apps/api/wrangler.toml
+# The wrangler.toml in the upstream repository holds the hosted gopaylocal.com
+# deployment's ids; yours replaces it in your fork or clone. Nothing in this file
+# is secret: secrets are set with `wrangler secret put` (list at the bottom).
+#
+# Full guide: apps/docs/src/content/docs/self-hosting/ (https://docs.gopaylocal.com/self-hosting/)
+# Every binding below must keep its binding name: the code reads env.<BINDING>.
+
+# Worker name. Any name works; it becomes part of the workers.dev hostname.
+name = "gopaylocal-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+# Keep both flags. global_fetch_strictly_public makes fetch() to a hostname in your
+# own zone go through the public route instead of straight to the zone's origin; the
+# WooCommerce integration fetches merchant-supplied store URLs and relies on it.
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+
+# Optional. Serve the API on your own hostname (the zone must be active on Cloudflare);
+# API_BASE_URL below must match it. Without it the Worker is reachable on its
+# workers.dev hostname only. Top-level key: keep it above the first [table].
+# routes = [
+#   { pattern = "api.<YOUR_DOMAIN>", custom_domain = true },
+# ]
+
+# Required. The API serves the banner bundle by importing packages/banner/dist/banner.js
+# as a text module, so run `pnpm build:banner` (from the repo root) before every deploy.
+[[rules]]
+type = "Text"
+globs = ["**/banner/dist/*.js"]
+fallthrough = false
+
+# Optional. Workers Logs for this Worker (dashboard > Workers > your Worker > Logs).
+[observability]
+enabled = true
+
+# Required: all three crons run the scheduled() handler in src/index.ts, routed by expression.
+# - "*/10 * * * *": recomputes each organization's monthly API-call usage and retries
+#   redemption webhooks that could not be processed on arrival. Keep it.
+# - "30 9 * * *": daily rebuild of the VPN / datacenter / Tor IP dataset in VPN_DATA.
+#   Must equal VPN_REFRESH_CRON in src/services/vpn-refresh.service.ts. Needs the
+#   Workers Paid plan (the Free plan allows 10 ms CPU per cron run, which is not enough).
+#   On Workers Free the run stops before it writes and leaves existing data alone; seed
+#   and refresh VPN_DATA with scripts/build-vpn-dataset.ts instead (see the guide).
+# - "40 */6 * * *": every 6 hours, fetches, checks and stores the exchange rates used
+#   for local prices (CACHE key fx:rates). Must equal FX_REFRESH_CRON in
+#   src/services/fx-refresh.service.ts. Sources: FX_RATES_URL and FX_RATES_FALLBACK_URL
+#   below. Until its first successful run, visitors see exact prices in the product's
+#   currency; a run that fails writes nothing and the previous rates stay.
+[triggers]
+crons = ["*/10 * * * *", "30 9 * * *", "40 */6 * * *"]
+
+# Optional. Runs the Worker close to your database instead of close to each visitor,
+# which helps the Postgres-backed dashboard API. Cloudflare marks host-based placement
+# as experimental. Leave it commented out if unsure.
+# [placement]
+# host = "<DATABASE_HOST>:5432"
+
+# Required. Postgres through Hyperdrive (connection pooling for Workers).
+# Create (from apps/api):
+#   pnpm wrangler hyperdrive create gopaylocal-db \
+#     --connection-string="postgres://<USER>:<PASSWORD>@<DATABASE_HOST>:5432/<DATABASE>"
+# then paste the printed id below. Hyperdrive is included in Workers Free and Paid.
+# GoPayLocal needs Postgres 15 or newer (the schema uses NULLS NOT DISTINCT).
+# Hyperdrive connects over TLS only and validates the server certificate by default.
+# localConnectionString is what `wrangler dev` uses instead; the value below matches
+# docker-compose.yml (service "postgres" on localhost:5433).
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "<HYPERDRIVE_ID>"
+localConnectionString = "postgresql://gopaylocal:gopaylocal@localhost:5433/gopaylocal"
+
+# Required. KV namespaces. Create each one (from apps/api) and paste the printed id:
+#   pnpm wrangler kv namespace create CACHE
+#   pnpm wrangler kv namespace create VPN_DATA
+
+# CACHE: banner configs, API-key lookups, usage snapshots, exchange rates (fx:rates).
+# Required.
+[[kv_namespaces]]
+binding = "CACHE"
+id = "<CACHE_KV_ID>"
+
+# VPN_DATA: the VPN / datacenter / Tor IP dataset (one value, written by the daily cron
+# or uploaded by hand). Required as a binding. While it is empty, VPN detection only
+# checks the visitor's network (request.cf.asn) against a built-in datacenter list.
+[[kv_namespaces]]
+binding = "VPN_DATA"
+id = "<VPN_DATA_KV_ID>"
+
+# Optional but recommended. Workers Rate Limiting bindings; the code skips a check whose
+# binding is missing (fails open). Nothing to create: the stanza is the whole setup.
+# `period` must be 10 or 60 seconds. `namespace_id` is a positive integer, as a string,
+# that must be unique within your Cloudflare account; change these if another Worker in
+# the account already uses 1001-1009. Limits are counted per Cloudflare location.
+# https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
+
+# Banner script, bundle and config, per visitor IP. Every pageview on every site that
+# embeds the banner hits it, so keep it generous.
+[[ratelimits]]
+name = "RL_BANNER_IP"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 300
+  period = 60
+
+# Banner lookups for unknown keys (both caches missed), per IP, before the database
+# lookup. Caps how many cold database queries one IP can force by rotating keys.
+[[ratelimits]]
+name = "RL_BANNER_MISS_IP"
+namespace_id = "1002"
+
+  [ratelimits.simple]
+  limit = 20
+  period = 60
+
+# POST /v1/events, per API key. The banner sends one beacon per event, so all of a
+# site's visitors share this bucket; it is sized for a busy site (bounds analytics
+# inflation per key, does not meter usage).
+[[ratelimits]]
+name = "RL_EVENTS_KEY"
+namespace_id = "1003"
+
+  [ratelimits.simple]
+  limit = 3000
+  period = 60
+
+# POST /v1/events, per IP (second gate, and the only one when the key is missing).
+[[ratelimits]]
+name = "RL_EVENTS_IP"
+namespace_id = "1004"
+
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
+# Auth POST requests (sign-in, credential endpoints), per IP.
+[[ratelimits]]
+name = "RL_AUTH_POST_IP"
+namespace_id = "1005"
+
+  [ratelimits.simple]
+  limit = 10
+  period = 60
+
+# Auth GET requests (session checks, OAuth callbacks), per IP.
+[[ratelimits]]
+name = "RL_AUTH_GET_IP"
+namespace_id = "1006"
+
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
+# Gumroad sale pings, per integration. Pings are unsigned and each one makes the API
+# read the sale back with the merchant's Gumroad token, so this stops forged pings
+# from using up that token's quota. Over the limit the route answers 503 and Gumroad
+# retries.
+[[ratelimits]]
+name = "RL_GUMROAD_PING"
+namespace_id = "1007"
+
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
+# Management API requests made with a secret API key, per key. Over the limit the
+# API answers 429 with Retry-After.
+[[ratelimits]]
+name = "RL_API_KEY"
+namespace_id = "1008"
+
+  [ratelimits.simple]
+  limit = 300
+  period = 60
+
+# Secret-key lookups that found no key (unknown or revoked), per IPv4 address or
+# IPv6 /64. Once it refuses, further failed attempts get 429; valid keys from the
+# same address are unaffected.
+[[ratelimits]]
+name = "RL_API_KEY_FAIL_IP"
+namespace_id = "1009"
+
+  [ratelimits.simple]
+  limit = 10
+  period = 60
+
+[vars]
+# Required. Public URL of this API Worker, no trailing slash. Better Auth uses it as
+# its base URL, so OAuth callbacks are <API_BASE_URL>/api/auth/callback/<provider>.
+# If unset (with SELF_HOSTED="true"), Better Auth derives it from each request's origin
+# and logs a warning; set it so callbacks and redirects are predictable.
+API_BASE_URL = "https://api.<YOUR_DOMAIN>"
+# Required. Public URL of the dashboard Worker. Allowed for credentialed CORS and as a
+# trusted auth origin; used in invitation-email links (if unset, no invitation email is
+# sent; the owner can still copy each link from the dashboard).
+APP_BASE_URL = "https://app.<YOUR_DOMAIN>"
+# Required if you deploy the admin app. Allowed for credentialed CORS and auth.
+ADMIN_BASE_URL = "https://admin.<YOUR_DOMAIN>"
+# Optional. Extra origins (comma-separated, exact scheme://host[:port]) allowed to make
+# credentialed requests, e.g. a second dashboard hostname. Not needed for banner sites:
+# the banner endpoints accept any origin.
+# CORS_ALLOWED_ORIGINS = "https://dashboard.<YOUR_DOMAIN>"
+# Needed for invitation emails (with ACS_CONNECTION_STRING below). Sender address on a
+# domain linked to your Azure Communication Services resource. If unset, no invitation
+# email is sent when SELF_HOSTED="true".
+# EMAIL_FROM = "DoNotReply@<YOUR_MAIL_DOMAIN>"
+# Required for self-hosting: "true" makes every organization unlimited, turns the
+# "Powered by GoPayLocal" banner link off, and disables billing (the checkout and
+# portal endpoints return 404 billing_disabled; the dashboard hides billing).
+SELF_HOSTED = "true"
+# Optional. Exchange rates for local prices, refreshed four times a day into CACHE
+# (fx:rates). FX_RATES_URL is a USD-based feed; {date} is replaced with today's, then
+# yesterday's, UTC date. Accepted formats: fawazahmed0/exchange-api, Frankfurter v1 or
+# v2, or {"base": "USD", "date": "YYYY-MM-DD", "rates": {...}}. Default:
+# fawazahmed0/exchange-api from cdn.jsdelivr.net, then currency-api.pages.dev. "off"
+# turns conversion off: visitors see exact prices in the product's currency.
+# FX_RATES_URL = "https://rates.<YOUR_DOMAIN>/{date}.json"
+# Optional. Second feed: cross-checks the first. A currency gets a new rate only when the
+# two agree within 5% (2% for a move over 15%); otherwise it keeps its last confirmed
+# rate for up to 96 hours, then is not converted. Also used when the first fails.
+# "off": one source, no cross-check; a new rate is accepted only within 15% of the last
+# accepted one, and a bigger move is held. Default: Frankfurter v2 (api.frankfurter.dev).
+# A self-hosted Frankfurter works here: https://frankfurter.dev/deploy/
+# FX_RATES_FALLBACK_URL = "https://frankfurter.<YOUR_DOMAIN>/v2/rates?base=usd"
+# Optional. Comma-separated currencies that are never converted.
+# FX_EXCLUDED_CURRENCIES = "VES,LBP"
+# Hosted billing only (SELF_HOSTED unset or "false"). Not read when SELF_HOSTED="true".
+# DODO_ENVIRONMENT = "test_mode"            # or "live_mode"
+# DODO_PRICE_ID_PRO_MONTHLY = "<DODO_PRODUCT_ID>"
+# DODO_PRICE_ID_PRO_ANNUAL = "<DODO_PRODUCT_ID>"
+
+# Secrets: set each with (from apps/api)
+#   pnpm wrangler secret put <NAME>
+# BETTER_AUTH_SECRET     Required. Signs sessions; also encrypts provider tokens unless
+#                        TOKEN_ENCRYPTION_KEY is set. Generate: openssl rand -base64 32
+# TOKEN_ENCRYPTION_KEY   Optional, recommended. Separate key for provider tokens at rest,
+#                        so BETTER_AUTH_SECRET can be rotated on its own. Set it before
+#                        connecting any integration: tokens stored under one key cannot
+#                        be decrypted with another. Generate: openssl rand -base64 32
+# GOOGLE_CLIENT_ID       Google sign-in. Set both Google values or neither.
+# GOOGLE_CLIENT_SECRET
+# GITHUB_CLIENT_ID       GitHub sign-in. Set both GitHub values or neither.
+# GITHUB_CLIENT_SECRET   At least one OAuth provider is needed: public email sign-up is
+#                        disabled, so OAuth is the only way to create an account.
+# ACS_CONNECTION_STRING  Optional. Azure Communication Services connection string for
+#                        team invitation emails; without it invitations are created but
+#                        no email is sent. Also set EMAIL_FROM (above).
+# DODO_API_KEY           Hosted billing only. Not needed when SELF_HOSTED="true".
+# DODO_WEBHOOK_SECRET    Hosted billing only. Leave unset when self-hosting; the Dodo
+#                        webhook endpoint then rejects every request.

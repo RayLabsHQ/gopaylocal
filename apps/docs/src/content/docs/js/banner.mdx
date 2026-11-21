@@ -1,0 +1,163 @@
+---
+title: JavaScript SDK Banner
+description: Programmatically show and control the PPP discount banner with the JavaScript SDK.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The JavaScript SDK can render a PPP discount banner similar to the standalone banner script, but with full programmatic control. It starts from your campaign's [banner design](/banner/customization) (position, colors, message, button text, flag and close button), and any option you pass overrides that setting. To change the design everywhere, including the script tag, edit it in the dashboard's [banner editor](/banner/customization#editing-the-design); use these options when a page needs something different.
+
+## Usage
+
+```js
+import { GoPayLocal } from '@gopaylocal/js';
+
+const gpl = new GoPayLocal({ apiKey: 'gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' });
+await gpl.init();
+
+const banner = gpl.showBanner({
+  position: 'bottom-right',
+});
+```
+
+The `showBanner()` method returns a handle with a `remove()` method:
+
+```js
+// Remove the banner programmatically
+banner.remove();
+```
+
+If no discount applies (visitor is from a full-price country, VPN detected, etc.), or `init()` has not resolved yet, `showBanner()` returns a no-op handle:
+
+```js
+const banner = gpl.showBanner();
+banner.remove(); // Safe to call, does nothing
+```
+
+## Options
+
+Each option overrides the matching setting of the campaign's design. The defaults below apply only when neither is set.
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `position` | `'top' \| 'bottom' \| 'bottom-left' \| 'bottom-right'` | `'bottom'` | Banner position |
+| `backgroundColor` | `string` | `'#1a1a2e'` | Background color |
+| `textColor` | `string` | `'#ffffff'` | Text color |
+| `ctaColor` | `string` | `'#e94560'` | CTA button color |
+| `ctaTextColor` | `string` | `'#ffffff'` | CTA button text color |
+| `ctaText` | `string` | `'Copy Code'` | CTA button label |
+| `messageTemplate` | `string` | See below | Message with `{{placeholders}}` |
+| `showFlag` | `boolean` | `true` | Show country flag emoji |
+| `showCloseBtn` | `boolean` | `true` | Show close button |
+| `onClose` | `() => void` | — | Called when banner is dismissed |
+
+### Default Message Template
+
+```
+Hey! It looks like you're visiting from {{countryName}}.
+We support Purchasing Power Parity! Use code {{code}} for {{discount}}% off.
+```
+
+### Available Placeholders
+
+The examples are for a $19 product and a visitor from India with 60% off (rates of 18 November 2026), and in the last column for a visitor from the United States, whose price is not converted.
+
+| Placeholder | Description | Example | No conversion |
+|---|---|---|---|
+| `{{discount}}` | Discount percentage (number only) | `60` | `60` |
+| `{{code}}` | Coupon code | `PPP-IN60-K7QX` | `PPP-US60-K7QX` |
+| `{{country}}` | ISO country code | `IN` | `US` |
+| `{{countryName}}` | Full country name | `India` | `United States` |
+| `{{flag}}` | Country flag emoji | `🇮🇳` | `🇺🇸` |
+| `{{localPrice}}` | Your product's price after the discount | `₹719` | `$7.60` |
+| `{{localOriginalPrice}}` | Your product's price before the discount | `₹1,769` | `$19` |
+| `{{currencySymbol}}` | The symbol of the currency the prices are shown in | `₹` | `$` |
+| `{{currencyCode}}` | The code of the currency the prices are shown in | `INR` | `USD` |
+
+The prices are your product's price from the API, the same numbers as the script-tag banner shows, whatever `baseCurrencyCode` you set. They are formatted in the visitor's locale, and a whole number shows no decimals. A converted price is an estimate, rounded with the campaign's [charm pricing](/guides/charm-pricing/); see [Multi-currency display](/guides/multi-currency/). An unknown placeholder, or `{{code}}` when the campaign has no code, is replaced with nothing.
+
+You can use `**bold text**` in the template — it is rendered as `<strong>` elements.
+
+## Examples
+
+### Custom Colors
+
+```js
+gpl.showBanner({
+  position: 'top',
+  backgroundColor: '#1e3a5f',
+  textColor: '#ffffff',
+  ctaColor: '#4fc3f7',
+  ctaTextColor: '#1e3a5f',
+});
+```
+
+### Custom Message
+
+```js
+gpl.showBanner({
+  messageTemplate:
+    '**{{countryName}} pricing!** Get {{discount}}% off with code **{{code}}**.',
+  ctaText: 'Copy Discount Code',
+});
+```
+
+### With Close Callback
+
+```js
+gpl.showBanner({
+  position: 'bottom-right',
+  onClose: () => {
+    console.log('Banner dismissed');
+    // Also tell your own analytics (GoPayLocal already records the dismissal)
+    analytics.track('ppp_banner_dismissed');
+  },
+});
+```
+
+### Remove After Timeout
+
+```js
+const banner = gpl.showBanner({ position: 'bottom' });
+
+// Remove after 30 seconds
+setTimeout(() => {
+  banner.remove();
+}, 30000);
+```
+
+## Shadow DOM
+
+Like the standalone banner script, the JavaScript SDK banner renders inside a **Shadow DOM**. This means:
+
+- Your site's CSS cannot affect the banner
+- The banner's CSS cannot leak into your site
+- The banner is completely isolated from your page
+
+## Branding
+
+On the Free plan the API asks for a small "Powered by GoPayLocal" link, and the banner shows it, as the script banner does. Paid and self-hosted plans don't show it. The API decides this; there is no option for it.
+
+## CTA Behavior
+
+When the user clicks the CTA button:
+
+1. The coupon code is copied to the clipboard using `navigator.clipboard.writeText()`
+2. If that fails, a fallback using `document.execCommand('copy')` is used
+3. The button text changes to "Copied!" for 2 seconds
+4. The text reverts to the original CTA text
+
+## Animations
+
+The banner slides in with a 300ms ease-out animation:
+
+| Position | Animation |
+|---|---|
+| `top` | Slides down from above the viewport |
+| `bottom` | Slides up from below the viewport |
+| `bottom-left` | Slides in from the left |
+| `bottom-right` | Slides in from the right |
+
+## Analytics
+
+Like the standalone banner script, the SDK banner reports an `impression` when it is shown, `copy` when the code is copied and `dismiss` when it is closed. The events go to your GoPayLocal [analytics](/banner/events) and are attributed to the campaign that produced the discount (the assigned arm during an [A/B experiment](/guides/ab-testing)). If you build your own banner instead, report the same events with [`gpl.track()`](/js/client#track).

@@ -1,0 +1,32 @@
+{
+  "success": true,
+  "sale": {
+    "id": "Rn3wAL-cHaRgEaBcDeFg-Q==",
+    "email": "calvin@gumroad.com",
+    "seller_id": "kL0paVL2SdmJSYsNs-OCMg==",
+    "created_at": "2021-03-05T19:38:56Z",
+    "product_name": "Pencil Club",
+    "price": 700,
+    "gumroad_fee": 60,
+    "subscription_duration": "monthly",
+    "formatted_display_price": "$7 a month",
+    "currency": "usd",
+    "product_id": "32-nPainqpLj1B_WIwVlMw==",
+    "refunded": false,
+    "partially_refunded": false,
+    "chargedback": false,
+    "paid": true,
+    "is_recurring_billing": true,
+    "is_gift_receiver_purchase": false,
+    "subscription_id": "GazW4_NBcQy-o7Gjjng7lw==",
+    "cancelled": false,
+    "ended": false,
+    "recurring_charge": true,
+    "offer_code": {
+      "code": "PPP-IN30-K7QX",
+      "name": "PPP-IN30-K7QX",
+      "displayed_amount_off": "30%"
+    },
+    "quantity": 1
+  }
+}

@@ -1,0 +1,265 @@
+---
+title: React Components
+description: Reference for all GoPayLocal React SDK components — PPPBanner, PPPPrice, PPPPriceFormatted, and more.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+All components must be rendered inside a [`GoPayLocalProvider`](/react/provider). They automatically read PPP data from context.
+
+The price components work like [`usePrice()`](/react/hooks#useprice): when the API converted your product's price for this visitor, they convert your prices with the same rate and round them with the campaign's [charm pricing](/guides/charm-pricing/), exactly as the API does. Otherwise prices stay in your base currency, exact. Converted prices are estimates: your payment provider charges the exact discounted price in your currency.
+
+The examples below are for a $19 price and a visitor from India with 60% off (rates of 18 November 2026) or from the United States with 60% off. The exact format (for example `US$7.60`) follows the visitor's browser locale.
+
+## PPPBanner
+
+Renders a discount banner with the visitor's PPP information. Renders nothing if no discount is available.
+
+It uses your campaign's [banner design](/banner/customization) (message, button text, colors, position, flag and close button), and the props below override it. It reports `impression` (once per campaign), `copy` and `dismiss` events to your [analytics](/banner/events), and shows a "Powered by GoPayLocal" link when the API asks for it (the Free plan).
+
+The message supports the same [placeholders](/banner/customization#message-placeholders) as the script tag. `{{localPrice}}` and `{{localOriginalPrice}}` are your product's price from the API, in the visitor's currency when converted, whatever `baseCurrencyCode` you set on the provider.
+
+```tsx
+import { GoPayLocalProvider, PPPBanner } from '@gopaylocal/react';
+
+function App() {
+  return (
+    <GoPayLocalProvider apiKey="gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef">
+      <PPPBanner position="bottom-right" />
+      <PricingPage />
+    </GoPayLocalProvider>
+  );
+}
+```
+
+### Props
+
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `position` | `'top' \| 'bottom' \| 'bottom-left' \| 'bottom-right'` | API config value or `'bottom-right'` | Banner position |
+| `backgroundColor` | `string` | API config value | Banner background color |
+| `fontColor` | `string` | API config value | Banner text color |
+| `borderRadius` | `string` | `'10px'` | CSS border radius of the `bottom-left`/`bottom-right` card |
+| `fontSize` | `string` | `'14px'` | CSS font size |
+| `showCloseIcon` | `boolean` | Campaign's design, else `true` | Whether to show the close button |
+| `noStyles` | `boolean` | `false` | Render without default styles (for custom styling) |
+| `className` | `string` | — | Additional CSS class name |
+| `onClose` | `() => void` | — | Callback when dismissed |
+
+### Unstyled Mode
+
+Use `noStyles` to render the banner with data attributes instead of inline styles, so you can style it with your own CSS:
+
+```tsx
+<PPPBanner noStyles className="my-banner" />
+```
+
+The unstyled version renders with these data attributes:
+- `data-gopaylocal-banner` — root element
+- `data-gopaylocal-flag` — flag emoji
+- `data-gopaylocal-message` — message text
+- `data-gopaylocal-cta` — CTA button
+- `data-gopaylocal-close` — close button
+- `data-gopaylocal-branding` — "Powered by GoPayLocal" link (Free plan only)
+
+Building a banner from scratch with `usePPP()` instead? Call [`track()`](/react/hooks#helper-functions) so its views and copies still show up in your analytics.
+
+---
+
+## PPPPrice
+
+The simplest price component. Renders the discounted price as a single formatted string.
+
+```tsx
+import { PPPPrice } from '@gopaylocal/react';
+
+<PPPPrice price={19} />
+// A visitor from India with 60% off:             "₹719"
+// A visitor from the United States with 60% off: "$7.60"
+// Without a discount:                             "$19"
+```
+
+### Props
+
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `price` | `number` | **(required)** | Base price in your base currency |
+| `localize` | `boolean` | `true` | Convert to the visitor's currency when possible. `false` keeps the price in your base currency. |
+| `showDecimal` | `boolean` | — | `true` always shows the currency's decimal digits (in currencies written in whole units, such as JPY, PKR or IDR, only an amount that has decimals shows them), `false` never does. Unset, a whole amount shows none (`₹719`, `$19`) and any other keeps them (`$7.60`). |
+| `currencyDisplay` | `'symbol' \| 'code' \| 'name'` | `'symbol'` | How to display the currency |
+| `className` | `string` | — | CSS class name |
+
+### Currency Display
+
+```tsx
+// A visitor from India with 60% off
+<PPPPrice price={19} currencyDisplay="symbol" />  // "₹719"
+<PPPPrice price={19} currencyDisplay="code" />    // "INR 719"
+<PPPPrice price={19} currencyDisplay="name" />    // "719 Indian rupees"
+```
+
+---
+
+## PPPPriceFormatted
+
+Like `PPPPrice` but with advanced formatting options, including the ability to show the original (pre-discount) price for strikethrough displays.
+
+```tsx
+import { PPPPriceFormatted } from '@gopaylocal/react';
+
+<div>
+  <s><PPPPriceFormatted price={19} isOriginalDisplay /></s>
+  {' '}
+  <PPPPriceFormatted price={19} />
+</div>
+// A visitor from India with 60% off:             <s>₹1,769</s> ₹719
+// A visitor from the United States with 60% off: <s>$19</s> $7.60
+```
+
+A converted original price is rounded down, so the discount the two prices imply is never larger than the real one.
+
+### Props
+
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `price` | `number` | **(required)** | Base price |
+| `isOriginalDisplay` | `boolean` | `false` | Show the original (non-discounted) price, in the same currency as the discounted one |
+| `localize` | `boolean` | `true` | Convert to the visitor's currency when possible |
+| `showDecimal` | `boolean` | — | `true` always shows decimals, `false` never does; unset, a whole amount shows none |
+| `minimumDecimalDigits` | `number` | — | Minimum decimal digits |
+| `maximumDecimalDigits` | `number` | — | Maximum decimal digits |
+| `currencyDisplay` | `'symbol' \| 'code' \| 'name'` | `'symbol'` | Currency display mode |
+| `className` | `string` | — | CSS class name |
+
+---
+
+## PPPPriceInteger
+
+Renders only the integer part of the discounted price. Use with `PPPPriceDecimal` and `PPPCurrencySymbol` for custom price layouts.
+
+```tsx
+import { PPPPriceInteger, PPPPriceDecimal, PPPCurrencySymbol } from '@gopaylocal/react';
+
+<span className="price">
+  <PPPCurrencySymbol />
+  <PPPPriceInteger price={19} />
+  <sup><PPPPriceDecimal price={19} /></sup>
+</span>
+// A visitor from the United States with 60% off: $7<sup>60</sup>
+// A visitor from India with 60% off:             ₹719<sup></sup>
+```
+
+The integer part keeps its group separators (`1,769`).
+
+### Props
+
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `price` | `number` | **(required)** | Base price |
+| `localize` | `boolean` | `true` | Convert to the visitor's currency when possible |
+| `className` | `string` | — | CSS class name |
+
+---
+
+## PPPPriceDecimal
+
+Renders only the decimal digits of the discounted price. Renders nothing when the price shows no decimals: a whole amount such as `₹719` or `$19`, or a zero-decimal currency like JPY. Keep any separator you add (such as a `.`) out of the markup, or it shows on its own for those prices.
+
+```tsx
+import { PPPPriceDecimal } from '@gopaylocal/react';
+
+<PPPPriceDecimal price={19} />
+// A visitor from the United States with 60% off: "60"
+// A visitor from India with 60% off: nothing
+```
+
+### Props
+
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `price` | `number` | **(required)** | Base price |
+| `localize` | `boolean` | `true` | Convert to the visitor's currency when possible |
+| `minimumDecimalDigits` | `number` | — | Minimum decimal digits |
+| `maximumDecimalDigits` | `number` | — | Maximum decimal digits |
+| `className` | `string` | — | CSS class name |
+
+---
+
+## PPPCurrencySymbol
+
+Renders the symbol of the currency prices are shown in (`currencySymbol` from [`usePPP()`](/react/hooks#useppp)): the visitor's currency when prices are converted, otherwise your base currency.
+
+```tsx
+import { PPPCurrencySymbol } from '@gopaylocal/react';
+
+<PPPCurrencySymbol />
+// "₹" for a visitor from India, "$" for a visitor from the United States
+```
+
+### Props
+
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `className` | `string` | — | CSS class name |
+
+---
+
+## PPPCurrencyCode
+
+Renders the code (ISO 4217) of the currency prices are shown in (`currencyCode` from [`usePPP()`](/react/hooks#useppp)).
+
+```tsx
+import { PPPCurrencyCode } from '@gopaylocal/react';
+
+<PPPCurrencyCode />
+// "INR" for a visitor from India, "USD" for a visitor from the United States
+```
+
+### Props
+
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `className` | `string` | — | CSS class name |
+
+---
+
+## Building a Custom Price Display
+
+Combine the granular components for full control:
+
+```tsx
+import {
+  PPPCurrencySymbol,
+  PPPPriceInteger,
+  PPPPriceDecimal,
+  PPPPriceFormatted,
+  usePPP,
+} from '@gopaylocal/react';
+
+function CustomPrice({ price }: { price: number }) {
+  const { discount } = usePPP();
+
+  return (
+    <div className="price-display">
+      {discount > 0 && (
+        <s className="original-price">
+          <PPPPriceFormatted price={price} isOriginalDisplay />
+        </s>
+      )}
+      <span className="current-price">
+        <PPPCurrencySymbol />
+        <span className="price-integer">
+          <PPPPriceInteger price={price} />
+        </span>
+        <sup className="price-decimal">
+          <PPPPriceDecimal price={price} />
+        </sup>
+      </span>
+    </div>
+  );
+}
+```
+
+<Aside type="tip">
+All components are memoized with `React.memo` for optimal performance. They only re-render when their props or the PPP context changes.
+</Aside>

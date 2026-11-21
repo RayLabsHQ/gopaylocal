@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/RayLabsHQ/gopaylocal/security/advisories/new
+    about: Report vulnerabilities privately, never in a public issue. You can also email security@gopaylocal.com. See SECURITY.md.
+  - name: Ask a question
+    url: https://github.com/RayLabsHQ/gopaylocal/discussions
+    about: Questions about setup, self-hosting or using GoPayLocal belong in Discussions.

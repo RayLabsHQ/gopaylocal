@@ -1,0 +1,172 @@
+---
+title: A/B Testing
+description: Split a product's visitors between two campaigns and compare discount levels.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+An A/B test links two campaigns of the same product: **A**, the control, and **B**, the variant. The banner sends each visitor to one of them according to a traffic split, and the dashboard shows the two campaigns' numbers side by side. The usual use is to compare two discount levels for the same countries.
+
+## Why A/B Test Discounts?
+
+A 30% discount might convert better than 20%, but is the extra conversion worth the 10% revenue per sale? A/B testing helps you answer this.
+
+**Example question:** Does a campaign capped at 45% convert enough better than one capped at 30% to justify the lower per-sale revenue?
+
+A test compares two campaigns across all of a product's visitors. It doesn't target particular countries, and its results aren't broken down by country.
+
+## How It Works
+
+<Steps>
+
+1. **Create two campaigns** for the same product with different discount settings, and activate both.
+2. **Start an A/B test** that links them, with a traffic split (default 50/50).
+3. The banner assigns each visitor to A or B and serves that campaign. Banner events are recorded against the campaign the visitor saw, so each campaign's numbers are that arm's results.
+4. **End the test** and pick the winner. The winner stays active; the other campaign is paused.
+
+</Steps>
+
+## Requirements
+
+- Both campaigns belong to the same product and the same environment (live or test).
+- Both campaigns are **active** when the test starts. The banner only serves active campaigns.
+- A product can have **one running test per environment**. End it before starting another.
+- The banner must know which product the page is for. In a workspace with one product that is automatic; with several products, set the product on the banner (the `data-product` attribute, or the `productId` option in the SDKs). See [Banner API](/api/banner/) for how the banner picks a campaign.
+
+## Setup
+
+### 1. Create the two campaigns
+
+Create two campaigns for the same product and set both to **Active**. In this example they differ only in their maximum discount:
+
+**Campaign A — Control (capped at 30%):**
+```
+Name: Pro Plan PPP - Control
+Pricing Mode: PPP Factor (automatic)
+Max Discount: 30%
+```
+
+**Campaign B — Variant (capped at 45%):**
+```
+Name: Pro Plan PPP - Variant
+Pricing Mode: PPP Factor (automatic)
+Max Discount: 45%
+```
+
+With PPP Factor pricing, a country whose PPP factor implies more than the cap gets the cap: India (implied 80%) gets 30% from A and 45% from B, while the UK (implied 11%) gets 11% from both.
+
+### 2. Start the test
+
+From the campaign you want as the control:
+
+1. Go to **Campaigns > Campaign A > Settings > A/B Testing**
+2. Click **Create A/B Test** (Campaign A is preselected as the control)
+3. Give the test a name and select **Campaign B** as the variant
+4. Set the traffic to B (default: 50%, so a 50/50 split)
+5. Click **Start Test**
+
+You can also start from **A/B Tests > New A/B Test** and pick the product and both campaigns there.
+
+### 3. How visitors are assigned
+
+Each visitor is placed in A or B by a hash of the test and the visitor, compared with the split. The same visitor gets the same campaign on every page view for as long as the test and its split stay the same.
+
+The visitor is identified by a random id kept in the browser's local storage (key `gpl_vid`, shared by the banner script and the JavaScript and React SDKs) and sent with each banner request. The API uses it only for this assignment and does not store it. You can pass your own id instead, such as a signed-in user's id, so a visitor keeps their arm across devices: `data-visitor-id` on the script tag or the `visitorId` option in the SDKs (see [A/B experiments in the JavaScript SDK](/js/installation/#ab-experiments)). Without any id (`data-no-storage` on the script tag, or `persistVisitorId: false` in the SDKs, and no id of your own), the visitor is identified by IP address and browser user agent, so a visitor whose IP changes can switch arms.
+
+A visitor always gets their own arm's campaign. If that campaign has no discount for the visitor's country, or its allowed domains do not include the site, the visitor sees no banner. They are not moved to the other campaign, because that would skew the comparison. The SDKs and the script tag tell you which arm a visitor is in (`experimentId` and `variant`), also when no banner is shown, so you can count visitors in both arms in your own analytics; see the [JavaScript SDK](/js/installation/#ab-experiments) and the [React SDK](/react/provider/#ab-experiments).
+
+### 4. Monitor results
+
+Open **A/B Tests** and select the test. The results table shows both campaigns side by side:
+
+| Metric | What it is |
+|---|---|
+| Impressions | Banner views (not unique visitors) |
+| Clicks | `click` events (see [Banner events](/banner/events/)) |
+| Copies | Coupon codes copied from the banner |
+| Redemptions | Purchases with the campaign's discount that GoPayLocal tracked |
+| Revenue saved | Discount given on those redemptions, one total per currency (the same figure the Overview page reports as Revenue Impact). Amounts in different currencies are never added together. |
+| Click rate, Copy rate, Conversion rate | Clicks, copies and redemptions divided by impressions |
+| Redemptions per copy | Redemptions divided by copies |
+
+A rate shows `—` until its denominator is above zero. **Export** downloads the table as CSV.
+
+Example:
+
+| Metric | Campaign A (max 30%) | Campaign B (max 45%) |
+|---|---|---|
+| Impressions | 5,100 | 5,080 |
+| Copies | 1,428 | 1,524 |
+| Redemptions | 204 | 279 |
+| Conversion rate | 4.0% | 5.5% |
+
+<Aside type="note">
+Results are **daily totals in UTC**. A test counts whole days: from the start of the UTC day it started to the end of the UTC day it ended (or today, while it runs). Traffic a campaign received earlier on the start day, before the test began, and later on the end day, after it ended, is included. Results only cover the analytics history your plan keeps; the page says when the start of a test is older than that.
+</Aside>
+
+The page also shows the share of impressions that went to B next to the configured split. Expect some gap: impressions count views, so a few visitors who view many pages can tilt one arm, and the whole-day counting above includes start-day traffic from before the test began.
+
+The dashboard shows raw counts and rates only. Before you pick a winner:
+
+- **Give it time:** run the test for at least two full weeks to cover weekly patterns.
+- **Wait for volume:** aim for at least 100 redemptions per campaign. Small numbers swing a lot from day to day.
+- **Keep it stable:** changing the split or a campaign's discounts mid-test mixes two different tests into one set of numbers.
+
+### 5. Pick a winner
+
+In this example, Campaign B (capped at 45%) converts better. Whether it also earns more depends on the price after discount; see [Consider Revenue, Not Just Conversions](#consider-revenue-not-just-conversions).
+
+## Changing a Running Test
+
+- **Name:** can be changed at any time, including after the test ends.
+- **Traffic split:** can be changed while the test runs. Visitors whose position falls between the old and new split move to the other campaign (going from 50% to 60% for B moves 10% of visitors from A to B); everyone else stays where they were.
+- **Campaign settings** (discounts, delivery, name) can still be edited, but the results then mix the old and new settings.
+- **Pausing, moving back to draft, moving to another product or environment, or deleting** either campaign is refused while the test runs. End the test first.
+- **Disconnecting a payment integration** is refused while the test runs if it would pause one of the test's campaigns (disconnecting pauses the integration's active auto-apply campaigns). End the test first.
+
+If one of the campaigns is not active anyway, the banner serves the other campaign to every visitor, and that traffic still counts in the results of the campaign that served it. If neither is active, the product is served as if there were no test. The test page warns you when a campaign is not active: resume it or end the test.
+
+## Ending a Test
+
+When you're ready to end a test:
+
+1. Open the test from **A/B Tests**
+2. Click **End Test**
+3. Select the winning campaign
+4. Click **End Test** to confirm
+
+The winning campaign is left as it is (active), and the other campaign is paused. Ended tests stay in the list with their results.
+
+After the test ends, the product is served the normal way, by its most recently created active campaign. If the product has another active campaign created after the winner, that campaign is served instead; pause it if you want the winner to serve all traffic.
+
+Once a test has ended, its campaigns can be deleted. The test stays in the list with its results; a deleted campaign is shown by the name it had when the test started, marked "(deleted)". Deleting the product deletes its tests.
+
+## Who Can Run Tests
+
+A/B tests follow the same rights as campaigns: owners and admins can run tests on every product, and members on the products they have access to. See [Team](/dashboard/team/).
+
+## Best Practices
+
+### Test One Variable at a Time
+
+Only change the discount percentage between variants. Keep everything else the same (message, colors, position) to isolate the impact.
+
+### Make Sure There Is Enough Traffic
+
+A test splits every visitor of the product, and its results are totals per campaign, not per country. Campaigns that differ only for countries with little traffic will show little difference.
+
+### Consider Revenue, Not Just Conversions
+
+A higher conversion rate doesn't always mean more revenue. Calculate total revenue for each variant:
+
+```
+Total Revenue = Redemptions × (Base Price × (1 - Discount))
+```
+
+### Two Campaigns per Test
+
+A test always has exactly two campaigns. To try a third discount level, end the test and start a new one between the winner and the new campaign.
+
+## API
+
+The dashboard uses the [Experiments API](/api/experiments/) for everything on this page.

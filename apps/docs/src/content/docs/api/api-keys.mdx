@@ -1,0 +1,110 @@
+---
+title: API Keys API
+description: API reference for listing, creating and revoking API keys.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+These are the endpoints behind **Settings > API Keys** in the dashboard. See [API Keys](/dashboard/api-keys/) for the two key types and [Authentication](/api/authentication/) for how each is used.
+
+<Aside type="note">
+These endpoints sit under `/v1/teams/{orgId}/`. Everyone in the workspace can list keys, with the dashboard session or a [secret API key](/api/authentication/#secret-keys). Creating and revoking keys needs the dashboard session of the owner or an admin. A secret key can't create or revoke keys: it gets `403` with `"code": "forbidden_api_key"`.
+</Aside>
+
+## The API Key Object
+
+```json
+{
+  "id": "01JD8Q0R3S4T5U6V7W8X9Y0Z1A",
+  "organizationId": "org_123",
+  "name": "Website banner",
+  "keyType": "public",
+  "keyPrefix": "gpl_pk_01234567...",
+  "fullKey": "gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "lastUsedAt": "2026-11-18T14:22:00.000Z",
+  "createdAt": "2026-11-15T10:30:00.000Z",
+  "createdBy": { "id": "user_123", "name": "Ada Lovelace" }
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | 1 to 100 characters |
+| `keyType` | `"public"` \| `"secret"` | See [Authentication](/api/authentication/) |
+| `keyPrefix` | `string` | The prefix and the first 8 hex characters, then `...` |
+| `fullKey` | `string` \| `null` | The whole key for a public key (it is public by design). Always `null` for a secret key, which is stored only as a hash |
+| `lastUsedAt` | `string` \| `null` | When the key was last used, approximately; `null` if never |
+| `createdBy` | `object` \| `null` | Who created the key: `{ "id", "name" }` (`name` can be `null`). `null` for keys created before this was recorded, and for keys whose creator's account has been deleted |
+
+## List API Keys
+
+```
+GET /v1/teams/{orgId}/api-keys
+```
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl https://api.gopaylocal.com/v1/teams/$ORG_ID/api-keys \
+    -H "Authorization: Bearer $GOPAYLOCAL_SECRET_KEY"
+  ```
+  </TabItem>
+  <TabItem label="JavaScript (server)">
+  ```js
+  const res = await fetch(`https://api.gopaylocal.com/v1/teams/${orgId}/api-keys`, {
+    headers: { Authorization: `Bearer ${process.env.GOPAYLOCAL_SECRET_KEY}` },
+  });
+  const { data: keys } = await res.json();
+  ```
+  </TabItem>
+</Tabs>
+
+**Response:** `{ "data": [ <api key>, ... ] }`, public and secret keys together.
+
+## Create an API Key
+
+Dashboard session only (owner or admin). The key records the signed-in person as its creator.
+
+```
+POST /v1/teams/{orgId}/api-keys
+```
+
+**Request body:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | `string` | Yes | 1 to 100 characters |
+| `keyType` | `"public"` \| `"secret"` | Yes | |
+
+**Response:** `201`:
+
+```json
+{
+  "data": {
+    "id": "01JD8Q0R3S4T5U6V7W8X9Y0Z1A",
+    "name": "Catalog sync",
+    "keyType": "secret",
+    "key": "gpl_sk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "keyPrefix": "gpl_sk_01234567...",
+    "createdAt": "2026-11-18T10:30:00.000Z"
+  }
+}
+```
+
+<Aside type="caution">
+`key` is the full key, returned only in this response. A secret key can't be shown again; if it is lost, create a new one and revoke the old one.
+</Aside>
+
+## Revoke an API Key
+
+Dashboard session only (owner or admin).
+
+```
+DELETE /v1/teams/{orgId}/api-keys/:id
+```
+
+**Response:** `{ "success": true }`, or `404`.
+
+The key is deleted and can't be restored:
+- A revoked **secret** key is refused on its next request (`401`, `"code": "invalid_api_key"`).
+- A revoked **public** key stops serving banners and accepting events within about a minute.

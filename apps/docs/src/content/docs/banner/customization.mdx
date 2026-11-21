@@ -1,0 +1,122 @@
+---
+title: Banner Customization
+description: Edit the GoPayLocal banner design in the dashboard, use its message placeholders, and override it from the JavaScript and React SDKs.
+---
+
+Each campaign has its own banner design. The API sends it with every config response, and the banner script, the [JS SDK](/js/banner) and the [React SDK](/react/components#pppbanner) all render from it. A new campaign starts with the default design below, and you change it in the dashboard's banner editor.
+
+## Editing the Design
+
+Open **Campaigns**, pick the campaign, and find the **Banner** card on its **Setup** tab. It has every setting of the design:
+
+- **Position**: a bar at the top or bottom, or a card in the bottom-left or bottom-right corner (see [Positioning](/banner/positioning)).
+- **Message**, up to 500 characters, with the [placeholders](#message-placeholders) below. Click a placeholder to insert it at the cursor.
+- **Button text**, up to 50 characters.
+- **Background**, **Text**, **Button** and **Button text** colors. Pick one with the color picker or type any CSS color, up to 64 characters.
+- **Show the visitor's country flag** and **Show a close button**.
+
+Above the form is a live preview. It is drawn by the same code as the banner script, so it shows exactly what visitors get. Choose the sample visitor with **Preview as a visitor from**, which lists every country this campaign gives a discount (it starts with India when India has one); the preview uses a sample code in the real format, such as `PPP-IN60-K7QX`. The [price placeholders](#message-placeholders) use your product's price, this campaign's charm pricing and the current exchange rates, computed the same way as the banner endpoint. A note under the preview says whether that price is a converted estimate or the exact price in your currency, and why. On the Free plan the preview includes the "Powered by GoPayLocal" link.
+
+The editor warns you when text is hard to read: when the text and background colors, or the button text and button colors, have a contrast ratio below 4.5:1 (the WCAG AA level for normal text), or when a color is not one browsers recognize (the banner then leaves it out). Translucent colors are not checked. The warning never blocks saving.
+
+**Save Banner** checks the values first (the message and button text cannot be empty) and **Discard Changes** goes back to the saved design. After a save, new visitors usually get the new design within about a minute (see [Caching and changes](/api/banner/#caching-and-changes)). Visitors who already saw the banner keep the old one for up to 5 minutes, because the banner script and the SDKs keep the response in the browser for that long.
+
+Owners and admins can edit the banner of any campaign. Members can edit the banners of campaigns for the products they have access to (see [Team](/dashboard/team)).
+
+## Default Design
+
+| Setting | Default |
+|---|---|
+| Position | `bottom` (see [Positioning](/banner/positioning)) |
+| Message | `It looks like you're visiting from {{country}}! Use code {{code}} for {{discount}}% off.` |
+| Button text | `Copy Code` |
+| Background color | `#1a1a2e` |
+| Text color | `#ffffff` |
+| Button color | `#e94560` |
+| Button text color | `#ffffff` |
+| Show the visitor's country flag | On |
+| Show a close button | On |
+
+The default button colors measure 3.8:1, so the editor shows a contrast warning on a new campaign until you change one of them.
+
+## Message Placeholders
+
+Placeholders in the message are replaced with the visitor's values when the banner renders. Unknown placeholders render as nothing.
+
+The example values are for a $19 product with **Round to X9** charm pricing and a visitor from India with 60% off, at the rates of 18 November 2026.
+
+| Placeholder | Description | Example value |
+|---|---|---|
+| `{{country}}` | ISO country code | `IN` |
+| `{{countryName}}` | Full country name | `India` |
+| `{{flag}}` | Country flag emoji | `🇮🇳` |
+| `{{discount}}` | Discount percentage (number only) | `60` |
+| `{{code}}` | Coupon code; empty when the campaign has none | `PPP-IN60-K7QX` |
+| `{{localPrice}}` | Your product's price after the discount: in the visitor's currency when converted (an estimate, rounded up with the campaign's [charm pricing](/guides/charm-pricing/)), otherwise exact in your currency | `₹719` |
+| `{{localOriginalPrice}}` | Your product's price before the discount, the same way (rounded down when converted) | `₹1,769` |
+| `{{currencySymbol}}` | The symbol of the currency the prices are shown in | `₹` |
+| `{{currencyCode}}` | The code of that currency | `INR` |
+
+Prices are formatted in the visitor's locale with exactly the digits the API sent: a whole number shows no decimals, and any other shows two (three in three-decimal currencies such as KWD). Converted prices in currencies written in whole units, such as JPY, PKR or IDR, are whole numbers; an exact price keeps your currency's minor unit (`PKR 1,838.14`). A visitor who pays in your currency, or whose currency has no usable exchange rate that day, sees the exact price in your currency: a US visitor at 60% off sees `$7.60` instead of `$19`. Converted prices are estimates; your payment provider charges the exact discounted price in your currency. See [Multi-currency display](/guides/multi-currency/).
+
+The default message does not mention prices. To show them, add the placeholders, for example:
+
+```
+{{flag}} {{discount}}% off for {{countryName}}: {{localPrice}} instead of {{localOriginalPrice}}. Use code {{code}}.
+```
+
+The banner script, the JS SDK's `showBanner()` and the React SDK's `<PPPBanner>` support every placeholder, with the same values. The banner script shows `{{discount}}` and `{{code}}` in bold; the JS SDK banner makes text wrapped in `**double asterisks**` bold.
+
+## Copy Button
+
+The button copies the coupon code to the visitor's clipboard and shows `Copied!` for 2 seconds. Browsers without the Clipboard API get a fallback copy method. Each copy is reported to your [analytics](/banner/events) as a `copy` event. When the response has no coupon code, no button is shown.
+
+## Country Flag
+
+When **Show the visitor's country flag** is on, the visitor's country flag is shown as a native emoji (e.g., 🇮🇳 for India). Some systems, notably Windows, show the two letters instead of a flag.
+
+## Close Button
+
+When **Show a close button** is on, visitors can dismiss the banner. The script tag then keeps it hidden for the rest of the browser session (in `sessionStorage`, per key and product; not with `data-no-storage`), and reports a `dismiss` event.
+
+## "Powered by GoPayLocal"
+
+On the Free plan the banner shows a small "Powered by GoPayLocal" link. Pro plans and self-hosted deployments don't show it. The API decides per response (`showBranding`), and all three banners follow it.
+
+## Overriding the Design
+
+The script tag always shows the campaign's design from the editor. It has no attributes or query parameters for the design, and the banner renders in a closed Shadow DOM, so your site's CSS cannot reach it.
+
+The SDKs also take overrides in code, for a page that needs something different from the campaign's design. Anything you don't pass comes from the campaign's design.
+
+**JavaScript SDK** ([all options](/js/banner)):
+
+```js
+gpl.showBanner({
+  position: 'bottom-right',
+  backgroundColor: '#1e3a5f',
+  textColor: '#ffffff',
+  ctaColor: '#4fc3f7',
+  ctaTextColor: '#1e3a5f',
+  ctaText: 'Copy code',
+  messageTemplate: '{{countryName}} pricing: **{{discount}}% off** with {{code}}',
+  showFlag: true,
+  showCloseBtn: true,
+});
+```
+
+**React SDK** ([all props](/react/components#pppbanner)):
+
+```tsx
+<PPPBanner
+  position="bottom-right"
+  backgroundColor="#1b4332"
+  fontColor="#ffffff"
+  borderRadius="12px"
+  showCloseIcon
+/>
+```
+
+For full control in React, render `<PPPBanner noStyles className="my-banner" />` and style it with your own CSS, or build your own banner from [`usePPP()`](/react/hooks#useppp).
+
+Colors may be hex values, color names, or `rgb()`/`hsl()` values. Characters that could end the CSS declaration are removed.

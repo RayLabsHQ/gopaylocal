@@ -1,0 +1,48 @@
+{
+  "_source": "The 'Create a coupon' response example at https://developer.woocommerce.com/docs/apis/rest-api/v3/coupons#create-a-coupon, changed to the coupon GoPayLocal creates: code lower-cased by the store (woocommerce_coupon_code filter), amount 40 formatted to two decimals as in the example, description and meta_data as sent, the example's minimum_amount and exclude_sale_items reset to their documented defaults.",
+  "id": 719,
+  "code": "ppp-in40-k7qx",
+  "amount": "40.00",
+  "date_created": "2017-03-21T15:23:00",
+  "date_created_gmt": "2017-03-21T18:23:00",
+  "date_modified": "2017-03-21T15:23:00",
+  "date_modified_gmt": "2017-03-21T18:23:00",
+  "discount_type": "percent",
+  "description": "Created by GoPayLocal: PPP IN 40%",
+  "date_expires": null,
+  "date_expires_gmt": null,
+  "usage_count": 0,
+  "individual_use": true,
+  "product_ids": [],
+  "excluded_product_ids": [],
+  "usage_limit": null,
+  "usage_limit_per_user": null,
+  "limit_usage_to_x_items": null,
+  "free_shipping": false,
+  "product_categories": [],
+  "excluded_product_categories": [],
+  "exclude_sale_items": false,
+  "minimum_amount": "0.00",
+  "maximum_amount": "0.00",
+  "email_restrictions": [],
+  "used_by": [],
+  "meta_data": [
+    {
+      "id": 5021,
+      "key": "gopaylocal",
+      "value": "true"
+    }
+  ],
+  "_links": {
+    "self": [
+      {
+        "href": "https://example.com/wp-json/wc/v3/coupons/719"
+      }
+    ],
+    "collection": [
+      {
+        "href": "https://example.com/wp-json/wc/v3/coupons"
+      }
+    ]
+  }
+}

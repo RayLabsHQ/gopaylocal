@@ -1,0 +1,69 @@
+---
+title: WordPress
+description: Add GoPayLocal PPP discounts to your WordPress site.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Add GoPayLocal to any WordPress site by adding the banner script to your theme's header or footer.
+
+## Installation
+
+<Steps>
+
+1. **Get your API key** from the [GoPayLocal dashboard](https://app.gopaylocal.com)
+
+2. **Add the script to your site**
+
+   Go to **Appearance > Theme File Editor** (or use a plugin like "Insert Headers and Footers") and add the script before `</body>`:
+
+   ```html
+   <script
+     src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+     data-product="prod_abc123"
+     async
+   ></script>
+   ```
+
+   `data-product` is the id of the product this site sells; the campaign page in the dashboard shows the snippet with your key and product filled in. You can leave it out if you have only one product. See [all script attributes](/banner/installation#script-attributes).
+
+   **Using a plugin (recommended):**
+
+   Install "WPCode" or "Insert Headers and Footers" plugin:
+   1. Go to **Plugins > Add New**
+   2. Search for "WPCode" and install
+   3. Go to **Code Snippets > Header & Footer**
+   4. Paste the script tag in the **Footer** section
+   5. Save
+
+3. **Configure discounts** in the GoPayLocal dashboard
+
+</Steps>
+
+That's it. The banner will appear for visitors from countries with lower purchasing power.
+
+## WooCommerce
+
+The banner shows a coupon code only when GoPayLocal can create that code in the store that takes the payment, through one of its [integrations](/integrations/overview). If your checkout runs through a provider GoPayLocal has no integration for, the banner has no code to hand out, so check that list before you rely on codes at a WooCommerce checkout.
+
+## Data Attributes with WordPress
+
+Use data attributes on your pricing page:
+
+```html
+<div class="pricing-card">
+  <h3>Pro Plan</h3>
+  <span data-gopaylocal-price="9.99">$9.99</span>/mo
+</div>
+
+<script type="module">
+  import { GoPayLocal } from 'https://esm.sh/@gopaylocal/js';
+  const gpl = new GoPayLocal({ apiKey: 'gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef', productId: 'prod_abc123' });
+  await gpl.init();
+  gpl.bindPriceElements();
+</script>
+```
+
+<Aside type="tip">
+For pricing pages that send buyers to a checkout GoPayLocal integrates with (Stripe, Paddle, Gumroad and the others in [Integrations](/integrations/overview)), the banner script is all you need. It works with any WordPress theme.
+</Aside>

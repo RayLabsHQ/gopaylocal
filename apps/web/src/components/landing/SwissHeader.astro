@@ -1,60 +1,34 @@
 ---
 import { SiteNav } from './SiteNav';
+import Logo from './Logo.astro';
 
 const mobileLinks = [
   { label: 'Features', href: '/#features' },
+  { label: 'Live Demo', href: '/#demo' },
   { label: 'Use Cases', href: '/use-cases/saas' },
   { label: 'Integrations', href: '/#integrations' },
   { label: 'Pricing', href: '/#pricing' },
-  { label: 'Docs', href: '/docs' },
+  { label: 'Docs', href: 'https://docs.gopaylocal.com' },
 ];
 ---
 
 <header class="border-b border-border relative z-50 bg-bg">
   <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 md:px-20">
-    <a href="/" class="flex items-center gap-2.5 shrink-0 no-underline">
-      <div class="h-2 w-2 bg-accent-500"></div>
-      <span class="font-display text-base font-bold tracking-tight text-text-primary">GoPayLocal</span>
-    </a>
+    <Logo />
 
     <SiteNav client:load />
 
     <div class="hidden items-center gap-4 md:flex shrink-0">
-      <!-- Theme toggle -->
-      <button
-        data-theme-toggle
-        class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-bg-surface text-text-secondary hover:bg-bg hover:text-text-primary transition-colors"
-        aria-label="Toggle theme"
-      >
-        <svg data-theme-icon-light class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
-        </svg>
-        <svg data-theme-icon-dark class="hidden h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" />
-        </svg>
-      </button>
 
       <a
         href="https://app.gopaylocal.com"
-        class="inline-flex items-center justify-center bg-accent-500 px-5 py-2.5 text-[13px] font-semibold font-display text-white hover:bg-accent-600 transition-colors no-underline rounded-lg"
+        class="inline-flex items-center justify-center bg-accent-500 px-5 py-2.5 text-sm font-semibold font-display text-white hover:bg-accent-600 transition-colors no-underline"
       >
         Start Free
       </a>
     </div>
 
     <div class="flex items-center gap-1 shrink-0 md:hidden">
-      <button
-        data-theme-toggle
-        class="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border bg-bg-surface text-text-secondary hover:bg-bg hover:text-text-primary transition-colors"
-        aria-label="Toggle theme"
-      >
-        <svg data-theme-icon-light class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
-        </svg>
-        <svg data-theme-icon-dark class="hidden h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" />
-        </svg>
-      </button>
 
       <button
         id="swiss-menu-btn"
@@ -74,12 +48,12 @@ const mobileLinks = [
   <div id="swiss-mobile-menu" class="hidden border-t border-border md:hidden bg-bg">
     <div class="space-y-1 px-6 py-4">
       {mobileLinks.map((link) => (
-        <a href={link.href} class="block py-3 text-sm text-text-secondary hover:text-text-primary">
+        <a href={link.href} class="block py-3 text-base text-text-secondary hover:text-text-primary">
           {link.label}
         </a>
       ))}
       <div class="border-t border-border pt-4 mt-2">
-        <a href="https://app.gopaylocal.com" class="block bg-accent-500 py-3 text-center text-sm font-semibold text-white">
+        <a href="https://app.gopaylocal.com" class="block bg-accent-500 py-3 text-center text-base font-semibold text-white">
           Start Free
         </a>
       </div>
@@ -100,29 +74,4 @@ const mobileLinks = [
     iconClose?.classList.toggle('hidden', isOpen);
   });
 
-  // Theme toggle — always flips current effective theme
-  const themeButtons = Array.from(document.querySelectorAll('[data-theme-toggle]'));
-
-  function updateThemeIcons() {
-    const isDark = document.documentElement.classList.contains('dark');
-    themeButtons.forEach((themeButton) => {
-      const iconLight = themeButton.querySelector('[data-theme-icon-light]');
-      const iconDark = themeButton.querySelector('[data-theme-icon-dark]');
-      iconLight?.classList.toggle('hidden', isDark);
-      iconDark?.classList.toggle('hidden', !isDark);
-    });
-  }
-  updateThemeIcons();
-
-  function handleThemeToggle() {
-    const isDark = document.documentElement.classList.contains('dark');
-    const next = isDark ? 'light' : 'dark';
-    localStorage.setItem('theme', next);
-    document.documentElement.classList.toggle('dark', next === 'dark');
-    updateThemeIcons();
-  }
-
-  themeButtons.forEach((themeButton) => {
-    themeButton.addEventListener('click', handleThemeToggle);
-  });
 </script>

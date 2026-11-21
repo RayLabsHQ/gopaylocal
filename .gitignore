@@ -1,0 +1,33 @@
+node_modules/
+dist/
+.output/
+.turbo/
+.wrangler/
+
+# Local secrets. The committed templates are the exceptions.
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.env
+.env.*
+!.env.test
+!.env.example
+
+*.log
+.DS_Store
+.vite/
+.astro/
+.playwright-mcp/
+test-results/
+playwright-report/
+
+# Internal working docs — never publish
+/ACTION_REQUIRED.md
+/LAUNCH_AUDIT.md
+/TESTING_PLAYBOOK.md
+/WEBHOOKS_DESIGN.md
+
+# Local tooling and design files: kept on the maintainers' machines only
+/.claude/
+/.agents/
+/design/

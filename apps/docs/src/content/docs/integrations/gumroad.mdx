@@ -1,0 +1,83 @@
+---
+title: Gumroad
+description: Integrate GoPayLocal with Gumroad for PPP offer codes.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+Gumroad is a popular platform for selling digital products. GoPayLocal creates offer codes (Gumroad's term for discount codes) that apply to all your products, and counts the sales that use them.
+
+## Setup
+
+<Steps>
+
+1. **Get your Gumroad API key**
+
+   Go to [Gumroad Settings](https://app.gumroad.com/settings/advanced) > **Advanced** > **API**. Copy your access token.
+
+2. **Connect in GoPayLocal**
+
+   In the GoPayLocal dashboard, go to **Integrations** (with the environment switch on **Live**) and click **Connect** on the **Gumroad** card. Paste your access token.
+
+   GoPayLocal checks the token and sets up redemption tracking. **Test** on the card checks it again later. **Import** brings your Gumroad products into GoPayLocal.
+
+3. **Create a campaign**
+
+   Create a campaign and choose **Gumroad** as its payment integration. When the campaign becomes active, GoPayLocal creates its offer codes.
+
+</Steps>
+
+## How Discounts Work
+
+Each code is a universal offer code, so it works on every product in your Gumroad account. Gumroad's API creates offer codes under a product, so GoPayLocal sends the request for one of your products:
+
+```
+POST /v2/products/{any_product_id}/offer_codes
+
+name=PPP-IN30-K7QX
+amount_off=30
+offer_type=percent
+universal=true
+```
+
+GoPayLocal sets no usage limit. Gumroad refuses a universal code that would take any of your products below Gumroad's minimum price; visitors from that country then see no banner (`no_discount`).
+
+## Gumroad's Built-in PPP
+
+Gumroad has a built-in PPP toggle in product settings. However, it is basic and does not support:
+
+- Custom discount tiers
+- VPN detection
+- A/B testing
+- Analytics
+
+GoPayLocal provides a more powerful PPP implementation on top of Gumroad's platform.
+
+<Aside type="note">
+If you enable Gumroad's built-in PPP alongside GoPayLocal, the discounts may stack. We recommend disabling Gumroad's built-in PPP when using GoPayLocal.
+</Aside>
+
+## Applying the Code at Checkout
+
+Visitors can enter the offer code at Gumroad's checkout. You can also apply it with Gumroad's discount link, the product URL followed by the code:
+
+```
+https://yourname.gumroad.com/l/product/PPP-IN30-K7QX
+```
+
+## Test Mode
+
+Gumroad has no sandbox or test mode: an access token always acts on your real account, so GoPayLocal connects Gumroad in **Live** only. With the dashboard switched to **Test**, the Gumroad card shows **Live only**, and the API refuses test-mode credentials with a `400`. To try it out:
+
+- Create a test product with a low price ($1)
+- Use real payment methods
+- Refund test purchases manually
+
+## Webhooks
+
+When you connect, GoPayLocal subscribes to Gumroad's sale Ping for your account automatically. Pings are unsigned, so GoPayLocal reads every sale back from the Gumroad API with your token before counting it, and pings are rate limited per integration. See [Webhooks](/api/webhooks/).
+
+## Limitations
+
+- No sandbox or test mode
+- A code can't be created if it would take any of your products below Gumroad's minimum price

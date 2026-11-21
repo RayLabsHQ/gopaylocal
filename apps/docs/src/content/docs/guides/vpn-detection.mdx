@@ -1,0 +1,178 @@
+---
+title: VPN Detection
+description: How GoPayLocal spots VPN, datacenter and Tor traffic, what it misses, where the data comes from, and how self-hosters load it.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+A PPP discount is only fair if the visitor's country is real. Someone in a high-income country can route their traffic through a VPN or a cloud server to look as if they are somewhere cheaper. GoPayLocal checks every banner request for signs of this and withholds the discount when it finds them.
+
+No list-based check catches every VPN, and a list-based check will flag some legitimate visitors. This page describes exactly what is checked, so you can judge the trade-off.
+
+## What a flagged visitor sees
+
+The banner endpoint answers:
+
+```json
+{ "show": false, "reason": "vpn_detected" }
+```
+
+The banner script shows nothing and the SDKs report no discount. The visitor is not blocked from your site and can still buy at full price.
+
+Detection is always on. There is no per-campaign switch and no allowlist.
+
+## What is checked
+
+The checks run in the API Worker at the Cloudflare edge, using `request.cf` metadata and the `CF-Connecting-IP` address, which Cloudflare sets and visitors cannot override.
+
+### 1. Country code (Tor)
+
+Cloudflare reports clients on the Tor network with the country code `T1` ([Cloudflare HTTP headers reference](https://developers.cloudflare.com/fundamentals/reference/http-headers/)). The banner endpoint treats `T1` like a missing country and answers `{ "show": false, "reason": "unknown_country" }` before the VPN check runs.
+
+### 2. Network owner (ASN)
+
+Every IP address belongs to a network with an Autonomous System Number (ASN). If the visitor's ASN (`request.cf.asn`) is on a short list of cloud, hosting and VPN-operator networks, the visitor is flagged. The list is `KNOWN_DATACENTER_ASNS` in `packages/shared/src/constants/index.ts`. It covers AWS, Microsoft (Azure), Google Cloud, Oracle Cloud, IBM Cloud, Alibaba Cloud, Tencent Cloud, DigitalOcean, Linode, Vultr, OVHcloud, Hetzner, Contabo, M247, DataCamp/CDN77, networks run by Surfshark, NordVPN, Mullvad and Proton VPN, and a Tor exit operator.
+
+Networks are matched by exact number, so a home or mobile ISP is only flagged if it really is one of these networks. This check needs no stored data. It works for IPv4 and IPv6 visitors, and on a deployment where the IP dataset below has never been loaded.
+
+Some large networks are left off on purpose, because ordinary consumers browse through them:
+
+- **Cloudflare** (the WARP app, iCloud Private Relay)
+- **Akamai and Fastly** (iCloud Private Relay, which keeps the visitor's region; see [below](#why-icloud-private-relay-is-excluded))
+- **Google's consumer network.** Google Cloud has its own ASN, which is on the list.
+
+### 3. IP ranges
+
+The visitor's address is looked up in a dataset of IP ranges built from public lists:
+
+| Category | What it contains | IPv4 | IPv6 |
+|---|---|---|---|
+| Tor | Tor exit relays | Yes | No (the source currently lists no IPv6 exits) |
+| VPN | Networks of known VPN providers | Yes | Yes, matched per /64 |
+| Datacenter | Hosting and cloud networks: in the source's words, anything that is "not an eyeball network" | Yes | No |
+
+iCloud Private Relay egress addresses are removed from the VPN and datacenter categories ([why](#why-icloud-private-relay-is-excluded)).
+
+A build on 2026-11-18 produced:
+
+| Category | Ranges | Coverage |
+|---|---|---|
+| Tor (IPv4) | 608 | 1,280 addresses |
+| VPN (IPv4) | 5,918 | 3,223,400 addresses |
+| Datacenter (IPv4) | 33,166 | 404,803,645 addresses (about 9% of the IPv4 space) |
+| VPN (IPv6) | 473 | 3,354,895,777,792 /64 networks |
+
+The whole dataset is about 325 KB and is stored as a single value in the `VPN_DATA` KV namespace. Each Worker instance reads it from KV about once an hour and keeps it in memory. Lookups are a binary search; in a Node benchmark each one took under 0.3 µs.
+
+## Data sources
+
+| Source | Used for | License / terms | Upstream updates |
+|---|---|---|---|
+| [X4BNet/lists_vpn](https://github.com/X4BNet/lists_vpn): `output/vpn/ipv4.txt`, `output/vpn/ipv6.txt`, `output/datacenter/ipv4.txt` | VPN and datacenter categories | MIT. The lists are built from the [IPLocate.io IP-to-ASN database](https://github.com/iplocate/ip-address-databases), licensed CC BY-SA 4.0 | Rebuilt daily at 08:45 UTC by GitHub Actions |
+| [Tor Project bulk exit list](https://check.torproject.org/torbulkexitlist) | Tor category | Provided by the Tor Project for services to [query locally](https://blog.torproject.org/changes-tor-exit-list-service/). The underlying exit-list data is published by [Tor Metrics](https://metrics.torproject.org/) under CC0 | Updated frequently (the file was under an hour old when checked on 2026-11-18) |
+| [Apple iCloud Private Relay egress ranges](https://mask-api.icloud.com/egress-ip-ranges.csv) | Removed from the VPN and datacenter categories. Never stored | Published by Apple for server operators ([Apple developer guide](https://developer.apple.com/icloud/prepare-your-network-for-icloud-private-relay/)) | Updated by Apple |
+
+IP address data powered by [IPLocate.io](https://www.iplocate.io).
+
+### Why iCloud Private Relay is excluded
+
+Apple states that "Private Relay preserves the region the user is in, so your server can trust the region assigned to the IP address it sees." A Private Relay user is not hiding their country, so they should keep their discount.
+
+The X4BNet VPN list includes all of Private Relay's IPv4 egress ranges. On 2026-11-18, 85,924 of Private Relay's 105,744 IPv4 egress addresses were also in the datacenter list. Without the exclusion, visitors using Private Relay over IPv4 would lose their discount.
+
+## How the data is refreshed
+
+The API Worker has a daily cron trigger at 09:30 UTC, after X4BNet's daily build. Each run:
+
+1. Downloads all five lists.
+2. Validates each download. It must return HTTP 2xx and fall within a size range. Every non-comment line must be a valid IP or CIDR with clean host bits and no prefix broader than /8 (IPv4) or /16 (IPv6). The list must have a minimum number of entries and a plausible amount of coverage; for example, the datacenter list must cover between 100 million and 850 million IPv4 addresses.
+3. Rebuilds each category from the downloads that passed. A rebuilt category must cover between half and double what the stored one covered, and keep at least half as many ranges.
+4. Keeps the stored version of any category whose sources failed or that failed the size comparison, and logs why. If nothing could be rebuilt, nothing is written.
+5. Writes the dataset (`vpn:v1:dataset`) and a short JSON report of the run (`vpn:v1:status`): two KV writes per day.
+
+New data reaches every edge location within about two hours: up to an hour of in-memory caching in each Worker instance, plus up to an hour of KV edge caching.
+
+Because the Tor list is refreshed daily, an exit relay that appeared since the last run is not in the dataset. Cloudflare's `T1` country code is the first line of defence for Tor.
+
+## When something goes wrong
+
+Detection fails open. If the dataset is missing, unreadable or malformed, or KV does not answer within 1.5 seconds, the IP-range check is skipped for that request and only the ASN check applies, so a visitor who passes it counts as not-VPN. A Worker instance that already has a good copy in memory keeps using it. A malformed dataset is rejected as a whole, never partly used. VPN detection never makes the banner endpoint return an error.
+
+## Accuracy: what to expect
+
+**VPN users who still get the discount (false negatives):**
+
+- VPN servers on networks that are in neither the ASN list nor the IP lists, including small hosting providers and new servers.
+- Residential and mobile proxies, which use ordinary home and mobile IP addresses.
+- Anyone tunnelling through a home or office connection in the country they want to appear in.
+- IPv6 visitors on hosting networks: for IPv6, only VPN-provider ranges and the ASN list are checked.
+- Tor exits that Cloudflare did not mark as `T1` and that appeared since the last refresh.
+
+**Real local buyers who lose the discount (false positives):**
+
+- People whose traffic leaves through a cloud or hosting network: employees behind a cloud-hosted corporate proxy or secure web gateway, and cloud-desktop users.
+- People using a VPN for privacy while really being in the country they appear to be in. The check cannot tell a privacy VPN from one used to fake a location.
+- Visitors on addresses that an upstream list classifies wrongly.
+
+Addresses on Apple's published iCloud Private Relay list are not flagged by either check. The ASN check does not flag Cloudflare, Akamai or Fastly networks.
+
+## Self-hosting: loading the data
+
+The dataset lives in the `VPN_DATA` KV namespace bound in `apps/api/wrangler.toml`. Until it is loaded, only the ASN check runs.
+
+### Workers Paid: automatic
+
+The daily cron (`30 9 * * *` in `[triggers]`) loads and refreshes the data. Building the dataset took 0.2 to 0.3 seconds of CPU in our Node measurements, well within the paid plan's limit for cron triggers (15 minutes of CPU for schedules that run hourly or less often; see [Workers limits](https://developers.cloudflare.com/workers/platform/limits/#cpu-time)). To check the last run:
+
+```sh
+cd apps/api
+pnpm wrangler kv key get --binding VPN_DATA vpn:v1:status --remote --text
+```
+
+### Workers Free: build locally and upload
+
+The free plan gives a cron trigger 10 ms of CPU, far less than processing the lists takes. The run is expected to be cut off before it reaches the write, so existing data is left alone, but the data is not refreshed either. You can delete `"30 9 * * *"` from `[triggers]` to avoid a daily failed run. Build the dataset on your machine instead (Node 22.18 or newer, which [runs TypeScript natively](https://nodejs.org/api/typescript.html); no extra packages):
+
+```sh
+cd apps/api
+node scripts/build-vpn-dataset.ts --out-dir ./vpn-dataset-out
+```
+
+The script downloads the same lists, applies the same validation, and writes two files. It never contacts Cloudflare. Upload one of them yourself:
+
+```sh
+# Raw value (works for --remote and --local)
+pnpm wrangler kv key put --binding VPN_DATA vpn:v1:dataset --path ./vpn-dataset-out/vpn-dataset.bin --remote
+
+# Or the bulk-upload file (remote only)
+pnpm wrangler kv bulk put --binding VPN_DATA ./vpn-dataset-out/vpn-dataset.bulk.json --remote
+```
+
+<Aside type="caution">
+Do not use `kv bulk put --local` with the `.bulk.json` file. Wrangler's local mode decodes base64 values into text, which corrupts binary data. The Worker would reject the corrupted value, and detection would fall back to the ASN check only. For local development, use `kv key put --local --path vpn-dataset.bin`.
+</Aside>
+
+Re-run the script regularly, for example weekly, to pick up list changes. Each upload is one KV write; the free plan allows 1,000 writes a day ([KV limits](https://developers.cloudflare.com/kv/platform/limits/)). To apply the same shrink and growth guard as the cron, pass the dataset currently in KV:
+
+```sh
+pnpm wrangler kv key get --binding VPN_DATA vpn:v1:dataset --remote > prev.bin
+node scripts/build-vpn-dataset.ts --out-dir ./vpn-dataset-out --previous prev.bin
+```
+
+If `prev.bin` is not a valid dataset (for example because other output ended up in the file), the script says so and stops without writing anything.
+
+If you publish a dataset file you have built, keep the IPLocate.io attribution and the CC BY-SA 4.0 license that come with the underlying data.
+
+## Testing it
+
+- **From a cloud server** (for example an AWS or DigitalOcean VM): the banner endpoint should answer `vpn_detected` because of the ASN check.
+- **Through a commercial VPN:** the result depends on the exit server. Exits on listed networks are flagged; exits on unlisted networks are not.
+- **Through Tor:** Cloudflare reports country `T1`, so the answer is `unknown_country`.
+
+```bash
+curl https://api.gopaylocal.com/v1/banner/config/gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+```
+
+<Aside type="note">
+The API response does not say which check matched. Internally, `detectVpnOrProxy` in `apps/api/src/services/vpn-detect.service.ts` returns the match (`asn`, `tor`, `vpn` or `datacenter`). That is the place to start when investigating a report of a wrong result.
+</Aside>

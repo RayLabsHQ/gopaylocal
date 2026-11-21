@@ -1,0 +1,251 @@
+---
+title: Integrations API
+description: API reference for connecting and managing payment provider integrations.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+An integration connects one payment provider account to a workspace. GoPayLocal uses it to create the PPP discount codes at the provider and to receive the provider's webhooks, which count redemptions. These are the endpoints the dashboard uses.
+
+<Aside type="note">
+These endpoints sit under `/v1/teams/:orgId/` and accept a [secret API key](/api/authentication/#secret-keys) (`Authorization: Bearer gpl_sk_...`) or the dashboard session (see [Authentication](/api/authentication/#dashboard-session)). Every member can list integrations; connecting, re-creating webhooks, testing, listing or importing products and disconnecting need the **admin** or **owner** role (others get `403`). A secret key can list integrations, list a provider's products and import them, but can't connect, re-create webhooks, test or disconnect: those answer `403` with `"code": "forbidden_api_key"`, because they handle the provider credentials.
+</Aside>
+
+A workspace has at most one integration per provider. Each integration holds separate **live** and **test** credentials; connecting again with the same provider updates the credentials of the environment you send.
+
+## The Integration Object
+
+```json
+{
+  "id": "01JD8Q0Z6N3V4C2X1B0A9S8D7F",
+  "organizationId": "org_123",
+  "provider": "chargebee",
+  "providerAccountId": "acme",
+  "testProviderAccountId": null,
+  "status": "active",
+  "hasLiveCredentials": true,
+  "hasTestCredentials": true,
+  "webhooks": {
+    "live": { "status": "active" },
+    "test": { "status": "missing" }
+  },
+  "health": [
+    {
+      "area": "webhook_setup",
+      "environment": "test",
+      "message": "Redemption tracking isn't set up: the API key lacks webhook permissions",
+      "at": "2026-11-18T10:00:00.000Z"
+    }
+  ],
+  "createdAt": "2026-11-10T15:30:00.000Z",
+  "updatedAt": "2026-11-18T10:00:00.000Z"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Integration id |
+| `provider` | `string` | Provider id: `stripe`, `paddle`, `dodopayments`, `gumroad`, `chargebee`, `whop`, `polar`, `creem` or `woocommerce` |
+| `providerAccountId` | `string \| null` | The account identifier the provider needs besides the key: the Chargebee site name, or the Whop `biz_` account id. `null` for providers that don't need one. |
+| `testProviderAccountId` | `string \| null` | The test-mode account when it differs from the live one (for example a Whop sandbox company). `null` means test mode uses `providerAccountId`. |
+| `hasLiveCredentials` / `hasTestCredentials` | `boolean` | Whether a key is stored for that environment. Keys are stored encrypted and never returned. |
+| `webhooks` | `object` | Redemption tracking per environment. `null` for an environment without credentials. Otherwise `status` is `active` (an endpoint is registered at the provider), `missing` (none is registered, so redemptions in that environment are not counted) or `needs_attention` (an endpoint exists but no signing secret was stored, so deliveries can't be verified; re-create it). Each environment has its own endpoint. |
+| `health` | `array` | The last problem seen per area, newest first: `coupon_sync` (creating a discount code failed), `webhook_setup`, `webhook_delivery` (deliveries can't be verified or processed) or `credentials` (the provider rejected the key). An entry is removed when the same operation next succeeds. |
+
+## List Integrations
+
+```
+GET /v1/teams/:orgId/integrations
+```
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl https://api.gopaylocal.com/v1/teams/org_123/integrations \
+    -H "Cookie: <session cookie>"
+  ```
+  </TabItem>
+  <TabItem label="JavaScript">
+  ```js
+  const res = await fetch(`https://api.gopaylocal.com/v1/teams/${orgId}/integrations`, {
+    credentials: 'include',
+  });
+  const { data } = await res.json();
+  ```
+  </TabItem>
+</Tabs>
+
+**Response:** `{ "data": [ <integration>, ... ] }`
+
+## Connect Integration
+
+Creates the integration, or updates the credentials of one environment of an existing one. GoPayLocal then registers the redemption webhook at the provider for that environment.
+
+```
+POST /v1/teams/:orgId/integrations
+```
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl -X POST https://api.gopaylocal.com/v1/teams/org_123/integrations \
+    -H "Cookie: <session cookie>" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "provider": "chargebee",
+      "accessToken": "live_xxx",
+      "providerAccountId": "acme",
+      "environment": "live"
+    }'
+  ```
+  </TabItem>
+  <TabItem label="JavaScript">
+  ```js
+  const res = await fetch(`https://api.gopaylocal.com/v1/teams/${orgId}/integrations`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      provider: 'chargebee',
+      accessToken: 'live_xxx',
+      providerAccountId: 'acme',
+      environment: 'live',
+    }),
+  });
+  const { data } = await res.json();
+  ```
+  </TabItem>
+</Tabs>
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `provider` | `string` | Yes | Provider id |
+| `accessToken` | `string` | Yes | The provider API key for this environment. WooCommerce: the REST API consumer key and consumer secret joined by a colon, `ck_...:cs_...` |
+| `environment` | `string` | No | `"live"` or `"test"` (default `"live"`). Gumroad and WooCommerce have no test mode: `"test"` is refused with `400` and `"error": "<Provider> has no test mode. Connect it in Live."` |
+| `providerAccountId` | `string` | Chargebee, Whop, WooCommerce | Chargebee: the site name from `{site}.chargebee.com` (a full URL is accepted and reduced to the name; in test mode a trailing `-test` is dropped). Whop: the account id starting with `biz_`. WooCommerce: the store's `https://` address, stored as `https://host` or `https://host/path`. With `environment: "test"` it is stored as the test-mode account. |
+
+**Response:** `201` for a new integration, `200` for an update. The integration object plus `webhookSetup`, what happened to the webhook:
+
+```json
+{
+  "data": {
+    "id": "01JD8Q0Z6N3V4C2X1B0A9S8D7F",
+    "provider": "chargebee",
+    "webhooks": { "live": { "status": "active" }, "test": null },
+    "webhookSetup": { "status": "active", "environment": "live" }
+  }
+}
+```
+
+`webhookSetup.status` is `active`, `failed` (with an `error` message; the credentials are still saved, and the failure is also recorded in `health`), or `unsupported` (the provider has no API to register webhooks). The other environment's webhook is never touched. If you change the key or account of an environment, its old webhook is removed and a new one registered.
+
+Errors: `400` with `details` when validation fails (for example a missing Chargebee site or Whop account id); `error` carries the reason when there is a specific one, otherwise `"Validation failed"`.
+
+## Re-create Webhook
+
+Removes the environment's webhook at the provider and registers a new one, for example after fixing the key's permissions or when deliveries keep failing verification.
+
+```
+POST /v1/teams/:orgId/integrations/:id/webhook?environment=live
+```
+
+`environment` is `live` or `test`. Without it, `live` is used when live credentials exist, otherwise `test`. Answers `400` when the integration has no credentials for that environment.
+
+**Response:** the integration object plus `webhookSetup`, as for Connect.
+
+## Test Connection
+
+Checks that the stored key for one environment works by making a read-only call to the provider.
+
+```
+POST /v1/teams/:orgId/integrations/:id/test?environment=live
+```
+
+**Response (success):**
+
+```json
+{ "ok": true, "message": "Connection successful" }
+```
+
+**Response (failure):**
+
+```json
+{ "ok": false, "message": "Authentication failed — check your API key" }
+```
+
+A rejected key is also recorded in `health` (area `credentials`); a later successful test clears it. `400` when there are no credentials for that environment, `404` for an unknown integration.
+
+## List Provider Products
+
+Fetches products from the provider, to import them into GoPayLocal.
+
+```
+GET /v1/teams/:orgId/integrations/:id/products?environment=live
+```
+
+**Response:**
+
+```json
+{
+  "data": [
+    {
+      "providerProductId": "prod_abc123",
+      "name": "Pro Plan",
+      "price": 29.99,
+      "currency": "USD",
+      "url": "https://checkout.example.com/prod_abc123"
+    }
+  ]
+}
+```
+
+<Aside type="note">
+Prices are in major currency units (dollars, not cents). Zero-decimal currencies such as JPY are returned as whole amounts. Providers without a product API (Chargebee, Polar, Whop) answer `400`.
+</Aside>
+
+## Import Products
+
+Creates GoPayLocal products from selected provider products.
+
+```
+POST /v1/teams/:orgId/integrations/:id/products/import
+```
+
+**Request Body:**
+
+```json
+{
+  "productIds": ["prod_abc123", "prod_def456"],
+  "environment": "live"
+}
+```
+
+**Response:**
+
+```json
+{ "data": { "imported": 2, "limitReached": false, "skipped": [] } }
+```
+
+Products already imported into that environment are skipped (matched by URL, or by name for a product stored without one). GoPayLocal never makes up a product URL: when the provider returns none (Stripe and Paddle never do), the product's `url` is left empty for you to fill in. Imports stop at the plan's product limit (`limitReached: true`); when no product slot is left the endpoint answers `403` with `plan`, `maxProducts` and `currentCount`. The provider's currency is stored in upper case. A product priced in a currency GoPayLocal doesn't support is not imported. It is listed in `skipped` as `{ "providerProductId", "name", "currency", "reason": "unsupported_currency" }`, and the other products are imported. A product the provider returns without a currency is stored as USD.
+
+## Disconnect Integration
+
+```
+DELETE /v1/teams/:orgId/integrations/:id
+```
+
+**Response:**
+
+```json
+{ "success": true, "pausedCampaigns": 1, "codesLeftAtProvider": 12 }
+```
+
+Disconnecting removes the integration and its stored keys, unlinks its campaigns (active auto-apply campaigns are paused, counted in `pausedCampaigns`), and removes the redemption webhooks at the provider in both environments.
+
+If one of those auto-apply campaigns is an arm of a running A/B test, the disconnect is refused with `409` and `{ "error", "code": "integration_in_running_experiment", "experimentId" }`, and nothing changes, here or at the provider. End the test first.
+
+<Aside type="caution">
+Discount codes already created at the provider are **not** deleted there, because customers may already have them. `codesLeftAtProvider` says how many; remove them in the provider's dashboard if you need to.
+</Aside>

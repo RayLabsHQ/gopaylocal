@@ -1,0 +1,11 @@
+---
+import SwissLayout from '../../layouts/SwissLayout.astro';
+import UseCasePage from '../../components/landing/UseCasePage.astro';
+import { useCases } from '@/lib/use-case-data';
+
+const data = useCases['developer-tools'];
+---
+
+<SwissLayout title="GoPayLocal for Developer Tools — PPP Pricing for Dev Tool Companies" description="Fair pricing builds bigger communities. PPP pricing on pro tiers helps developers everywhere afford your tool.">
+  <UseCasePage data={data} />
+</SwissLayout>

@@ -1,0 +1,67 @@
+---
+title: Integration prompt
+description: A copy-paste prompt that makes a coding agent integrate GoPayLocal into an existing codebase end to end, reading these docs as Markdown instead of relying on memory.
+---
+
+Paste the prompt below into Claude Code, Cursor, Codex or any coding agent that can read your repository and fetch URLs. Run it from the root of the project. The agent picks the right integration path, installs it, wires your public key through an environment variable, checks that it works, and stops to ask you for anything it cannot know.
+
+Shortest version, if your agent can fetch web pages:
+
+```text
+Add GoPayLocal to this project. Fetch https://docs.gopaylocal.com/ai/integration-prompt.md and follow the prompt in it.
+```
+
+## Before you run it
+
+- Have your **public API key** ready (dashboard, API keys; it starts with `gpl_pk_`). The agent will ask for it if you don't include it.
+- In the dashboard: a product, a connected payment provider and an active campaign. Without an active campaign the integration still works, but no visitor gets a discount.
+- If you know the path you want, add one line at the top of the prompt, for example `Use the banner script.` or `Use @gopaylocal/react and show discounted prices on the pricing page.`
+
+## The prompt
+
+```text
+You are adding GoPayLocal to this codebase. GoPayLocal shows purchasing power parity (PPP) discounts: a script or SDK running in the visitor's browser asks the GoPayLocal API for that visitor's country-specific discount and coupon code, and can show a banner with the code.
+
+Do not rely on memory for GoPayLocal's API. Fetch these docs as Markdown before writing code, and fetch again whenever you need a detail:
+1. https://docs.gopaylocal.com/ai/reference-card.md - checked against the source code; if any other page disagrees, the reference card wins.
+2. The page for the path you choose (step 2):
+   - Banner script: https://docs.gopaylocal.com/banner/installation.md
+   - React or Next.js: https://docs.gopaylocal.com/react/installation.md and https://docs.gopaylocal.com/react/hooks.md
+   - Other JavaScript frameworks: https://docs.gopaylocal.com/js/installation.md and https://docs.gopaylocal.com/js/data-attributes.md
+   Index of every page: https://docs.gopaylocal.com/llms.txt
+
+Step 1 - Inspect the project. Find: the framework and version, router type, package manager (from the lockfile), the root layout or HTML template, how environment variables reach client-side code, any pricing page with hard-coded prices, and any Content-Security-Policy.
+
+Step 2 - Choose one path and tell me which and why in one or two sentences.
+- Banner script (default): use it when the goal is a discount banner, when the site is not React, or when unsure.
+- @gopaylocal/react: a React or Next.js app where I want discounted prices shown inside the UI. For the banner, use either the banner script or <PPPBanner />, never both.
+- @gopaylocal/js: a non-React app where I want discounted prices in the page through data attributes.
+GoPayLocal has no server-side pricing API. The API uses the country of whoever makes the request, so never call it from server code, API routes, edge functions or build steps.
+
+Step 3 - Wire the public key through an environment variable.
+- Use the framework's client-exposed naming, for example NEXT_PUBLIC_GOPAYLOCAL_KEY (Next.js), VITE_GOPAYLOCAL_KEY (Vite), PUBLIC_GOPAYLOCAL_KEY (Astro, SvelteKit).
+- Add it to .env.example (or the project's equivalent) with a placeholder value. Never commit a real key and never invent one.
+- Public keys start with gpl_pk_. If you are given a key starting with gpl_sk_, stop and tell me: that is a secret key and must not be used.
+- Banner script: the key goes in the ?key= query parameter of the script URL, https://api.gopaylocal.com/v1/banner/script.js?key=<key>. There is no data-key attribute.
+- Plain HTML with no build step: ask me for the key, or leave a clearly marked placeholder and tell me where.
+
+Step 4 - Install and integrate, following the project's existing conventions.
+- Banner script: add one <script async> tag to the root layout so it loads on every page (or only on the pages I name). Use the framework's script mechanism, for example next/script with strategy="afterInteractive" in Next.js, or is:inline in Astro.
+- React: install with the project's package manager. The package is marked 'use client', so the Next.js root layout can render GoPayLocalProvider directly; if you pass onLoad or onError, put the provider in your own 'use client' file instead. Set baseCurrencyCode and baseCurrencySymbol to the currency the prices are written in. If I sell several products, ask which product id each page belongs to and pass it as productId (data-product for the banner script). Replace hard-coded prices only where I asked, with <PPPPrice price={...} /> or usePrice().
+- JS SDK: create the client once, await init(), then call bindPriceElements(). Keep the base price as the element text so it still shows when there is no discount.
+- If there is a Content-Security-Policy, allow https://api.gopaylocal.com in script-src and connect-src.
+
+Step 5 - Verify.
+- Run the project's type check, lint and build.
+- Start the dev server, load a page in a browser (a headless browser is fine), and confirm that a request to https://api.gopaylocal.com/v1/banner/config/<key> is made and returns JSON with a "show" field. For the banner script, also confirm that script.js and bundle.js load.
+- "show": false with a "reason" means the integration works and no discount applies to this request. Look up the reason on the reference card; vpn_detected, no_discount, domain_not_allowed and no_active_campaign are the usual ones. HTTP 401 means the key is wrong.
+- Expect no banner from a development machine: high-income countries, VPNs and cloud machines get no discount. To see the banner, I can temporarily give my own country a discount in the dashboard campaign. Tell me if that is needed.
+
+Step 6 - Stop and ask me instead of guessing when you need: the public key; which pages should show the banner or discounted prices; whether hard-coded prices should be replaced; the currency the prices are in; whether the campaign restricts allowed domains (local testing then needs localhost added); whether I self-host GoPayLocal (then use my API URL instead of https://api.gopaylocal.com in the script URL, apiBase and the Content-Security-Policy); or anything that is set up in the GoPayLocal dashboard (product, payment provider, active campaign, A/B test). Do not change the campaign's own banner design or any other GoPayLocal account setting, and do not call GoPayLocal's management API: it needs a secret key, which must never be in this project's code. If I want a different banner look, tell me to change it in the dashboard (the campaign's Setup tab, Banner card), or in code use the SDK banner options or a custom banner. Do not invent keys, coupon codes or discount values. Do not configure discounts or build an A/B split in code: discounts and A/B tests are set up in the dashboard, and the API assigns each visitor's test campaign.
+
+Step 7 - Finish with a short summary: files changed, the environment variable to set in each environment (local, preview, production), what you verified and how, and what I still need to do in the dashboard.
+```
+
+## Why there is one prompt, not one per framework
+
+The prompt branches on what the agent finds in the project, and the steps differ only in where the script tag or provider goes, which the linked docs pages cover. There is no separate server-side variant because GoPayLocal has no server-side pricing API: the discount depends on the country of the device making the request, so it has to be fetched in the visitor's browser. See the [reference card](/ai/reference-card/) for the details the agent will rely on.

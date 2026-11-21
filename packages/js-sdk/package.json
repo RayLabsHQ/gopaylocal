@@ -1,0 +1,64 @@
+{
+  "name": "@gopaylocal/js",
+  "version": "0.0.1",
+  "description": "Browser SDK for GoPayLocal: purchasing power parity (PPP) discounts, localized prices and a discount banner for any website.",
+  "license": "MIT",
+  "author": "RayLabs",
+  "homepage": "https://docs.gopaylocal.com/js/installation/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RayLabsHQ/gopaylocal.git",
+    "directory": "packages/js-sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/RayLabsHQ/gopaylocal/issues"
+  },
+  "keywords": [
+    "ppp",
+    "purchasing-power-parity",
+    "parity-pricing",
+    "regional-pricing",
+    "localized-pricing",
+    "discounts",
+    "pricing",
+    "gopaylocal",
+    "sdk"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --target es2020",
+    "dev": "tsup src/index.ts --format esm,cjs --dts --target es2020 --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "prepack": "pnpm run clean && pnpm run build"
+  },
+  "devDependencies": {
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "tsup": "^9.0.0",
+    "typescript": "npm:@typescript/typescript6@^6.0.2"
+  }
+}

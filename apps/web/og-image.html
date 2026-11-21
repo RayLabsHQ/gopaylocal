@@ -1,0 +1,80 @@
+<!doctype html>
+<!-- Source of public/og-image.png. Re-render: open this file in Chromium with a 1200x630 viewport at device scale 1, wait for the Google Fonts to load, screenshot the viewport and save it over public/og-image.png.
+     Numbers: 75 = entries in PPP_MULTIPLIERS, <4KB = gzip size of the banner bundle, $19 = PLAN_PRICES_USD.pro.month, 9 = integrations in src/lib/landing-data.ts, table rows = DEFAULT_PARITY_TIERS (packages/shared); update this file when they change. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1200">
+<title>GoPayLocal OG image</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Space+Grotesk:wght@600;700&family=JetBrains+Mono:wght@500&display=block">
+<style>
+  :root {
+    --bg: #0A0A0A;
+    --surface: #161616;
+    --border: #2A2A2A;
+    --text-1: #F5F5F5;
+    --text-2: #B8B8B8;
+    --accent: #E42313;
+    --accent-text: #FF3B2E;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1200px; height: 630px; overflow: hidden; background: var(--bg); }
+  body { position: relative; color: var(--text-1); font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+  .abs { position: absolute; }
+  .bar { left: 0; top: 0; width: 16px; height: 630px; background: var(--accent); }
+  .brand { left: 80px; top: 64px; display: flex; align-items: center; gap: 12px; }
+  .brand svg { width: 36px; height: 36px; display: block; }
+  .brand span { position: relative; top: -1px; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 24px; letter-spacing: -0.025em; line-height: 36px; }
+  .tag { left: 80px; top: 140px; font-family: 'JetBrains Mono', monospace; font-weight: 500; font-size: 14px; line-height: 20px; letter-spacing: 0.18em; color: var(--accent-text); white-space: nowrap; }
+  h1 { left: 80px; top: 179.5px; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 72px; line-height: 73.5px; letter-spacing: -0.04em; white-space: nowrap; }
+  .sub { left: 80px; top: 428.5px; font-size: 24px; line-height: 32px; color: var(--text-2); white-space: nowrap; }
+  .rule { left: 80px; top: 494px; width: 1040px; height: 1px; background: var(--border); }
+  .stats { left: 80px; top: 524px; display: flex; gap: 80.8px; }
+  .stat .num { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 37px; line-height: 44px; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
+  .stat .num.accent { color: var(--accent-text); }
+  .stat .label { margin-top: 3px; font-family: 'JetBrains Mono', monospace; font-weight: 500; font-size: 12px; line-height: 16px; letter-spacing: 0.14em; color: var(--text-2); white-space: nowrap; }
+  .table { left: 790px; top: 140px; width: 330px; border: 1px solid var(--border); background: var(--surface); }
+  .row { height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px 4px; }
+  .row + .row { border-top: 1px solid var(--border); height: 61px; }
+  .country { display: flex; align-items: center; gap: 10px; font-size: 20px; color: var(--text-1); }
+  .flag { font-size: 18px; line-height: 1; }
+  .pct { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 21px; color: var(--accent-text); font-variant-numeric: tabular-nums; }
+  .full { font-size: 20px; font-weight: 500; color: var(--text-2); }
+</style>
+</head>
+<body>
+  <div class="abs bar"></div>
+
+  <div class="abs brand">
+    <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path fill="#E42313" fill-rule="evenodd" d="M0 0 H28 L0 28 Z M5.5 5.5 h6 v6 h-6 Z"></path>
+      <path fill="#FFFFFF" fill-rule="evenodd" d="M32 4 V32 H4 Z M20.5 20.5 h6 v6 h-6 Z"></path>
+    </svg>
+    <span>GoPayLocal</span>
+  </div>
+
+  <p class="abs tag">PURCHASING POWER PARITY · SAAS PRICING</p>
+
+  <h1 class="abs">Fair prices.<br>More customers.<br>Zero effort.</h1>
+
+  <p class="abs sub">Country-fair pricing, applied<br>automatically at the edge.</p>
+
+  <div class="abs rule"></div>
+
+  <div class="abs stats">
+    <div class="stat"><div class="num">75</div><div class="label">COUNTRIES WITH PPP DATA</div></div>
+    <div class="stat"><div class="num">&lt;4KB</div><div class="label">SCRIPT (GZIP)</div></div>
+    <div class="stat"><div class="num">$19</div><div class="label">FLAT PRICE ON PRO</div></div>
+    <div class="stat"><div class="num accent">9</div><div class="label">INTEGRATIONS</div></div>
+  </div>
+
+  <div class="abs table">
+    <div class="row"><span class="country"><span class="flag">🇮🇳</span>India</span><span class="pct">-65%</span></div>
+    <div class="row"><span class="country"><span class="flag">🇧🇷</span>Brazil</span><span class="pct">-35%</span></div>
+    <div class="row"><span class="country"><span class="flag">🇲🇽</span>Mexico</span><span class="pct">-20%</span></div>
+    <div class="row"><span class="country"><span class="flag">🇺🇸</span>United States</span><span class="full">Full price</span></div>
+  </div>
+</body>
+</html>

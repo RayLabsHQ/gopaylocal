@@ -1,0 +1,85 @@
+---
+title: API Keys
+description: Creating and revoking API keys in the GoPayLocal dashboard.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+API keys belong to the workspace. They are managed under **Settings > API Keys**.
+
+## Key Types
+
+| Type | Format | Used for | Safe in a browser? |
+|---|---|---|---|
+| **Public** | `gpl_pk_` followed by 64 hex characters | The banner script, the JavaScript and React SDKs, and the [banner config endpoint](/api/banner/) | Yes |
+| **Secret** | `gpl_sk_` followed by 64 hex characters | Your server, calling the [management API](/api/authentication/#secret-keys) | No |
+
+There are no separate live and test keys. One public key serves both Live and Test campaigns; whether a campaign is live or test is set on the campaign, not on the key. The keys in the code examples throughout these docs (`gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef`) are placeholders.
+
+### Public Keys
+
+A public key ends up in your page source, so it's not a secret. It can only fetch the banner config and report banner events, and it works for every product in the workspace.
+
+```html
+<script src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" async></script>
+```
+
+```tsx
+<GoPayLocalProvider apiKey="gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef">
+```
+
+The campaign page's **Setup** tab fills one of your public keys into its snippets.
+
+### Secret Keys
+
+A secret key lets your own server call the management API: products, campaigns, A/B tests, banner settings, parity groups, analytics, listing integrations and importing their products, and listing keys. It works on every product of the workspace. It can't manage the team, billing, API keys, integration connections or the workspace itself: the management API answers `403` to those, and the sign-in service's team routes don't accept keys. See [Authentication](/api/authentication/#secret-keys) for the full list, the errors and the rate limits.
+
+Below the key list, **Calling the API from your server** shows the workspace ID that the API paths need, and a request to copy:
+
+```bash
+curl https://api.gopaylocal.com/v1/teams/<workspace id>/products \
+  -H "Authorization: Bearer $GOPAYLOCAL_SECRET_KEY"
+```
+
+<Aside type="danger">
+Treat a secret key like a password: keep it on your server, out of web pages, frontend bundles and public repositories, and revoke it if it leaks. The banner script, the banner config endpoint and the events endpoint refuse a secret key. A leaked secret key can create an active campaign, which creates real discount codes at your payment provider.
+</Aside>
+
+## Managing Keys
+
+Everyone in the workspace can see the list. Only the owner and admins can create and revoke keys; other members are asked to contact them. See [Team](/dashboard/team/).
+
+### Create a Key
+
+1. Go to [app.gopaylocal.com](https://app.gopaylocal.com) > **Settings > API Keys**
+2. Click **Create Key**
+3. Enter a **Key Name** (e.g., "Production") and choose the **Type** (Public or Secret)
+4. Click **Create**
+5. Copy the key from the notice
+
+The full key is shown once, when it's created. Afterwards the list shows only its first characters. The full public key is still filled into the **Setup** tab's snippets.
+
+### The Key List
+
+The list shows each key's name, its first characters, its type, when it was created, who created it (**Created By**; **Unknown** for keys created before this was recorded, or whose creator's account has been deleted) and when it was last used (**Never** if it hasn't been). Treat the last-used date as approximate: a public key's is updated when GoPayLocal looks the key up in its database rather than in its cache, and a secret key's at most once every 5 minutes.
+
+### Revoke a Key
+
+Click **Revoke** next to the key. The key is deleted straight away, with no confirmation, and can't be restored. A revoked secret key is refused on its next request.
+
+A secret key keeps working after the person who created it leaves the workspace. When someone leaves, revoke the keys they had access to. While a key's creator is suspended, that key is refused.
+
+<Aside type="caution">
+Revoking a public key stops every banner and SDK that uses it, within about a minute. Put the new key on your site first.
+</Aside>
+
+## Key Rotation
+
+To replace a public key:
+
+1. Create a new public key
+2. Put the new key in your script tag or SDK setup and deploy
+3. Check that the banner still loads
+4. Revoke the old key
+
+To replace a secret key, create a new secret key, put it in your server's configuration, and then revoke the old one. Several keys can be active at once, so there is no gap.

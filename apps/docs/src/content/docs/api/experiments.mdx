@@ -1,0 +1,263 @@
+---
+title: Experiments API
+description: API reference for A/B tests (experiments) between two campaigns.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+An experiment is an [A/B test](/guides/ab-testing/) between two campaigns of the same product: campaign A (control) and campaign B (variant). These are the endpoints the dashboard uses.
+
+<Aside type="note">
+These endpoints accept a [secret API key](/api/authentication/#secret-keys) (`Authorization: Bearer gpl_sk_...`) or the dashboard session (see [Authentication](/api/authentication/#dashboard-session)). They are scoped to a workspace: `:orgId` is the workspace (organization) id, which a secret key must belong to and a signed-in user must be a member of. A secret key works on every experiment of its workspace; members can only see and change experiments of the products they have access to.
+</Aside>
+
+## The Experiment Object
+
+```json
+{
+  "id": "01JD8Q0Z6N3V4C2X1B0A9S8D7F",
+  "organizationId": "org_123",
+  "productId": "01JD8PZK2M1N0B9V8C7X6Z5A4S",
+  "environment": "live",
+  "name": "India 30% vs 45%",
+  "status": "running",
+  "campaignAId": "01JD8PZY3Q2W1E0R9T8Y7U6I5O",
+  "campaignBId": "01JD8PZY9P8O7I6U5Y4T3R2E1W",
+  "campaignAName": "Control 30%",
+  "campaignBName": "Variant 45%",
+  "trafficSplitB": 50,
+  "winnerCampaignId": null,
+  "startedAt": "2026-11-10T15:30:00.000Z",
+  "endedAt": null,
+  "createdAt": "2026-11-10T15:30:00.000Z",
+  "updatedAt": "2026-11-10T15:30:00.000Z"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Experiment id |
+| `productId` | `string` | The product both campaigns belong to |
+| `environment` | `string` | `"live"` or `"test"`, taken from the two campaigns |
+| `name` | `string` | Display name (1-200 characters) |
+| `status` | `string` | `"running"` or `"ended"` |
+| `campaignAId` | `string` | Campaign A, the control |
+| `campaignBId` | `string` | Campaign B, the variant |
+| `campaignAName` | `string` | Campaign A's name when the experiment started |
+| `campaignBName` | `string` | Campaign B's name when the experiment started |
+| `trafficSplitB` | `integer` | Percent of visitors sent to campaign B (1-99). A gets the rest. |
+| `winnerCampaignId` | `string \| null` | Set when the experiment ends |
+| `startedAt` | `string` | When the experiment started |
+| `endedAt` | `string \| null` | When it ended |
+
+List and get responses also include `campaignA` and `campaignB`: the current `{ "id", "name", "status" }` of each campaign, or `null` once that campaign has been deleted. The experiment itself is kept; use `campaignAName` / `campaignBName` to label a deleted campaign.
+
+## List Experiments
+
+```
+GET /v1/teams/:orgId/experiments
+```
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl "https://api.gopaylocal.com/v1/teams/org_123/experiments?status=running" \
+    -H "Cookie: <dashboard session cookie>"
+  ```
+  </TabItem>
+  <TabItem label="JavaScript">
+  ```js
+  // From the dashboard origin, with the session cookie.
+  const res = await fetch('https://api.gopaylocal.com/v1/teams/org_123/experiments?status=running', {
+    credentials: 'include',
+  });
+  const { data } = await res.json();
+  ```
+  </TabItem>
+</Tabs>
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `productId` | `string` | Only experiments of this product |
+| `campaignId` | `string` | Only experiments where this campaign is A or B |
+| `environment` | `string` | `live` or `test` |
+| `status` | `string` | `running` or `ended` |
+
+Newest first. **Response:** `{ "data": [Experiment, ...] }`
+
+## Start an Experiment
+
+```
+POST /v1/teams/:orgId/experiments
+```
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl -X POST https://api.gopaylocal.com/v1/teams/org_123/experiments \
+    -H "Cookie: <dashboard session cookie>" \
+    -H "Origin: https://app.gopaylocal.com" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "productId": "01JD8PZK2M1N0B9V8C7X6Z5A4S",
+      "campaignAId": "01JD8PZY3Q2W1E0R9T8Y7U6I5O",
+      "campaignBId": "01JD8PZY9P8O7I6U5Y4T3R2E1W",
+      "name": "India 30% vs 45%",
+      "trafficSplitB": 50
+    }'
+  ```
+  </TabItem>
+  <TabItem label="JavaScript">
+  ```js
+  const res = await fetch('https://api.gopaylocal.com/v1/teams/org_123/experiments', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      productId: '01JD8PZK2M1N0B9V8C7X6Z5A4S',
+      campaignAId: '01JD8PZY3Q2W1E0R9T8Y7U6I5O',
+      campaignBId: '01JD8PZY9P8O7I6U5Y4T3R2E1W',
+      name: 'India 30% vs 45%',
+    }),
+  });
+  ```
+  </TabItem>
+</Tabs>
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `productId` | `string` | Yes | Product of both campaigns |
+| `campaignAId` | `string` | Yes | Control campaign |
+| `campaignBId` | `string` | Yes | Variant campaign, different from A |
+| `name` | `string` | Yes | 1-200 characters |
+| `trafficSplitB` | `integer` | No | Percent of visitors sent to B, 1-99. Default `50`. |
+
+Both campaigns must belong to the workspace and to `productId`, be in the same environment, be `active`, and have a banner configuration (every campaign gets one when it is created). The experiment's environment is the campaigns' environment.
+
+**Response:** `201` with `{ "data": Experiment }`.
+
+**Errors:**
+
+| Status | `code` | When |
+|---|---|---|
+| `400` | — | Body fails validation (`error: "Validation failed"`, with `details`) |
+| `400` | `invalid_product` | The product is not in this workspace |
+| `400` | `invalid_campaign` | A campaign is not in this workspace |
+| `400` | `campaign_product_mismatch` | A campaign belongs to another product |
+| `400` | `campaign_environment_mismatch` | The campaigns are in different environments |
+| `403` | `no_product_access` | A member without access to the product |
+| `409` | `campaign_not_active` | A campaign is paused or draft |
+| `409` | `campaign_not_servable` | A campaign has no banner configuration |
+| `409` | `experiment_already_running` | The product already has a running experiment in this environment |
+
+## Get an Experiment
+
+```
+GET /v1/teams/:orgId/experiments/:id
+```
+
+Returns the experiment with `campaignA`, `campaignB` and `results`:
+
+```json
+{
+  "data": {
+    "id": "01JD8Q0Z6N3V4C2X1B0A9S8D7F",
+    "status": "running",
+    "trafficSplitB": 50,
+    "campaignA": { "id": "01JD8PZY3Q2W1E0R9T8Y7U6I5O", "name": "Control 30%", "status": "active" },
+    "campaignB": { "id": "01JD8PZY9P8O7I6U5Y4T3R2E1W", "name": "Variant 45%", "status": "active" },
+    "results": {
+      "granularity": "day",
+      "from": "2026-11-10T00:00:00.000Z",
+      "to": null,
+      "truncatedByRetention": false,
+      "a": {
+        "campaignId": "01JD8PZY3Q2W1E0R9T8Y7U6I5O",
+        "impressions": 5100,
+        "clicks": 0,
+        "copies": 1428,
+        "redemptions": 204,
+        "revenueSavedByCurrency": { "USD": 5400, "EUR": 650 },
+        "clickRate": 0,
+        "copyRate": 0.28,
+        "conversionRate": 0.04,
+        "redemptionsPerCopy": 0.142857
+      },
+      "b": { "campaignId": "01JD8PZY9P8O7I6U5Y4T3R2E1W", "impressions": 5080, "...": "..." },
+      "observedShareB": 0.499
+    }
+  }
+}
+```
+
+`results` sums the campaigns' daily analytics (UTC days) in the experiment's environment:
+
+- `from` is the start of the UTC day the experiment started, or the start of your plan's analytics history if that is later (`truncatedByRetention` is then `true`). `to` is `endedAt` for an ended experiment (the end day is included in full) and `null` while it runs.
+- `impressions`, `clicks`, `copies` and `redemptions` are the same counters as the [analytics endpoints](/api/analytics/), for that campaign only. `revenueSavedByCurrency` is the discount given on those redemptions, one total per ISO 4217 currency code in major units (the analytics endpoints' `revenueSavedByCurrency`); amounts in different currencies are never added together.
+- Rates are fractions (`0.04` is 4%): `clickRate`, `copyRate` and `conversionRate` divide clicks, copies and redemptions by impressions; `redemptionsPerCopy` divides redemptions by copies. A rate is `null` when its denominator is `0`.
+- `observedShareB` is B's share of all impressions, `null` with no impressions.
+
+**Errors:** `404` when the experiment is not in this workspace or the member has no access to its product.
+
+## Update an Experiment
+
+```
+PATCH /v1/teams/:orgId/experiments/:id
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | 1-200 characters. Can change at any time. |
+| `trafficSplitB` | `integer` | 1-99. Only while the experiment is running. |
+
+Send at least one field. **Response:** `{ "data": Experiment }` (without `campaignA`/`campaignB`).
+
+**Errors:** `400` validation, `404` not found, `409 experiment_ended` for a `trafficSplitB` change on an ended experiment.
+
+Changing the split moves the visitors whose position lies between the old and new values to the other campaign; see [How visitors are assigned](/guides/ab-testing/#3-how-visitors-are-assigned).
+
+## End an Experiment
+
+```
+POST /v1/teams/:orgId/experiments/:id/end
+```
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl -X POST https://api.gopaylocal.com/v1/teams/org_123/experiments/01JD8Q0Z6N3V4C2X1B0A9S8D7F/end \
+    -H "Cookie: <dashboard session cookie>" \
+    -H "Origin: https://app.gopaylocal.com" \
+    -H "Content-Type: application/json" \
+    -d '{ "winnerCampaignId": "01JD8PZY9P8O7I6U5Y4T3R2E1W" }'
+  ```
+  </TabItem>
+  <TabItem label="JavaScript">
+  ```js
+  await fetch(`https://api.gopaylocal.com/v1/teams/org_123/experiments/${id}/end`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ winnerCampaignId: '01JD8PZY9P8O7I6U5Y4T3R2E1W' }),
+  });
+  ```
+  </TabItem>
+</Tabs>
+
+`winnerCampaignId` must be campaign A or campaign B. The experiment's status becomes `ended`; the winner is left as it is; the other campaign is paused if it is active.
+
+**Response:** `{ "data": Experiment, "pausedCampaignId": "01JD8PZY3Q2W1E0R9T8Y7U6I5O" }`. `pausedCampaignId` is `null` when the other campaign was not active.
+
+**Errors:** `400 invalid_winner`, `404` not found, `409 experiment_ended` when it already ended.
+
+## Effects on Campaigns
+
+While an experiment runs, the [campaign endpoints](/api/campaigns/) refuse with `409` and `code: "campaign_in_running_experiment"` (plus `experimentId`) to pause either campaign, set it back to draft, move it to another product or environment, or delete it. Disconnecting an [integration](/api/integrations/) that would pause one of them (an active auto-apply campaign) is refused with `409` and `code: "integration_in_running_experiment"`.
+
+After an experiment ends, its campaigns can be deleted; the experiment and its `results` stay (`campaignA`/`campaignB` become `null`). Deleting the product deletes its experiments.
+
+Every change that affects the banner (start, split change, end) rebuilds the cached banner configuration of the workspace.

@@ -1,86 +1,59 @@
 ---
 import { Button } from "../ui/button";
 import { pricingCards } from "@/lib/landing-data";
-import { HelixStripIcon } from "@astraicons/react/3d";
-
-const mainCards = pricingCards.slice(0, 3);
-const enterprise = pricingCards[3];
 ---
 
-<section id="pricing" class="relative border-t border-border overflow-hidden">
-  <div
-    class="pointer-events-none absolute w-full h-full bg-linear-175 from-red-500/70 via-transparent via-5% md:via-20% -z-10"
-  >
-  </div>
-  <div
-    class="pointer-events-none absolute w-full h-full bg-linear-355 from-red-500/70 via-transparent via-5% md:via-20% -z-10"
-  >
-  </div>
-  <div
-    class="pointer-events-none absolute -left-32 2xl:left-[20%] w-fit 2xl:-translate-x-1/2 -top-40 md:-top-40 -z-20 rotate-60 opacity-90 blur-xs select-none"
-  >
-    <HelixStripIcon
-      className="w-[400px] md:w-[600px] lg:w-[800px] h-auto [&_path[fill='#00d2a0']]:fill-red-500"
-    />
-  </div>
-
-  <div class="relative max-w-7xl mx-auto px-6 py-16 md:py-24 md:px-20">
+<section id="pricing" class="border-t border-border">
+  <div class="max-w-7xl mx-auto px-6 py-16 md:py-24 md:px-20">
     <div class="flex flex-col w-full text-center">
       <h2
-        class="font-display text-3xl md:text-4xl font-semibold text-text-primary tracking-tight"
+        class="font-display text-3xl md:text-4xl font-semibold text-text-primary tracking-tight leading-tight"
       >
-        Simple, honest pricing
+        The complete PPP toolkit, priced fairly
       </h2>
-      <p class="mt-4 text-base text-text-secondary">
-        All features on every plan. Only scale limits change.
+      <p class="mt-4 mx-auto max-w-prose text-base text-text-secondary leading-relaxed">
+        Every feature on every plan. Start free, go unlimited for one flat
+        price, or run it on your own infrastructure.
       </p>
     </div>
-    <!-- Main 3 cards -->
-    <div class="mt-12 grid grid-cols-1 md:grid-cols-3 items-stretch gap-4">
+    <!-- Plan cards: Free, Pro, Self-hosted -->
+    <div class="mt-12 mx-auto max-w-5xl grid grid-cols-1 lg:grid-cols-3 items-stretch gap-4">
       {
-        mainCards.map((card) => (
+        pricingCards.map((card) => (
           <div
             class:list={[
-              "p-8 flex flex-col overflow-hidden backdrop-blur-lg bg-black/20 rounded-3xl",
-              card.highlighted
-                ? "bg-bg-inverted text-white border border-red-400 shadow-[inset_0_0_30px_rgba(239,68,68,0.8)]"
-                : "border border-border",
+              // Subgrid: cards in the same row share the three row tracks
+              // (header / buttons / features), so a wrapping subtitle can never
+              // push one card's button out of line with its neighbours.
+              "relative p-8 flex flex-col lg:grid lg:grid-rows-subgrid lg:row-span-3 bg-bg-surface border",
+              card.highlighted ? "border-accent-500" : "border-border",
             ]}
           >
             {card.highlighted && (
-              <span class="inline-block self-start bg-accent-500 text-white text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 mb-4">
-                Popular
+              <span class="absolute top-4 right-4 bg-accent-500 text-white text-[11px] font-bold uppercase tracking-wider px-2 py-0.5">
+                Recommended
               </span>
             )}
-            <p
-              class:list={[
-                "font-display text-base font-semibold",
-                card.highlighted ? "text-white" : "text-text-primary",
-              ]}
-            >
-              {card.name}
-            </p>
-            <p
-              class:list={[
-                "font-display text-5xl font-bold tracking-[-2px] mt-3",
-                card.highlighted ? "text-white" : "text-text-primary",
-              ]}
-            >
-              {card.price}
-            </p>
-            <p
-              class:list={[
-                "text-[13px] mt-3 leading-relaxed whitespace-pre-line",
-                card.highlighted ? "text-text-muted" : "text-text-secondary",
-              ]}
-            >
-              {card.subtitle}
-            </p>
+            <div>
+              <p class="font-display text-base font-semibold text-text-primary">
+                {card.name}
+              </p>
+              <p
+                class="font-display text-5xl font-bold tracking-[-2px] tabular-nums mt-3 text-text-primary"
+              >
+                {card.price}
+              </p>
+              <p
+                class="text-sm mt-3 leading-relaxed whitespace-pre-line text-text-secondary"
+              >
+                {card.subtitle}
+              </p>
+            </div>
 
             <div class="mt-5">
               {card.highlighted ? (
                 <Button
-                  href="https://app.gopaylocal.com"
+                  href={card.href}
                   variant="primary"
                   size="md"
                   className="w-full justify-center"
@@ -90,7 +63,7 @@ const enterprise = pricingCards[3];
                 </Button>
               ) : (
                 <Button
-                  href="https://app.gopaylocal.com"
+                  href={card.href}
                   variant="secondary"
                   size="md"
                   className="w-full justify-center"
@@ -99,14 +72,17 @@ const enterprise = pricingCards[3];
                   {card.cta}
                 </Button>
               )}
+              {card.secondaryLink && (
+                <a
+                  href={card.secondaryLink.href}
+                  class="mt-3 block text-center text-sm font-medium text-text-secondary underline underline-offset-4 hover:text-text-primary"
+                >
+                  {card.secondaryLink.label}
+                </a>
+              )}
             </div>
 
-            <div
-              class:list={[
-                "mt-5 pt-4 space-y-2.5 border-t flex-1",
-                card.highlighted ? "border-[#2A2A2A]" : "border-border",
-              ]}
-            >
+            <div class="mt-5 pt-4 space-y-2.5 border-t border-border">
               {card.features.map((f) => (
                 <div class="flex items-center gap-2">
                   <svg
@@ -122,16 +98,7 @@ const enterprise = pricingCards[3];
                       d="M4.5 12.75l6 6 9-13.5"
                     />
                   </svg>
-                  <span
-                    class:list={[
-                      "text-[13px]",
-                      card.highlighted
-                        ? "text-text-muted"
-                        : "text-text-secondary",
-                    ]}
-                  >
-                    {f}
-                  </span>
+                  <span class="text-sm text-text-secondary">{f}</span>
                 </div>
               ))}
             </div>
@@ -139,55 +106,5 @@ const enterprise = pricingCards[3];
         ))
       }
     </div>
-
-    <!-- Enterprise full-width banner -->
-    {
-      enterprise && (
-        <div class="mt-8 bg-bg-inverted px-8 py-8 md:py-6 rounded-3xl border border-[#2A2A2A]">
-          <div class="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-            <div class="flex flex-col gap-4 md:flex-row md:items-center md:gap-10">
-              <div class="shrink-0">
-                <p class="font-display text-lg font-semibold text-white">
-                  Need more?
-                </p>
-                <p class="text-[13px] text-text-secondary mt-0.5">
-                  Unlimited products, custom SLA, SSO/SAML, dedicated support.
-                </p>
-              </div>
-              <div class="flex flex-wrap gap-3">
-                {enterprise.features.map((f) => (
-                  <span class="text-[12px] text-text-secondary border border-[#2A2A2A] px-3 py-1">
-                    {f}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div class="shrink-0">
-              <Button
-                href="mailto:hello@gopaylocal.com"
-                variant="primary"
-                size="md"
-                client:load
-              >
-                {enterprise.cta}
-                <svg
-                  class="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke-width="2"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
-                  />
-                </svg>
-              </Button>
-            </div>
-          </div>
-        </div>
-      )
-    }
   </div>
 </section>

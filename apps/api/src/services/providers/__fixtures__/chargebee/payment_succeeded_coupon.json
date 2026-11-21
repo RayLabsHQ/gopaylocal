@@ -1,0 +1,78 @@
+{
+  "_source": "Shape from the Sample Event at https://apidocs.chargebee.com/docs/api/events.md (envelope, invoice, line_items, linked_payments), event_type switched to payment_succeeded (content = transaction, invoice, customer, subscription, card per chargebee@3.37.0 types/resources/WebhookEvent.d.ts PaymentSucceededContent). invoice.discounts[] per https://apidocs.chargebee.com/docs/api/invoices/invoice-object.md#discounts. transaction fields per https://apidocs.chargebee.com/docs/api/transactions/transaction-object.md. 40% PPP coupon on a 116.67 INR plan: 4667 paise off, 7000 paid.",
+  "id": "ev_16BPgETyVrQbiGhB",
+  "occurred_at": 1702645601,
+  "source": "hosted_page",
+  "object": "event",
+  "site_id": "cb_site_16CQtCTrgrYqi9n2A",
+  "api_version": "v2",
+  "event_type": "payment_succeeded",
+  "content": {
+    "transaction": {
+      "id": "txn_16BPgETyVrQXVGh4",
+      "customer_id": "sarah",
+      "subscription_id": "16BPgETyVrQVHGh1",
+      "payment_method": "card",
+      "gateway": "chargebee",
+      "type": "payment",
+      "date": 1702645601,
+      "currency_code": "INR",
+      "amount": 7000,
+      "status": "success",
+      "object": "transaction",
+      "linked_invoices": [{ "invoice_id": "203", "applied_amount": 7000 }]
+    },
+    "invoice": {
+      "id": "203",
+      "customer_id": "sarah",
+      "subscription_id": "16BPgETyVrQVHGh1",
+      "recurring": true,
+      "status": "paid",
+      "price_type": "tax_exclusive",
+      "date": 1702578600,
+      "total": 7000,
+      "amount_paid": 7000,
+      "amount_due": 0,
+      "paid_at": 1702645601,
+      "object": "invoice",
+      "first_invoice": true,
+      "currency_code": "INR",
+      "line_items": [
+        {
+          "id": "li_16BPgETyVrQWBGh3",
+          "unit_amount": 11667,
+          "quantity": 1,
+          "amount": 11667,
+          "object": "line_item",
+          "subscription_id": "16BPgETyVrQVHGh1",
+          "entity_type": "plan_item_price",
+          "entity_id": "cross-train-advanced-INR-1_MONTH",
+          "discount_amount": 4667,
+          "item_level_discount_amount": 0
+        }
+      ],
+      "sub_total": 11667,
+      "discounts": [
+        {
+          "amount": 4667,
+          "description": "PPP IN 40%",
+          "line_item_id": "li_16BPgETyVrQWBGh3",
+          "entity_type": "document_level_coupon",
+          "discount_type": "percentage",
+          "entity_id": "PPP-IN40-K7QX",
+          "object": "discount"
+        }
+      ],
+      "linked_payments": [
+        {
+          "txn_id": "txn_16BPgETyVrQXVGh4",
+          "applied_amount": 7000,
+          "txn_status": "success",
+          "txn_amount": 7000
+        }
+      ]
+    },
+    "customer": { "id": "sarah", "object": "customer" },
+    "subscription": { "id": "16BPgETyVrQVHGh1", "status": "active", "object": "subscription", "currency_code": "INR" }
+  }
+}

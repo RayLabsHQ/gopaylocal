@@ -1,0 +1,130 @@
+---
+title: Multi-Currency Display
+description: Show visitors the discounted price in their own currency, converted at the day's rate.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+With multi-currency display, a visitor from India sees the discounted price as **₹719** instead of working out "60% off $19". The banner endpoint converts your product's price into the visitor's currency at the day's mid-market rate, and your campaign's [charm pricing](/guides/charm-pricing/) strategy rounds it to a natural price point.
+
+It is on for every campaign on every plan. There is nothing to enable: add the price placeholders to your banner message, or use the SDK price components.
+
+<Aside type="caution" title="Local prices are estimates">
+Local prices are estimates. They convert your price at the day's mid-market rate and round up to a charm price, at most 8% above the converted amount and never below it (an amount under 13 of the currency's smallest unit can round up by more than 8%, to the next one). Your payment provider charges the exact discounted price in your currency; the amount on the customer's statement depends on their bank's exchange rate.
+</Aside>
+
+## What the visitor sees
+
+A $19 product, with the campaign's charm pricing set to **Round to X9** (`round_x9`), using the rates of 18 November 2026:
+
+| Visitor | Discount | `localPrice` | `localOriginalPrice` | Discount the two prices imply |
+|---|---|---|---|---|
+| India | 60% | ₹719 | ₹1,769 | 59.4% |
+| Brazil | 50% | R$54.99 | R$109 | 49.6% |
+| Nigeria | 65% | ₦8,999 | ₦24,999 | 64.0% |
+| Indonesia | 55% | Rp159,999 | Rp346,999 | 53.9% |
+| Germany | 20% | €13.99 | €17.30 | 19.1% |
+| United States | 60% | $7.60 | $19 | 60% (no conversion) |
+
+Prices are written here in English notation; the banner formats them in the visitor's locale, so a German visitor sees 13,99 €.
+
+The paid price is rounded up and the original down, so the discount the two prices imply is never larger than the real coupon. Your banner's `{{discount}}%` stays the true figure. It is also at most 2 percentage points below the coupon and at least four fifths of it: if the tidiest charm prices would imply less, finer ones are used. Only for a price of a few cents can no pair meet this, and the two prices are then just rounded to the smallest unit (a $0.30 product at 10% off shows €0.25 instead of €0.27, 7.4%).
+
+## How a local price is computed
+
+For the Indian visitor above (60% off $19, 1 USD = 93.32614706 INR):
+
+```
+discounted price    $19 × (1 − 60/100)      = $7.60
+converted           $7.60 × 93.32614706     = ₹709.28
+charm, rounded up   ₹709.28                 → ₹719      (localPrice)
+
+original converted  $19 × 93.32614706       = ₹1,773.20
+charm, rounded down ₹1,773.20               → ₹1,769    (localOriginalPrice)
+```
+
+₹1,699 would be tidier, but next to ₹719 it implies only 57.7%, more than 2 points under the 60% coupon.
+
+When your product is not priced in US dollars, the rate is the cross rate between the two currencies. A €20 product at 60% off shows an Indian visitor **₹829** (was **₹1,999**), with `fxRate` 102.4654853 INR per EUR.
+
+### When the price is not converted
+
+A visitor is shown the **exact** discounted price in your product's currency, with no charm rounding, when:
+
+- they already pay in your product's currency (a US visitor and a USD product: **$7.60**, was **$19**);
+- the exchange rates are older than 96 hours, or there are none (a Nigerian visitor at 65% off then sees **$6.65**, was **$19**);
+- their country has no currency mapping, or their currency is left out of the current rates (see [Held currencies](#held-currencies));
+- the paid price and the original would round to the same amount, which happens only for very small prices at very small discounts (a $2.44 product at 1% off shows a UK visitor **$2.42**, was **$2.44**);
+- the converted price rounds to zero, or is larger than 10^12 of the currency's smallest unit (no realistic price is);
+- their currency is excluded by the operator (self-hosting only, `FX_EXCLUDED_CURRENCIES`).
+
+A 100% discount is still converted: an Indian visitor sees **₹0**, was **₹1,699**.
+
+The response still has every price field in that case, with `currencyCode` equal to `baseCurrencyCode`, `fxRate` 1 and no `fxAsOf`. A banner template with `{{localPrice}}` therefore always shows a correct price.
+
+## Using local prices
+
+### In the banner message
+
+Two placeholders carry the prices, formatted in the visitor's locale (a whole number shows no decimals):
+
+| Placeholder | Example (India) | Example (no conversion) |
+|---|---|---|
+| `{{localPrice}}` | ₹719 | $7.60 |
+| `{{localOriginalPrice}}` | ₹1,769 | $19 |
+| `{{currencyCode}}` | INR | USD |
+| `{{currencySymbol}}` | ₹ | $ |
+
+Converted prices in Afghan afghani, Albanian lek, Colombian peso, Hungarian forint, Indonesian rupiah, Iraqi dinar, Iranian rial, North Korean won, Lao kip, Lebanese pound, Myanmar kyat, Pakistani rupee, Somali shilling, Syrian pound and Yemeni rial are whole numbers, as prices are written there. An exact price keeps the currency's decimals (PKR 1,838.14), because it is what your provider charges.
+
+```
+{{flag}} {{discount}}% off for {{countryName}}: {{localPrice}} instead of {{localOriginalPrice}}. Use code {{code}}.
+```
+
+The default banner message does not mention prices; add the placeholders in the campaign's banner settings if you want them. The full list is in [Banner customization](/banner/customization/).
+
+### In the SDKs
+
+The JavaScript and React SDKs read the same response and convert any other price on your page with the response's `fxRate` and `charmPricingStrategy`, using the same rounding code as the server, so a price shown in both places is the same number. They convert only when the SDK's base currency matches the product's (`baseCurrencyCode`). See the [JavaScript client](/js/client/) and the [React hooks](/react/hooks/).
+
+### In the API response
+
+The fields are documented in the [Banner API](/api/banner/#local-prices).
+
+## Exchange rates
+
+| | |
+|---|---|
+| Primary source | [fawazahmed0/exchange-api](https://github.com/fawazahmed0/exchange-api) daily rates (CC0), via jsDelivr, with its Cloudflare Pages mirror as a backup |
+| Cross-check and fallback | [Frankfurter](https://frankfurter.dev) |
+| Refresh | Every 6 hours (00:40, 06:40, 12:40 and 18:40 UTC) |
+| Maximum age | 96 hours from the rates' own date. Older rates are not used, and visitors see exact prices in your currency |
+| Reaching visitors | Within about 15 minutes of a refresh |
+
+Every refresh is checked before it replaces the stored rates. For each currency the API keeps a baseline: the last rate on which both sources agreed, with its date.
+
+- all major currencies must be present in the source, and at least 120 currencies must be convertible after the checks below;
+- a currency is accepted when the second source agrees with it within 5% (within 2% if it moved more than 15% from its baseline), and the new rate becomes its baseline. This is how a real devaluation gets through on the first refresh;
+- when the second source has no rate for a currency, or is down, a rate within 15% of the baseline is accepted but the baseline does not move, so without a second source no rate can drift more than 15% from the last confirmed one. A currency with no baseline is not converted until both sources have agreed on it once;
+- a currency on which the two sources disagree by more than 5%, or that moved more than 15% from its baseline without confirmation, is held;
+- if more than 10 currencies moved more than 15% from their baselines without confirmation, that source's rates are rejected. When a source's rates are rejected, or fewer than 120 currencies would be convertible, the other source is tried (checked against the baselines only), and if it fails too, the previous rates stay unchanged.
+
+### Held currencies
+
+A held currency keeps its baseline rate for up to 96 hours from that rate's date. After that it is left out: its visitors see the exact discounted price in your product's currency, with no charm rounding, until a later refresh accepts a rate for it again. This mostly affects currencies whose official and market rates are far apart.
+
+## Which currency a country gets
+
+Each country is mapped to its currency from the Unicode CLDR (version 49). Where a country has more than one legal tender, one is chosen:
+
+| Country | Currency shown |
+|---|---|
+| Panama, Zimbabwe | US dollar |
+| Palestine | Israeli new shekel |
+| Bhutan, Lesotho, Namibia, Haiti | The national currency (ngultrum, loti, Namibian dollar, gourde) |
+
+Euro-area countries, including Bulgaria since it adopted the euro, show euros. Countries using another country's currency (Ecuador, El Salvador, Montenegro, Kosovo and others) show that currency.
+
+## Self-hosting
+
+A self-hosted Worker refreshes the rates with its own cron. The sources can be replaced, or local prices turned off, with Worker variables; see [Configuration](/self-hosting/configuration/).

@@ -1,0 +1,93 @@
+---
+title: Database and migrations
+description: Create the Postgres database for a self-hosted GoPayLocal, apply the schema with drizzle-kit, and understand how the Worker and the scripts connect to it.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+GoPayLocal keeps its data in Postgres: users and sessions, organizations and members, products, campaigns, coupons, integrations (provider tokens are stored encrypted), analytics rollups and webhook records.
+
+Two things connect to the database:
+
+- **The API Worker**, through a Cloudflare Hyperdrive configuration. The Worker never sees your connection string; Hyperdrive holds it. You create the configuration in [Cloudflare setup](/self-hosting/cloudflare/#3-create-hyperdrive-and-the-kv-namespaces).
+- **The command-line tools on your computer** (migrations and the admin sync script), which read the connection string from the `DATABASE_URL` environment variable.
+
+## Create the database
+
+Create an empty database and a user that owns it. The migrations create every table, including the ones the sign-in library (Better Auth) uses.
+
+You will need the connection string in this form:
+
+```text
+postgres://USER:PASSWORD@HOST:5432/DATABASE?sslmode=require
+```
+
+Keep `sslmode=require` (or `sslmode=verify-full`) for a database reached over the internet.
+
+**Version: Postgres 15 or newer.** The `analytics_rollups` table has a unique constraint declared `NULLS NOT DISTINCT`, which Postgres added in version 15; the migrations fail on anything older. Nothing else in the schema or the queries needs a newer version. CI runs the test suite against Postgres 18, `docker-compose.yml` uses 18, and the integration tests have also been run against 17.
+
+**TLS.** Hyperdrive only connects to Postgres over TLS, and in its default mode it validates the server certificate; it supports Postgres 9.0 to 18.x ([supported databases](https://developers.cloudflare.com/hyperdrive/reference/supported-databases-and-features/)). Managed providers meet this out of the box. A database you run yourself needs TLS turned on with a certificate Hyperdrive accepts.
+
+**Connections.** A Hyperdrive configuration opens up to about 20 connections to your database on Workers Free and about 100 on Workers Paid ([Hyperdrive limits](https://developers.cloudflare.com/hyperdrive/platform/limits/)). Make sure your database plan allows that many, plus a few for the migration tool.
+
+### Trying it locally first
+
+To try GoPayLocal on your computer, the repository's `docker-compose.yml` starts Postgres 18 on `localhost:5433` (user, password and database all `gopaylocal`):
+
+```sh
+docker compose up -d postgres
+```
+
+`localConnectionString` in `apps/api/wrangler.example.toml` points at this database, so `wrangler dev` uses it. [CONTRIBUTING.md](https://github.com/RayLabsHQ/gopaylocal/blob/main/CONTRIBUTING.md) describes the full local setup.
+
+## Apply the migrations
+
+The schema lives in `apps/api/src/db/schema.ts`, and the SQL migrations generated from it are in `apps/api/drizzle/`. [drizzle-kit](https://orm.drizzle.team/docs/drizzle-kit-migrate) applies them in order and records each one it applied, so running it again applies only new files.
+
+From the repository root:
+
+```sh
+DATABASE_URL="postgres://USER:PASSWORD@HOST:5432/DATABASE?sslmode=require" pnpm db:migrate
+```
+
+`pnpm db:migrate` runs `drizzle-kit migrate` in `apps/api` with the settings in `apps/api/drizzle.config.ts`, and only if that fails, `scripts/migrate.ts`, which applies the same migrations the same way and prints the database error.
+
+Use the migrations, not `drizzle-kit push`. The migration files are the schema the test suite runs against. Also, `push` in the drizzle-kit version the repository pins (0.31) does not read the `NULLS NOT DISTINCT` setting back from Postgres, so it proposes changing the `analytics_rollups` constraint on every run.
+
+Run it before your first deploy, and again before deploying any version that adds a migration (see [Upgrading](/self-hosting/upgrading/)).
+
+### Migrate, sync admins and deploy in one command
+
+`apps/api` has a `deploy:full` script that runs the migrations, then [`scripts/sync-admins.js`](/self-hosting/first-admin/#option-a-admin_emails-and-sync-adminsjs), then `wrangler deploy`:
+
+```sh
+cd apps/api
+DATABASE_URL="postgres://..." ADMIN_EMAILS="you@example.com" pnpm run deploy:full
+```
+
+Build the banner first (`pnpm build:banner` from the repository root); see [Cloudflare setup](/self-hosting/cloudflare/#6-build-the-banner-and-deploy-the-api).
+
+<Aside type="caution">
+The admin sync step also **removes** the admin role from every user whose email is not in `ADMIN_EMAILS`. With `ADMIN_EMAILS` empty or unset, it changes nothing.
+</Aside>
+
+## TLS settings for the scripts
+
+`pnpm db:migrate` follows the `sslmode` in `DATABASE_URL`.
+
+`apps/api/scripts/sync-admins.js` decides TLS in this order, first match wins:
+
+| Setting | Result |
+|---|---|
+| `DATABASE_SSL` environment variable: `disable`, `require` or `verify-full` (also `allow`, `prefer`, `true`, `false`) | Used as given. Any other value stops the script before it connects. |
+| `sslmode` in `DATABASE_URL`, or the `PGSSLMODE` environment variable | Left to the Postgres driver, the same rule `pnpm db:migrate` follows |
+| Host is `localhost`, `127.0.0.1` or `::1` | No TLS (for the docker-compose database) |
+| Anything else | TLS required (`require`: encrypted, server certificate not verified) |
+
+To verify the server certificate, add `sslmode=verify-full` to `DATABASE_URL` or set `DATABASE_SSL=verify-full`.
+
+## Backups
+
+Back up the Postgres database with your provider's tools. Everything GoPayLocal needs to keep is in Postgres. The KV namespaces hold caches that the API rebuilds from Postgres, and the VPN dataset, which you can rebuild from public lists (see [VPN detection](/guides/vpn-detection/#self-hosting-loading-the-data)).
+
+Keep `BETTER_AUTH_SECRET` and `TOKEN_ENCRYPTION_KEY` somewhere safe as well. Stored provider tokens are encrypted with one of them (see [Configuration reference](/self-hosting/configuration/#secrets)), and a database backup is not enough to read those tokens without it.

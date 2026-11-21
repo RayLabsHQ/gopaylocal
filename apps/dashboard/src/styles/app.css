@@ -1,0 +1,78 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+/* ── Light / Dark tokens ─────────────────────────────────────── */
+
+:root {
+  --bg: #FFFFFF;
+  --surface: #FAFAFA;
+  --border-color: #E8E8E8;
+  --text-1: #0D0D0D;
+  --text-2: #7A7A7A;
+  --text-3: #B0B0B0;
+  --brand: #E42313;
+  --brand-text: #C41A0C;
+  --brand-light: #FEF2F2;
+  --success-color: #22C55E;
+  --success-light: #ECFDF5;
+  --inverted: #0D0D0D;
+  --inverted-text: #FFFFFF;
+  color-scheme: light;
+}
+
+.dark {
+  --bg: #0A0A0A;
+  --surface: #161616;
+  --border-color: #2A2A2A;
+  --text-1: #F5F5F5;
+  --text-2: #B8B8B8;
+  --text-3: #8E8E8E;
+  --brand: #E42313;
+  /* #E42313 only measures ~4.3:1 on #0A0A0A — brand-text is the AA-safe
+     variant required for brand-coloured text below 18px. */
+  --brand-text: #FF3B2E;
+  --brand-light: #2D1215;
+  --success-color: #22C55E;
+  --success-light: #0D2818;
+  --inverted: #F5F5F5;
+  --inverted-text: #0A0A0A;
+  color-scheme: dark;
+}
+
+/* ── Tailwind design tokens ──────────────────────────────────── */
+
+@theme {
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-border: var(--border-color);
+  --color-text-primary: var(--text-1);
+  --color-text-secondary: var(--text-2);
+  --color-text-muted: var(--text-3);
+  --color-brand: var(--brand);
+  --color-brand-text: var(--brand-text);
+  --color-brand-light: var(--brand-light);
+  --color-success: var(--success-color);
+  --color-success-light: var(--success-light);
+  --color-inverted: var(--inverted);
+  --color-inverted-text: var(--inverted-text);
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--text-1);
+  background-color: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tailwind v4's preflight resets buttons to `cursor: default`, which strips the
+   hover affordance from every control in the app. Put it back. */
+@layer base {
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
+}

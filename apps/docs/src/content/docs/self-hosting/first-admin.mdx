@@ -1,0 +1,69 @@
+---
+title: First admin user
+description: Give yourself the platform admin role on a self-hosted GoPayLocal, with ADMIN_EMAILS and sync-admins.js or with one SQL statement.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+GoPayLocal has two kinds of roles:
+
+- **Team roles** (owner, admin, member) apply inside one organization. Whoever creates an organization in the dashboard owns it. You need nothing extra for these.
+- **The platform admin role** (`role = 'admin'` on the user) unlocks the admin app and the `/v1/admin` API: every organization, user, usage alert and the audit log. There is no way to get it from the dashboard; it is set in the database.
+
+## 1. Create your user
+
+Open the dashboard and sign in with Google or GitHub ([OAuth setup](/self-hosting/oauth/)). Your first sign-in creates your user. Then make it a platform admin in one of two ways.
+
+## Option A: `ADMIN_EMAILS` and `sync-admins.js`
+
+`apps/api/scripts/sync-admins.js` makes the database match a list of emails:
+
+- every user whose email is in `ADMIN_EMAILS` (comma-separated, case does not matter) gets the admin role;
+- every other user who has the admin role loses it.
+
+Run it from `apps/api`:
+
+```sh
+cd apps/api
+DATABASE_URL="postgres://USER:PASSWORD@HOST:5432/DATABASE?sslmode=require" \
+ADMIN_EMAILS="you@example.com" \
+node scripts/sync-admins.js
+```
+
+It prints how many users it promoted and how many it demoted. If `DATABASE_URL` or `ADMIN_EMAILS` is empty, it does nothing. TLS follows the rules in [Database and migrations](/self-hosting/database/#tls-settings-for-the-scripts).
+
+`pnpm run deploy:full` runs the same script after the migrations on every deploy, so if you deploy that way, keep `ADMIN_EMAILS` set to the full list each time.
+
+<Aside type="caution">
+Because the script also removes the role, an `ADMIN_EMAILS` that is missing someone demotes them. An unset or empty `ADMIN_EMAILS` changes nothing.
+</Aside>
+
+## Option B: one SQL statement
+
+Connect to the database with any Postgres client and run:
+
+```sql
+UPDATE "user" SET role = 'admin' WHERE email = 'you@example.com';
+```
+
+The table is named `user`, which is a reserved word in Postgres, so keep the double quotes. To check:
+
+```sql
+SELECT email, role FROM "user" WHERE role = 'admin';
+```
+
+If you use this option and also deploy with `deploy:full`, remember that `deploy:full` runs Option A whenever `ADMIN_EMAILS` is set.
+
+## 2. Open the admin app
+
+Sign out and back in, or wait up to five minutes: the session, including the role, is cached in a cookie for 300 seconds. Then open the admin app. If it says **Access denied**, check the role with the `SELECT` above.
+
+The admin app's sign-in page only offers Google. It uses the same session as the dashboard, because both talk to the same API, so if you only set up GitHub, sign in on the dashboard first and then open the admin app.
+
+## Removing an admin
+
+Run Option A with the remaining list, or set the role back to empty:
+
+```sql
+UPDATE "user" SET role = NULL WHERE email = 'former-admin@example.com';
+```

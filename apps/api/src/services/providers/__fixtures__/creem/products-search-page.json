@@ -1,0 +1,51 @@
+{
+  "_source": "ProductListEntity, the 200 response of GET /v1/products/search at https://docs.creem.io/api-reference/endpoint/search-products: {items: ProductEntity[], pagination: PaginationEntity}. Products use the field names of the checkout.completed sample product at https://docs.creem.io/code/webhooks plus product_url (example https://creem.io/product/prod_123123123123 in the ProductEntity schema). One page with no next page.",
+  "items": [
+    {
+      "id": "prod_d1AY2Sadk9YAvLI0pj97f",
+      "mode": "test",
+      "object": "product",
+      "name": "Monthly",
+      "description": "Monthly",
+      "price": 1000,
+      "currency": "EUR",
+      "billing_type": "recurring",
+      "billing_period": "every-month",
+      "status": "active",
+      "tax_mode": "exclusive",
+      "tax_category": "saas",
+      "product_url": "https://creem.io/product/prod_d1AY2Sadk9YAvLI0pj97f",
+      "default_success_url": "",
+      "external_id": null,
+      "metadata": null,
+      "created_at": "2024-10-11T11:50:00.182Z",
+      "updated_at": "2024-10-11T11:50:00.182Z"
+    },
+    {
+      "id": "prod_AnVJ11ujp7x953ARpJvAF",
+      "mode": "test",
+      "object": "product",
+      "name": "My Product - Product 01",
+      "description": "Test my product",
+      "price": 10000,
+      "currency": "USD",
+      "billing_type": "onetime",
+      "billing_period": "once",
+      "status": "active",
+      "tax_mode": "inclusive",
+      "tax_category": "saas",
+      "default_success_url": "",
+      "external_id": "pro-lifetime",
+      "metadata": null,
+      "created_at": "2024-09-16T16:12:09.813Z",
+      "updated_at": "2024-09-16T16:12:09.813Z"
+    }
+  ],
+  "pagination": {
+    "total_records": 2,
+    "total_pages": 1,
+    "current_page": 1,
+    "next_page": null,
+    "prev_page": null
+  }
+}

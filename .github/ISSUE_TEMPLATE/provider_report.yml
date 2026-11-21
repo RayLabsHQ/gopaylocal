@@ -1,0 +1,122 @@
+name: Payment provider problem or verification result
+description: Report a problem with a payment provider integration, or share the result of verifying one against the real provider.
+labels: ["provider"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form both for integration bugs and for verification results (passing or failing).
+        The verification steps are in [apps/api/PROVIDER_VERIFICATION.md](https://github.com/RayLabsHQ/gopaylocal/blob/main/apps/api/PROVIDER_VERIFICATION.md).
+
+        **Redact before you paste.** Remove API keys, access tokens, webhook signing secrets, signature headers, cookies, and customer names, emails and addresses. Replace each with a placeholder such as `<REDACTED>`.
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options:
+        - Stripe
+        - Paddle
+        - Gumroad
+        - Chargebee
+        - Dodo Payments
+        - Polar
+        - Whop
+    validations:
+      required: true
+
+  - type: dropdown
+    id: report-type
+    attributes:
+      label: Report type
+      options:
+        - Problem with the integration
+        - Verification result, everything worked
+        - Verification result, something failed
+    validations:
+      required: true
+
+  - type: dropdown
+    id: operation
+    attributes:
+      label: Operation
+      description: Which step is this about? Pick the closest match.
+      multiple: true
+      options:
+        - Connecting the integration (API key or account ID)
+        - Creating a discount or coupon
+        - Deleting a discount
+        - Listing discounts
+        - Importing products
+        - Building a checkout URL (auto-apply)
+        - Provisioning the webhook endpoint
+        - Deleting the webhook endpoint
+        - Verifying a webhook signature
+        - Recording a redemption from a webhook
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Test or live mode
+      options:
+        - Test / sandbox mode
+        - Live mode
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Where did you run it?
+      options:
+        - Hosted service (gopaylocal.com)
+        - Self-hosted instance
+        - Local development
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Commit or date tested
+      description: The commit SHA for self-hosted or local runs, or the date for the hosted service.
+      placeholder: e.g. 62654f4, or 2026-11-18
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what did you expect?
+      description: For a passing verification, list what you checked.
+    validations:
+      required: true
+
+  - type: textarea
+    id: request
+    attributes:
+      label: Request (redacted)
+      description: The request GoPayLocal sent to the provider, or the webhook the provider sent to GoPayLocal. Method, URL path, relevant headers and body.
+      render: json
+
+  - type: textarea
+    id: response
+    attributes:
+      label: Response (redacted)
+      description: Status code and body returned, plus any error message GoPayLocal showed or logged.
+      render: json
+
+  - type: input
+    id: provider-reference
+    attributes:
+      label: Provider request or event ID (optional)
+      description: Helps match this report to the provider's logs.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I removed API keys, tokens, webhook secrets, signature headers and customer personal data from this report.
+          required: true

@@ -1,0 +1,47 @@
+{
+  "name": "gopaylocal",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "dev:api": "pnpm --filter @gopaylocal/api dev",
+    "dev:dashboard": "pnpm --filter @gopaylocal/dashboard dev",
+    "dev:web": "pnpm --filter @gopaylocal/web dev",
+    "dev:admin": "pnpm --filter @gopaylocal/admin dev",
+    "dev:docs": "pnpm --filter @gopaylocal/docs dev",
+    "build": "pnpm -r build",
+    "build:api": "pnpm --filter @gopaylocal/api build",
+    "build:dashboard": "pnpm --filter @gopaylocal/dashboard build",
+    "build:web": "pnpm --filter @gopaylocal/web build",
+    "build:banner": "pnpm --filter @gopaylocal/banner build",
+    "build:docs": "pnpm --filter @gopaylocal/docs build",
+    "typecheck": "pnpm -r typecheck && tsc --noEmit -p tsconfig.e2e.json",
+    "db:generate": "pnpm --filter @gopaylocal/api db:generate",
+    "db:migrate": "pnpm --filter @gopaylocal/api db:migrate",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:shared": "vitest run --project shared",
+    "test:sdk": "vitest run --project sdk",
+    "test:api": "vitest run --project api",
+    "test:integration": "vitest run --project integration",
+    "db:test:up": "docker compose up -d postgres-test",
+    "db:test:down": "docker compose down",
+    "db:test:migrate": "DATABASE_URL=postgresql://gopaylocal_test:gopaylocal_test@localhost:5434/gopaylocal_test pnpm --filter @gopaylocal/api db:migrate",
+    "clean": "pnpm -r clean",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261117.1",
+    "@playwright/test": "^1.65.1",
+    "@types/node": "^24.19.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
+  },
+  "engines": {
+    "node": "^22.23.4 || ^24.11.0 || >=26.0.0"
+  },
+  "packageManager": "pnpm@12.21.0"
+}

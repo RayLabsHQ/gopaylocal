@@ -1,0 +1,143 @@
+---
+title: Pricing Modes
+description: How GoPayLocal's three pricing modes calculate each country's discount — PPP Factor, Group and Custom.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Each campaign has a pricing mode that decides each country's discount. In every mode the result is capped by the campaign's **max discount**, and a country with 0% sees no banner.
+
+| Mode | Works without setup | Set in the dashboard |
+|---|---|---|
+| **PPP Factor (automatic)** | Yes | Yes (the New Campaign form's default) |
+| **Group-based tiers** | Yes: the default tiers until you add parity groups | Mode only; parity groups have no screen yet |
+| **Custom per-country** | No: needs per-country percentages | Mode only; percentages are set through the API |
+
+## PPP Factor Pricing
+
+The discount comes from the country's PPP factor, the ratio of local prices to US prices.
+
+### How It Works
+
+1. GoPayLocal has a fixed table of PPP factors for 75 countries.
+2. The discount is `(1 − factor) × 100`, rounded to a whole percent.
+3. The campaign's max discount caps the result.
+4. Countries not in the table get no discount.
+
+### Example
+
+| Country | PPP Factor | Calculated Discount | With Max 60% |
+|---|---|---|---|
+| United States | 1.00 | 0% | 0% |
+| United Kingdom | 0.89 | 11% | 11% |
+| South Korea | 0.81 | 19% | 19% |
+| Brazil | 0.44 | 56% | 56% |
+| India | 0.20 | 80% | 60% (capped) |
+| Nigeria | 0.21 | 79% | 60% (capped) |
+
+For a $99 product with a 60% cap:
+
+| Visitor From | Discount | Final Price |
+|---|---|---|
+| United Kingdom | 11% | $88.11 |
+| South Korea | 19% | $80.19 |
+| Brazil | 56% | $43.56 |
+| India | 60% (capped) | $39.60 |
+
+### When to Use
+
+- You want discounts without any setup
+- You're comfortable with a different discount for almost every country
+- You want discounts that follow purchasing power closely
+
+<Aside type="caution">
+Set a **max discount** that suits your business. Uncapped, the lowest factor in the table gives a 90% discount (Venezuela, 0.10). The New Campaign form allows a cap of up to 90%.
+</Aside>
+
+---
+
+## Group Pricing
+
+Countries are grouped into parity tiers, and every country in a tier gets the tier's discount.
+
+### How It Works
+
+1. Your workspace's parity groups define the tiers and their discounts. While the workspace has no parity groups at all, GoPayLocal's default tiers are used; as soon as it has any group of its own (even one with no countries), only its own groups are used, never a mix.
+2. Each country is in at most one tier; if it's in several, the tier with the lowest sort order wins.
+3. Countries in no tier get no discount.
+
+<Aside type="caution">
+A new workspace has no parity groups and the dashboard has no screen for them, so a Group campaign uses the default tiers below. Changing the tiers means creating parity groups through the API. See [Parity Groups](/dashboard/parity-groups/).
+</Aside>
+
+### Example
+
+GoPayLocal's default tiers (75 countries), which a workspace without parity groups uses, for a $99 product:
+
+| Visitor From | Tier | Discount | Final Price |
+|---|---|---|---|
+| United States | 1 | 0% | $99.00 |
+| Portugal | 2 | 20% | $79.20 |
+| Brazil | 3 | 35% | $64.35 |
+| Nigeria | 4 | 50% | $49.50 |
+| India | 5 | 65% | $34.65 |
+
+See [Parity Groups](/dashboard/parity-groups/#default-tiers) for every country in each tier.
+
+### When to Use
+
+- You want a few predictable discount levels
+- You want to choose which countries share a discount
+
+---
+
+## Custom Pricing
+
+Set a discount percentage per country.
+
+### How It Works
+
+1. The campaign's `discountOverrides` maps country codes to percentages, set through the [Campaigns API](/api/campaigns/). The dashboard has no field for it yet.
+2. A country without its own percentage gets its parity group's discount, or none if it is in no group. The default tiers are not used here: in a workspace without parity groups, those countries get 0%.
+3. The max discount still caps every value.
+
+### Example
+
+```json
+{
+  "US": 0,
+  "GB": 10,
+  "DE": 10,
+  "ES": 20,
+  "BR": 35,
+  "MX": 35,
+  "IN": 50,
+  "ID": 50,
+  "NG": 55,
+  "PK": 55
+}
+```
+
+### When to Use
+
+- You have specific business requirements per country
+- You want to match a competitor's pricing in specific markets
+
+---
+
+## Comparison
+
+| Feature | PPP Factor | Group | Custom |
+|---|---|---|---|
+| **Setup** | None | None (default tiers), or your parity groups | Per-country percentages |
+| **Granularity** | Per country | Per tier | Per country |
+| **Based on** | GoPayLocal's PPP factor table | Your tiers | Your values |
+| **Countries covered** | The 75 in the table | Those in your tiers (the default tiers cover 75) | Those you list, plus your tiers |
+
+## Switching Modes
+
+You can change a campaign's pricing mode (and max discount) at any time in its **Settings** tab:
+
+1. The banner usually serves the new discounts within about a minute. A visitor who already loaded the banner can see the old answer for up to 5 minutes.
+2. When a country's discount changes, its code is replaced: the next time a visitor from that country loads the banner, GoPayLocal removes the old code at your payment provider and creates one for the new percentage.
+3. Analytics keep counting per campaign and country.

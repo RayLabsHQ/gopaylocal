@@ -1,0 +1,67 @@
+# Local configuration for the API Worker under `wrangler dev` (`pnpm dev:api`).
+#
+#   cp apps/api/.dev.vars.example apps/api/.dev.vars
+#
+# `.dev.vars` is gitignored. Never commit real values. Every value below is a
+# placeholder. Entries here override the [vars] block in wrangler.toml during
+# local development only; production secrets are set with `wrangler secret put`.
+# Bindings (HYPERDRIVE, CACHE, VPN_DATA, the RL_* rate limiters) are configured
+# in wrangler.toml, not here.
+
+# --- URLs ---------------------------------------------------------------------
+
+# Public origin of this Worker: Better Auth base URL and provider webhook callbacks.
+API_BASE_URL=http://localhost:8787
+# Merchant dashboard origin (trusted auth origin, links in invitation emails).
+APP_BASE_URL=http://localhost:3000
+# Admin dashboard origin (trusted auth origin).
+ADMIN_BASE_URL=http://localhost:3001
+
+# --- Database -----------------------------------------------------------------
+
+# Not read by the Worker: it connects through HYPERDRIVE (locally, the
+# localConnectionString in wrangler.toml). drizzle-kit and apps/api/scripts read
+# DATABASE_URL from your shell environment. Value: the docker-compose dev database.
+DATABASE_URL=postgresql://gopaylocal:gopaylocal@localhost:5433/gopaylocal
+
+# --- Auth -----------------------------------------------------------------------
+
+# Better Auth signing secret, 32+ random characters (openssl rand -base64 32).
+BETTER_AUTH_SECRET=replace-with-a-random-secret-of-at-least-32-characters
+# Google OAuth client ID. Leave Google values empty to disable Google sign-in.
+GOOGLE_CLIENT_ID=
+# Google OAuth client secret (redirect URI: http://localhost:8787/api/auth/callback/google).
+GOOGLE_CLIENT_SECRET=
+# GitHub OAuth app client ID. Leave GitHub values empty to disable GitHub sign-in.
+GITHUB_CLIENT_ID=
+# GitHub OAuth app client secret (callback URL: http://localhost:8787/api/auth/callback/github).
+GITHUB_CLIENT_SECRET=
+
+# --- Billing (Dodo Payments, hosted plan only) -----------------------------------
+
+# Dodo Payments API key used by the billing routes. Use a test-mode key locally.
+DODO_API_KEY=replace-with-dodo-test-mode-api-key
+# Signing secret for the billing webhook at /v1/webhooks/dodo.
+DODO_WEBHOOK_SECRET=replace-with-dodo-webhook-secret
+# Dodo environment: test_mode or live_mode.
+DODO_ENVIRONMENT=test_mode
+# Dodo product ID for the Pro plan billed monthly.
+DODO_PRICE_ID_PRO_MONTHLY=pdt_replace_with_monthly_product_id
+# Dodo product ID for the Pro plan billed annually.
+DODO_PRICE_ID_PRO_ANNUAL=pdt_replace_with_annual_product_id
+
+# --- Other --------------------------------------------------------------------
+
+# Key for encrypting merchants' payment-provider tokens at rest. Falls back to
+# BETTER_AUTH_SECRET when unset; changing it makes stored tokens unreadable.
+TOKEN_ENCRYPTION_KEY=replace-with-a-different-random-secret-of-at-least-32-characters
+# Comma-separated admin emails. Not read by the Worker: scripts/sync-admins.js
+# (run by `pnpm deploy:full`) reads it from the shell and syncs user.role.
+ADMIN_EMAILS=you@example.com
+# "true" = self-hosted mode: every organization unlimited, branding off, billing
+# endpoints disabled. Anything else = hosted mode with plans and Dodo billing.
+SELF_HOSTED=false
+# Azure Communication Services connection string for team invitation emails
+# (endpoint=https://<resource>.communication.azure.com/;accesskey=<key>).
+# Leave empty to skip sending invitation emails.
+ACS_CONNECTION_STRING=

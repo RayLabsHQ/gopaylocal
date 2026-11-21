@@ -1,0 +1,39 @@
+{
+  "name": "@gopaylocal/api",
+  "version": "0.0.1",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "wrangler deploy --dry-run --outdir=dist",
+    "deploy": "wrangler deploy",
+    "deploy:full": "drizzle-kit migrate || tsx scripts/migrate.ts && node scripts/sync-admins.js && wrangler deploy",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate || tsx scripts/migrate.ts",
+    "vpn:build-dataset": "node scripts/build-vpn-dataset.ts",
+    "verify:provider": "node --experimental-transform-types --disable-warning=ExperimentalWarning --import ./scripts/verify-provider/register-ts-resolve.mjs scripts/verify-provider.ts",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@gopaylocal/shared": "workspace:*",
+    "@paddle/paddle-node-sdk": "^3.12.0",
+    "better-auth": "^1.7.25",
+    "dodopayments": "^2.63.0",
+    "drizzle-orm": "^0.45.4",
+    "hono": "^4.13.19",
+    "postgres": "^4.1.1",
+    "stripe": "^23.1.0",
+    "ulid": "^3.0.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261117.1",
+    "@types/node": "^24.19.2",
+    "drizzle-kit": "^0.31.11",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.164.0"
+  }
+}

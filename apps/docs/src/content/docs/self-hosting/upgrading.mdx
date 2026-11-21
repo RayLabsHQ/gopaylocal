@@ -1,0 +1,94 @@
+---
+title: Upgrading
+description: Update a self-hosted GoPayLocal to a newer version, apply new database migrations, pick up new configuration, and roll back if needed.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+An upgrade is: pull the new code, check the configuration for new entries, migrate the database, deploy the API, then rebuild and deploy the frontends. Migrate before you deploy the API, so the new code never runs against an old schema.
+
+## 1. Pull the new version
+
+If you work in a fork with your own `wrangler.toml` committed, add the original repository once:
+
+```sh
+git remote add upstream https://github.com/RayLabsHQ/gopaylocal.git
+```
+
+Then, for each upgrade:
+
+```sh
+git fetch upstream
+git merge upstream/main
+pnpm install
+```
+
+`apps/api/wrangler.toml` in the original repository holds the hosted service's ids, so a merge may conflict on it. Keep your version:
+
+```sh
+git checkout --ours apps/api/wrangler.toml
+git add apps/api/wrangler.toml
+git commit
+```
+
+`pnpm install` uses the pnpm version pinned in `package.json` (through Corepack). If the root `package.json` raises the Node.js version in `engines`, upgrade Node first.
+
+## 2. Check for new configuration
+
+New bindings, variables, cron triggers and rate limits appear in `apps/api/wrangler.example.toml`. See what changed in this upgrade:
+
+```sh
+git diff ORIG_HEAD HEAD -- apps/api/wrangler.example.toml
+```
+
+`ORIG_HEAD` is where your branch was before the merge. Copy anything new into your `wrangler.toml`, and set any new secret with `pnpm wrangler secret put <NAME>` from `apps/api`. The [Configuration reference](/self-hosting/configuration/) describes every entry.
+
+## 3. Migrate the database
+
+List the migrations this upgrade adds:
+
+```sh
+git diff --stat ORIG_HEAD HEAD -- apps/api/drizzle
+```
+
+If there are new `.sql` files, apply them from the repository root:
+
+```sh
+DATABASE_URL="postgres://USER:PASSWORD@HOST:5432/DATABASE?sslmode=require" pnpm db:migrate
+```
+
+drizzle-kit applies only the files it has not applied before. If a migration fails, nothing from the run is applied (all new migrations run in one transaction), and the command exits with an error after printing the Postgres error message, its SQLSTATE code, the migration file and line, and the failing statement. Take a database backup first if your provider does not keep one for you.
+
+## 4. Deploy
+
+From the repository root:
+
+```sh
+pnpm build:banner
+cd apps/api
+pnpm run deploy
+cd ../..
+VITE_API_URL=https://api.example.com pnpm --filter @gopaylocal/dashboard build
+pnpm --filter @gopaylocal/dashboard run deploy:worker
+VITE_API_URL=https://api.example.com pnpm --filter @gopaylocal/admin build
+pnpm --filter @gopaylocal/admin run deploy:worker
+```
+
+Rebuild the banner every time: the API serves whatever is in `packages/banner/dist/banner.js` when you deploy.
+
+Alternatively, `pnpm run deploy:full` in `apps/api` runs the migration, the admin sync and the API deploy in one step ([details](/self-hosting/database/#migrate-sync-admins-and-deploy-in-one-command)).
+
+## Rolling back
+
+Cloudflare keeps previous versions of each Worker. To go back to the previous API version:
+
+```sh
+cd apps/api
+pnpm wrangler rollback
+```
+
+A rollback does not undo database migrations. Before rolling back past an upgrade that added a migration, check that the older code works with the newer schema. See Cloudflare's [rollbacks documentation](https://developers.cloudflare.com/workers/configuration/versions-and-deployments/rollbacks/).
+
+<Aside type="tip">
+Watch the repository's commits (or releases, once they are published) for changes that need action. Anything that adds configuration shows up in `wrangler.example.toml`, and anything that changes the schema adds a file in `apps/api/drizzle/`.
+</Aside>

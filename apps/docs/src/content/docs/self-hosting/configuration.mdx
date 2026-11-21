@@ -1,0 +1,106 @@
+---
+title: Configuration reference
+description: Every binding, variable and secret a self-hosted GoPayLocal reads, whether it is required, and what happens without it.
+---
+
+The API Worker is configured in `apps/api/wrangler.toml` (bindings, cron triggers and plain variables) and with `wrangler secret put` (secrets). Start from `apps/api/wrangler.example.toml`, which has a comment on every entry. The frontends read a single build-time variable. Local scripts read a few environment variables of their own.
+
+This list matches `apps/api/src/bindings.ts`. A unit test (`apps/api/src/wrangler-example.test.ts`) fails if a binding is added there without being documented in the example file.
+
+## Bindings
+
+Declared in `apps/api/wrangler.toml`. Keep the binding names; the code reads them by name.
+
+| Binding | Type | Required | Purpose | How to create |
+|---|---|---|---|---|
+| `HYPERDRIVE` | Hyperdrive | Yes | Connection to Postgres. `localConnectionString` is what `wrangler dev` uses locally. | `pnpm wrangler hyperdrive create <name> --connection-string="postgres://..."` |
+| `CACHE` | KV namespace | Yes | Banner documents, API-key lookups, usage snapshots, exchange rates (`fx:rates`). Rebuilt from Postgres or the next rate refresh when missing. | `pnpm wrangler kv namespace create CACHE` |
+| `VPN_DATA` | KV namespace | Yes | The VPN, datacenter and Tor IP dataset. While empty, only the built-in network list is checked. | `pnpm wrangler kv namespace create VPN_DATA` |
+| `RL_BANNER_IP` | Rate limit | Recommended | Banner script, bundle and config requests per visitor IP (300 per minute) | Nothing to create; the `[[ratelimits]]` block is the setup |
+| `RL_BANNER_MISS_IP` | Rate limit | Recommended | Banner requests with an unknown key, per IP, before the database lookup (20 per minute) | As above |
+| `RL_EVENTS_KEY` | Rate limit | Recommended | `POST /v1/events` per API key (3,000 per minute) | As above |
+| `RL_EVENTS_IP` | Rate limit | Recommended | `POST /v1/events` per IP (120 per minute) | As above |
+| `RL_AUTH_POST_IP` | Rate limit | Recommended | Sign-in and other auth `POST` requests per IP (10 per minute) | As above |
+| `RL_AUTH_GET_IP` | Rate limit | Recommended | Auth `GET` requests (session checks, OAuth callbacks) per IP (120 per minute) | As above |
+| `RL_GUMROAD_PING` | Rate limit | Recommended | Gumroad sale pings per integration (120 per minute). Each ping makes the API read the sale back with the merchant's token; over the limit the route answers 503 and Gumroad retries. | As above |
+| `RL_API_KEY` | Rate limit | Recommended | Management API requests made with a secret API key, per key (300 per minute). Over the limit the API answers 429 with `Retry-After`. | As above |
+| `RL_API_KEY_FAIL_IP` | Rate limit | Recommended | Secret-key lookups that found no key (unknown or revoked), per IPv4 address or IPv6 /64 (10 per minute). Over the limit, further failed attempts get 429 instead of 401; valid keys from the same address are unaffected. | As above |
+
+Rate limits are counted separately in each Cloudflare location, and `namespace_id` must be unique within your account ([rate limiting binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)). If a rate-limit binding is missing, the API skips that check rather than failing, and logs a warning once per isolate.
+
+### Cron triggers
+
+`[triggers] crons = ["*/10 * * * *", "30 9 * * *", "40 */6 * * *"]`. Keep all three.
+
+| Schedule (UTC) | Job |
+|---|---|
+| `*/10 * * * *` | Recomputes each organization's monthly API-call usage, and retries provider redemption webhooks that could not be processed when they arrived. Its 03:00 run also deletes sign-in sessions that expired more than a day ago. Analytics are never deleted on a self-hosted deployment |
+| `30 9 * * *` | Rebuilds the VPN dataset in `VPN_DATA`. Needs Workers Paid; see [Cloudflare plan](/self-hosting/#cloudflare-plan) |
+| `40 */6 * * *` | Refreshes the exchange rates used for local prices (`fx:rates` in `CACHE`). Its CPU use has not been measured on Workers Free. If it has not run, banners still work and show exact prices in your product's currency, with no converted estimate. |
+
+## Variables
+
+Set in the `[vars]` section of `apps/api/wrangler.toml`.
+
+| Variable | Required | Example | Purpose | If unset |
+|---|---|---|---|---|
+| `SELF_HOSTED` | Yes | `"true"` | Self-hosted mode: every organization unlimited, banner branding off, billing disabled. Only the exact value `true` (any case) turns it on. | Hosted mode: Free plan limits, branding, Dodo billing |
+| `API_BASE_URL` | Yes | `"https://api.example.com"` | Public URL of the API. Base URL for sign-in (OAuth callbacks) and for the webhook URLs registered with payment providers. | Sign-in derives the URL from each request and logs a warning; webhook URLs use the request's origin. Set it so callbacks and webhook URLs are predictable. |
+| `APP_BASE_URL` | Yes | `"https://app.example.com"` | Public URL of the dashboard. Allowed to make signed-in (credentialed) requests; used in invitation email links. | In self-hosted mode the dashboard's requests are refused by CORS, and no invitation email is sent |
+| `ADMIN_BASE_URL` | If you deploy the admin app | `"https://admin.example.com"` | Public URL of the admin app. Allowed to make signed-in requests. | In self-hosted mode the admin app's requests are refused by CORS |
+| `CORS_ALLOWED_ORIGINS` | No | `"https://dashboard.example.com"` | Extra comma-separated origins (exact `scheme://host[:port]`) allowed to make signed-in requests | None |
+| `EMAIL_FROM` | For invitation emails | `"DoNotReply@mail.example.com"` | Sender address for team invitation emails. It must be on a domain linked to your Azure Communication Services resource. See [Invitation emails](#invitation-emails). | In self-hosted mode no invitation email is sent |
+| `FX_RATES_URL` | No | `"https://rates.example.com/{date}.json"` or `"off"` | USD-based exchange-rate feed for local prices. `{date}` is replaced with today's, then yesterday's, UTC date. Accepted formats: fawazahmed0/exchange-api, Frankfurter v1 or v2, or `{"base": "USD", "date": "YYYY-MM-DD", "rates": {...}}`. `off` turns conversion off: visitors see exact prices in your product's currency. | fawazahmed0/exchange-api from jsDelivr, then its Cloudflare Pages mirror |
+| `FX_RATES_FALLBACK_URL` | No | `"https://frankfurter.example.com/v2/rates?base=usd"` or `"off"` | Second feed. It cross-checks the first: a currency gets a new rate only when the two agree within 5% (2% for a move over 15%); otherwise it keeps its last confirmed rate for up to 96 hours, then is not converted. It is also used when the first fails. `off` means one source with no cross-check: a new rate is accepted only within 15% of the last accepted one, and a bigger move is held until it comes back in range; to accept such a move, set this variable to a feed that confirms it, or delete the `fx:rates` key in the `CACHE` namespace so the next refresh starts over. A [self-hosted Frankfurter](https://frankfurter.dev/deploy/) works here. | Frankfurter v2 (`api.frankfurter.dev`) |
+| `FX_EXCLUDED_CURRENCIES` | No | `"VES,LBP"` | Comma-separated currencies that are never converted; visitors who use them see exact prices in your product's currency | None |
+| `DODO_ENVIRONMENT` | No | | Hosted billing only (`test_mode` or `live_mode`) | Not read when self-hosted |
+| `DODO_PRICE_ID_PRO_MONTHLY`, `DODO_PRICE_ID_PRO_ANNUAL` | No | | Hosted billing only (Dodo product ids) | Not read when self-hosted |
+
+With the defaults, the API fetches exchange rates from cdn.jsdelivr.net, currency-api.pages.dev and api.frankfurter.dev four times a day. To make no third-party requests, point `FX_RATES_URL` and `FX_RATES_FALLBACK_URL` at your own feed, or set `FX_RATES_URL` to `off`.
+
+**When a rate is held.** With `FX_RATES_FALLBACK_URL` set to `off`, there is no second source to confirm a rate. A currency whose rate moves more than 15% from its last accepted rate is held: visitors keep seeing prices converted at the old rate until that rate is 96 hours old, and after that the currency is left out, so visitors who use it see exact prices in your product's currency. The currency comes back when the feed's rate returns to within 15% of the old one, when you set `FX_RATES_FALLBACK_URL` to a feed again and that feed confirms the new rate, or when you delete the `fx:rates` key in the `CACHE` namespace so that the next refresh starts fresh. With two sources (the default), a currency the two disagree on is held in the same way; every other currency keeps converting.
+
+The banner and SDK endpoints accept requests from any website, so the sites that embed your banner do not go in `CORS_ALLOWED_ORIGINS`. To limit a campaign to your own sites, set its `allowedDomains` through the [campaigns API](/api/campaigns/).
+
+## Secrets
+
+Set from `apps/api` with `pnpm wrangler secret put <NAME>`.
+
+| Secret | Required | Purpose | How to create |
+|---|---|---|---|
+| `BETTER_AUTH_SECRET` | Yes | Signs sessions. Also encrypts stored payment-provider tokens when `TOKEN_ENCRYPTION_KEY` is not set. | `openssl rand -base64 32` |
+| `TOKEN_ENCRYPTION_KEY` | Recommended | Encrypts stored payment-provider tokens and webhook secrets, so `BETTER_AUTH_SECRET` can be rotated on its own. Set it before connecting the first integration: tokens stored under one key cannot be decrypted with another. | `openssl rand -base64 32` |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | At least one provider pair | Google sign-in. Enabled only when both are set. | [OAuth setup](/self-hosting/oauth/#google) |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | At least one provider pair | GitHub sign-in. Enabled only when both are set. | [OAuth setup](/self-hosting/oauth/#github) |
+| `ACS_CONNECTION_STRING` | No | Azure Communication Services connection string for team invitation emails | Azure portal. Without it, invitations are created but no email is sent. See [Invitation emails](#invitation-emails). |
+| `DODO_API_KEY`, `DODO_WEBHOOK_SECRET` | No | Hosted billing only | Leave unset. With no webhook secret, the Dodo webhook endpoint rejects every request. |
+
+### Invitation emails
+
+Team invitation emails go out through Azure Communication Services and need three settings:
+
+- `ACS_CONNECTION_STRING` (secret): your Azure Communication Services resource;
+- `EMAIL_FROM` (variable): the sender address, on a domain linked to that resource;
+- `APP_BASE_URL` (variable): the dashboard URL that the invitation link points to.
+
+If any of them is missing, the invitation is still created but no email is sent, and the API logs a warning naming the missing setting. Invitations work without email: the team settings page in the dashboard has a copy-link button for each pending invitation, and you send that link yourself.
+
+## Frontend build variable
+
+| Variable | Used by | Required | Purpose |
+|---|---|---|---|
+| `VITE_API_URL` | Dashboard and admin app, at build time | Yes | Public URL of the API (the same value as `API_BASE_URL`). Compiled into the app; without it the build calls `http://localhost:8787`. |
+
+The marketing site and the docs read no variables. Their canonical URL is `site` in each app's `astro.config.mjs`.
+
+## Script environment variables
+
+Read by tools you run on your computer; never deployed.
+
+| Variable | Read by | Purpose |
+|---|---|---|
+| `DATABASE_URL` | `pnpm db:migrate` (drizzle-kit, then `scripts/migrate.ts` if that fails), `scripts/sync-admins.js`, `scripts/create-test-user.ts` | Direct connection string to Postgres |
+| `ADMIN_EMAILS` | `scripts/sync-admins.js` (also run by `pnpm run deploy:full`) | Comma-separated platform admins; see [First admin user](/self-hosting/first-admin/) |
+| `DATABASE_SSL` | `scripts/sync-admins.js` | TLS override; see [TLS settings](/self-hosting/database/#tls-settings-for-the-scripts) |
+| `PGSSLMODE` | the Postgres driver used by the scripts | Standard Postgres TLS setting, used when `DATABASE_URL` has no `sslmode` |
+| `TEST_USER_EMAIL`, `TEST_USER_PASSWORD`, `TEST_USER_NAME`, `BETTER_AUTH_SECRET` | `scripts/create-test-user.ts` | Local test accounts only; see [OAuth setup](/self-hosting/oauth/#why-oauth-is-required) |

@@ -1,0 +1,164 @@
+---
+title: React SDK Installation
+description: Install and set up the GoPayLocal React SDK in your React or Next.js app.
+---
+
+import { Tabs, TabItem, Aside, Steps } from '@astrojs/starlight/components';
+
+The React SDK provides components and hooks for building PPP-aware pricing in React and Next.js applications.
+
+`@gopaylocal/react` is open source under the MIT license, so you can bundle it into closed-source and commercial apps. Keep its license notice in the bundles you ship. Its source lives in [`packages/react-sdk`](https://github.com/RayLabsHQ/gopaylocal/tree/main/packages/react-sdk).
+
+## Install
+
+<Tabs>
+  <TabItem label="npm">
+  ```bash
+  npm install @gopaylocal/react
+  ```
+  </TabItem>
+  <TabItem label="pnpm">
+  ```bash
+  pnpm add @gopaylocal/react
+  ```
+  </TabItem>
+  <TabItem label="yarn">
+  ```bash
+  yarn add @gopaylocal/react
+  ```
+  </TabItem>
+  <TabItem label="bun">
+  ```bash
+  bun add @gopaylocal/react
+  ```
+  </TabItem>
+</Tabs>
+
+Peer dependency: `react` 18 or 19. The package ships ES module and CommonJS builds with TypeScript declarations for both.
+
+## Setup
+
+<Steps>
+
+1. **Wrap your app with `GoPayLocalProvider`**
+
+   The provider fetches PPP data once and makes it available to all child components.
+
+   <Tabs>
+     <TabItem label="Next.js (App Router)">
+     ```tsx
+     // app/layout.tsx (a Server Component)
+     import { GoPayLocalProvider } from '@gopaylocal/react';
+
+     export default function RootLayout({
+       children,
+     }: {
+       children: React.ReactNode;
+     }) {
+       return (
+         <html lang="en">
+           <body>
+             <GoPayLocalProvider apiKey={process.env.NEXT_PUBLIC_GOPAYLOCAL_KEY!}>
+               {children}
+             </GoPayLocalProvider>
+           </body>
+         </html>
+       );
+     }
+     ```
+
+     The package is marked `'use client'`, so a Server Component can render the provider directly with plain props. Callback props (`onLoad`, `onError`) are functions, which a Server Component cannot pass; to use them, render the provider from your own `'use client'` component instead.
+     </TabItem>
+
+     <TabItem label="Next.js (Pages Router)">
+     ```tsx
+     // pages/_app.tsx
+     import { GoPayLocalProvider } from '@gopaylocal/react';
+     import type { AppProps } from 'next/app';
+
+     export default function App({ Component, pageProps }: AppProps) {
+       return (
+         <GoPayLocalProvider apiKey="gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef">
+           <Component {...pageProps} />
+         </GoPayLocalProvider>
+       );
+     }
+     ```
+     </TabItem>
+
+     <TabItem label="Vite / CRA">
+     ```tsx
+     // src/main.tsx
+     import React from 'react';
+     import ReactDOM from 'react-dom/client';
+     import { GoPayLocalProvider } from '@gopaylocal/react';
+     import App from './App';
+
+     ReactDOM.createRoot(document.getElementById('root')!).render(
+       <React.StrictMode>
+         <GoPayLocalProvider apiKey="gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef">
+           <App />
+         </GoPayLocalProvider>
+       </React.StrictMode>
+     );
+     ```
+     </TabItem>
+   </Tabs>
+
+2. **Use PPP-aware components or hooks**
+
+   ```tsx
+   'use client'; // in Next.js App Router: hooks and PPP components run on the client
+
+   import { PPPPrice } from '@gopaylocal/react';
+
+   function PricingCard() {
+     return (
+       <div>
+         <h2>Pro Plan</h2>
+         <PPPPrice price={9.99} />
+         <span>/month</span>
+       </div>
+     );
+   }
+   ```
+
+</Steps>
+
+<Aside type="note">
+The request runs in the browser only: the discount depends on the visitor's country, so the server has no data. Server-rendered HTML and the first client render show your base prices (`isLoading` is `true`), and the discount appears right after hydration. This keeps server and client HTML identical, so there are no hydration mismatches.
+</Aside>
+
+In Next.js App Router, files that call `usePPP()`/`usePrice()` or render `PPP*` components need `'use client'` at the top, like any component that uses hooks. The helpers the package re-exports (`formatCurrency`, `countryToFlag`, `splitPrice`) are client references too; to use them in a Server Component, import them from [`@gopaylocal/js`](/js/installation) instead.
+
+## What's Included
+
+The React SDK exports:
+
+| Category | Exports |
+|---|---|
+| **Provider** | `GoPayLocalProvider` |
+| **Hooks** | `usePPP`, `usePrice` |
+| **Components** | `PPPBanner`, `PPPPrice`, `PPPPriceFormatted`, `PPPPriceInteger`, `PPPPriceDecimal`, `PPPCurrencySymbol`, `PPPCurrencyCode`, `PPPPricingTable` |
+| **Utilities** | `countryToFlag`, `formatCurrency`, `splitPrice` |
+| **Constants** | `DEFAULT_API_BASE` (`'https://api.gopaylocal.com'`), `VISITOR_ID_STORAGE_KEY` (`'gpl_vid'`) |
+| **Types** | `PPPConfig`, `PPPResponse`, `PPPBannerDesign`, `PPPContextValue`, `PPPTrackableEvent`, and all component props |
+
+## TypeScript
+
+The SDK is written in TypeScript and ships with full type definitions. All components, hooks, and utilities are fully typed.
+
+```tsx
+import type { PPPContextValue, PPPResponse } from '@gopaylocal/react';
+```
+
+## Bundle Size
+
+The package is marked side-effect free (`"sideEffects": false`), so bundlers can drop the components you don't import. The provider and the hooks are always included.
+
+## Next Steps
+
+- [Provider reference](/react/provider) — All provider props and configuration
+- [Hooks reference](/react/hooks) — `usePPP()` and `usePrice()` API
+- [Components reference](/react/components) — All available components
+- [Pricing Table](/react/pricing-table) — Drop-in pricing page component

@@ -1,0 +1,186 @@
+---
+title: GoPayLocalProvider
+description: Reference for the GoPayLocalProvider component — the root of every GoPayLocal React integration.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The `GoPayLocalProvider` wraps your app (or the part of your app that needs PPP pricing) and provides PPP data to all descendant hooks and components.
+
+## Usage
+
+```tsx
+import { GoPayLocalProvider } from '@gopaylocal/react';
+
+function App() {
+  return (
+    <GoPayLocalProvider apiKey="gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef">
+      <PricingPage />
+    </GoPayLocalProvider>
+  );
+}
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `apiKey` | `string` | **(required)** | Your GoPayLocal public API key (starts with `gpl_pk_`). |
+| `apiBase` | `string` | `'https://api.gopaylocal.com'` | API base URL. Self-hosted deployments set the URL of their own API Worker. |
+| `productId` | `string` | — | Only use this product's campaign. Without it, the API picks the campaign (see [Banner API](/api/banner)). An unknown id, or a product with no active campaign, means no discount, never another product's campaign. |
+| `visitorId` | `string` | — | Your own visitor id for [A/B experiments](#ab-experiments). 16 to 64 characters of `A-Z a-z 0-9 _ -`; anything else is ignored with a console warning. |
+| `persistVisitorId` | `boolean` | `true` | Keep a random visitor id in localStorage (key `gpl_vid`) so the visitor stays in the same experiment arm. |
+| `baseCurrencyCode` | `string` | The product's currency | The currency the prices you pass to `usePrice()` and the price components are written in. Prices are converted to the visitor's currency only when this is your product's currency. Unset, it is the product's currency from the API, and `'USD'` before the API answers or when no discount applies. |
+| `baseCurrencySymbol` | `string` | The product's symbol | Its symbol. Unset, it is the product's symbol from the API when `baseCurrencyCode` is the product's currency, otherwise the symbol of `baseCurrencyCode` in the visitor's locale. |
+| `onLoad` | `(data: PPPResponse) => void` | — | Called when a discount applies (not when there is none). |
+| `onError` | `(error: Error) => void` | — | Called when the request fails, including a timeout after 8 seconds. |
+| `children` | `ReactNode` | **(required)** | Child components that need access to PPP data. |
+
+Changing `apiKey`, `apiBase`, `productId`, `visitorId` or `persistVisitorId` makes a new request.
+
+## A/B experiments
+
+When a product has a running [A/B experiment](/guides/ab-testing), the API puts each visitor in arm A or B and serves that arm's campaign. The provider sends a visitor id so the visitor stays in the same arm:
+
+- By default it generates a random id with Web Crypto, keeps it in `localStorage` under `gpl_vid`, and sends it only to the GoPayLocal API. The banner script and the JS SDK use the same key.
+- `visitorId` uses your own id instead (never stored), for example a signed-in user's id. Do not use personal data such as an email address (those are rejected anyway).
+- `persistVisitorId={false}` stores nothing. No id is sent and the API assigns the arm from a hash of IP address and user agent.
+- With storage blocked, no id is sent and everything else works.
+
+Read the arm from [`usePPP()`](/react/hooks#useppp): `experimentId` and `variant` (`'a'`, `'b'` or `null`). They are set even when the visitor's arm gives them no discount (then `data` is `null`), so you can attribute visitors in both arms.
+
+## Self-hosting
+
+```tsx
+<GoPayLocalProvider apiKey="gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" apiBase="https://ppp.example.com">
+  <App />
+</GoPayLocalProvider>
+```
+
+Requests then go to `https://ppp.example.com/v1/...` (trailing slashes are ignored). It is the same URL as the [JS SDK's](/js/installation#self-hosting) `apiBase` and the host you load the [banner script](/banner/installation#self-hosting) from.
+
+## Callbacks
+
+### onLoad
+
+Called when the response grants a discount. The callback receives the `PPPResponse` object. It is not called when no discount applies.
+
+```tsx
+<GoPayLocalProvider
+  apiKey="gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  onLoad={(data) => {
+    console.log('PPP data loaded:', data.country, data.discount);
+    // Track in your analytics
+    analytics.track('ppp_loaded', {
+      country: data.country,
+      discount: data.discount,
+      variant: data.variant, // 'a' | 'b' during an A/B experiment, else undefined
+    });
+  }}
+>
+  <App />
+</GoPayLocalProvider>
+```
+
+### onError
+
+Called when the API request fails or times out (after 8 seconds). The provider continues to render children with no discount applied.
+
+```tsx
+<GoPayLocalProvider
+  apiKey="gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  onError={(error) => {
+    console.error('GoPayLocal error:', error.message);
+    // Report to error tracking
+    Sentry.captureException(error);
+  }}
+>
+  <App />
+</GoPayLocalProvider>
+```
+
+<Aside type="note">
+Errors are non-fatal. If the API request fails, all PPP components render with the base currency and no discount. Your app continues to work normally.
+</Aside>
+
+## Context Value
+
+The provider creates a React context with the following shape:
+
+```ts
+interface PPPContextValue {
+  /** The response when a discount applies; null while loading, on error, or with no discount. */
+  data: PPPResponse | null;
+  /** Whether the API request is in flight (true on the server and the first client render). */
+  isLoading: boolean;
+  /** Error from the API request, if any. */
+  error: Error | null;
+  /** ISO 3166-1 alpha-2 country code (e.g., 'IN'), when a discount applies. */
+  country: string | null;
+  /** Discount percentage (0-100); 0 without a discount. */
+  discount: number;
+  /** Coupon code, if available. */
+  code: string | null;
+  /** The currency the prices you pass in are written in. */
+  baseCurrencyCode: string;
+  /** The symbol of baseCurrencyCode. */
+  baseCurrencySymbol: string;
+  /** The currency prices are shown in: the visitor's when converted (fxAsOf set), else baseCurrencyCode. */
+  currencyCode: string;
+  /** The symbol of currencyCode. */
+  currencySymbol: string;
+  /** The exchange rate prices are converted with; 1 when they are not converted. */
+  fxRate: number;
+  /** The rates' date (YYYY-MM-DD) when prices are converted estimates; null otherwise. */
+  fxAsOf: string | null;
+  /** The campaign's charm pricing strategy, used to round converted prices. */
+  charmPricingStrategy: 'none' | 'dot99' | 'round_x9' | 'nearest_5' | 'region_aware';
+  /** A base price after the discount, in currencyCode (charm-rounded up when converted). */
+  localPrice: (basePrice: number) => number;
+  /** A base price before the discount, in currencyCode (charm-rounded down when converted). */
+  localOriginalPrice: (basePrice: number) => number;
+  /** Format a price in currencyCode. */
+  formatPrice: (price: number, options?: Intl.NumberFormatOptions) => string;
+  /** Country flag emoji (e.g., '🇮🇳'). */
+  flag: string;
+  /** The campaign that produced the discount (the assigned arm during an experiment). */
+  campaignId: string | null;
+  /** The running A/B experiment's id, or null. Also set when the visitor's arm has no discount. */
+  experimentId: string | null;
+  /** 'a' (control), 'b' (variant), or null when no experiment applied. */
+  variant: 'a' | 'b' | null;
+  /** Report a banner interaction to GoPayLocal analytics (for custom banners). */
+  track: (event: 'impression' | 'click' | 'copy' | 'dismiss') => void;
+}
+```
+
+Access this context via the [`usePPP()` hook](/react/hooks#useppp).
+
+## Caching
+
+The provider caches a response with a discount in `sessionStorage` for 5 minutes under the key `gpl_react_{apiKey}_{productId}`. This means:
+
+- The first page load makes an API call
+- Subsequent page loads within the session use cached data
+- The cache is automatically invalidated after 5 minutes
+- The cache is cleared when the browser tab is closed
+
+If storage is blocked, the provider simply asks the API on every page load.
+
+## Multiple Providers
+
+You can have multiple providers for different products, side by side, with the same API key:
+
+```tsx
+<GoPayLocalProvider apiKey="gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" productId="prod_ebook">
+  <EbookPricing />
+</GoPayLocalProvider>
+
+<GoPayLocalProvider apiKey="gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" productId="prod_course">
+  <CoursePricing />
+</GoPayLocalProvider>
+```
+
+<Aside type="caution">
+Do not nest providers. Each provider creates its own context, and nested providers will shadow the outer one.
+</Aside>

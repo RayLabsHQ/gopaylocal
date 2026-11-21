@@ -1,0 +1,123 @@
+---
+title: Quickstart
+description: Add PPP discounts to your site in under 5 minutes.
+---
+
+import { Steps, Tabs, TabItem, Aside, Code } from '@astrojs/starlight/components';
+
+Get up and running with GoPayLocal in three steps.
+
+<Steps>
+
+1. **Sign up for free**
+
+   Create your account at [app.gopaylocal.com](https://app.gopaylocal.com). No credit card required: the Free plan has every feature, for 1 product and 10,000 API calls a month.
+
+2. **Add the banner script**
+
+   Copy your public API key from the dashboard and add the script tag to your site:
+
+   <Tabs>
+     <TabItem label="HTML">
+     ```html
+     <!-- Add before </body> -->
+     <script
+       src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+       async
+     ></script>
+     ```
+     </TabItem>
+     <TabItem label="React / Next.js">
+     ```tsx
+     // app/layout.tsx (App Router)
+     import Script from 'next/script';
+
+     export default function RootLayout({ children }) {
+       return (
+         <html>
+           <body>
+             {children}
+             <Script
+               src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+               strategy="afterInteractive"
+             />
+           </body>
+         </html>
+       );
+     }
+     ```
+     </TabItem>
+     <TabItem label="Astro">
+     ```astro
+     ---
+     // src/layouts/Layout.astro
+     ---
+     <html>
+       <body>
+         <slot />
+         <script
+           src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+           is:inline
+           async
+         ></script>
+       </body>
+     </html>
+     ```
+     </TabItem>
+   </Tabs>
+
+   Replace `gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef` with your actual public API key from the [dashboard](/dashboard/api-keys).
+
+3. **Configure discounts in the dashboard**
+
+   Go to your [Dashboard](https://app.gopaylocal.com) and:
+   - Connect a **Payment Integration** (Stripe, Paddle, etc.) under **Integrations**, so GoPayLocal can create coupon codes there. Without one, the banner shows the discount but no code.
+   - Create a **Product** with your product name, URL and base price
+   - Create a **Campaign** for the product, pick the integration, and set its status to **Active**. **PPP Factor** pricing works without any further setup.
+   - Adjust the **Banner** on the campaign's **Setup** tab. The same tab has the script tag with your key and product filled in.
+
+</Steps>
+
+That's it. Visitors from countries with lower purchasing power will now see a personalized discount banner.
+
+## What Happens Next
+
+When a visitor loads your page:
+
+1. The script makes one request to the GoPayLocal API, which runs on Cloudflare's edge.
+2. The API takes the visitor's country from Cloudflare's geolocation of the connection.
+3. It checks for VPN, proxy, datacenter and Tor traffic, which gets no discount.
+4. It answers with the campaign's discount and coupon code for that country, mostly from its edge cache.
+5. The banner appears with the discount and code.
+6. Impressions, clicks and copies are reported with `sendBeacon`.
+
+<Aside type="note">
+The banner renders inside a **Shadow DOM** so it never breaks your site's styles. It's completely isolated.
+</Aside>
+
+## Want More Control?
+
+The banner script is the simplest integration. For deeper control over pricing display, consider:
+
+- **[React SDK](/react/installation)** — Components and hooks for React/Next.js apps
+- **[JavaScript SDK](/js/installation)** — Imperative API for any JS framework
+- **[Auto-apply discounts](/guides/auto-apply)** — Have your checkout apply the code for the visitor
+
+## Test It
+
+The banner works on `localhost` too (unless the campaign has an allowed-domains list without it). The API always uses the country Cloudflare sees for your connection: there is no way to pick a country, and a `CF-IPCountry` header you send is ignored. A VPN doesn't help either, because VPN traffic gets no discount.
+
+To check your setup:
+
+- Call the config endpoint and read the answer. `show: false` comes with a `reason`, such as `no_discount` when your own country has none (see [Banner API](/api/banner/#reasons-for-show-false)):
+
+  ```bash
+  curl "https://api.gopaylocal.com/v1/banner/config/gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef?product=YOUR_PRODUCT_ID"
+  ```
+
+- The New Campaign page previews the discount for every country GoPayLocal has a PPP factor for.
+- The **Banner** card on the campaign's **Setup** tab previews the design.
+
+<Aside type="caution">
+A campaign change usually reaches the API within about a minute, and the banner script keeps its answer for 5 minutes in the browser tab. After a change, wait a minute and open the page in a new tab.
+</Aside>

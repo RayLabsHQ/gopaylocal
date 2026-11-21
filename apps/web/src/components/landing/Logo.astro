@@ -1,0 +1,24 @@
+---
+// Brand mark "Parity percent": the diagonal parity split whose gutter doubles
+// as a percent slash, with a square hole in each half as the percent dots.
+// Holes are transparent — the mark sits on dark surfaces. Keep geometry in
+// sync with public/favicon.svg (which adds a dark backing tile for light tabs).
+interface Props {
+  class?: string;
+}
+const { class: className } = Astro.props;
+---
+
+<a href="/" class:list={["flex items-center gap-2.5 shrink-0 no-underline", className]}>
+  <svg
+    class="h-6 w-6 shrink-0"
+    viewBox="0 0 32 32"
+    xmlns="http://www.w3.org/2000/svg"
+    role="img"
+    aria-label="GoPayLocal logo"
+  >
+    <path fill="#E42313" fill-rule="evenodd" d="M0 0 H28 L0 28 Z M5.5 5.5 h6 v6 h-6 Z"></path>
+    <path fill="#FFFFFF" fill-rule="evenodd" d="M32 4 V32 H4 Z M20.5 20.5 h6 v6 h-6 Z"></path>
+  </svg>
+  <span class="font-display text-base font-bold tracking-tight text-text-primary">GoPayLocal</span>
+</a>

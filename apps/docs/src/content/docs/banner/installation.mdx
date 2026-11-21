@@ -1,0 +1,259 @@
+---
+title: Banner Script Installation
+description: Install the GoPayLocal banner script on your site with a single script tag.
+---
+
+import { Tabs, TabItem, Aside, Steps } from '@astrojs/starlight/components';
+
+The banner script is the simplest way to add PPP discounts to your site. One `<script>` tag and you're done.
+
+The banner's source is open under the MIT license in [`packages/banner`](https://github.com/RayLabsHQ/gopaylocal/tree/main/packages/banner). The GoPayLocal API serves the built script, so there is nothing to install.
+
+## Quick Install
+
+Add this script tag to your site, just before the closing `</body>` tag:
+
+```html
+<script
+  src="https://api.gopaylocal.com/v1/banner/script.js?key=YOUR_PUBLIC_KEY"
+  data-product="YOUR_PRODUCT_ID"
+  async
+></script>
+```
+
+Replace `YOUR_PUBLIC_KEY` with your public API key (starts with `gpl_pk_`). You can find it in the [Dashboard](/dashboard/api-keys). The campaign page in the dashboard shows this snippet with your key and product id filled in.
+
+<Aside type="tip">
+The `async` attribute ensures the script loads without blocking your page. The banner is about 3.6 KB gzipped (see [Script Size](#script-size)).
+</Aside>
+
+## Script Attributes
+
+Put these on the `<script>` tag you add (the loader). The banner reads them from that tag.
+
+| Attribute | Description |
+|---|---|
+| `src` `?key=` | **Required.** Your public API key, in the script URL. |
+| `data-product` | Only show this product's campaign. Without it, the API uses your default product: the product of your newest active campaign (live campaigns before test ones), so single-product sites need nothing. An unknown id, or a product with no active campaign, shows no banner, never another product's campaign. Use it whenever you sell more than one product. |
+| `data-visitor-id` | Your own visitor id for [A/B experiments](#ab-experiments), such as a signed-in user's id. 16 to 64 characters of `A-Z a-z 0-9 _ -`; anything else is ignored. Never stored. |
+| `data-no-storage` | Use no browser storage at all: no response cache, no remembered dismissal, no visitor id. Any value except `"false"` turns it on (`data-no-storage` alone works). |
+
+```html
+<script
+  src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  data-product="prod_ebook"
+  data-no-storage
+  async
+></script>
+```
+
+## Framework-Specific Installation
+
+<Tabs>
+  <TabItem label="HTML">
+  ```html
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <title>My App</title>
+  </head>
+  <body>
+    <h1>My Pricing Page</h1>
+
+    <!-- GoPayLocal Banner Script -->
+    <script
+      src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      data-product="prod_abc123"
+      async
+    ></script>
+  </body>
+  </html>
+  ```
+  </TabItem>
+
+  <TabItem label="Next.js (App Router)">
+  ```tsx
+  // app/layout.tsx
+  import Script from 'next/script';
+
+  export default function RootLayout({
+    children,
+  }: {
+    children: React.ReactNode;
+  }) {
+    return (
+      <html lang="en">
+        <body>
+          {children}
+          <Script
+            src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            data-product="prod_abc123"
+            strategy="afterInteractive"
+          />
+        </body>
+      </html>
+    );
+  }
+  ```
+  </TabItem>
+
+  <TabItem label="Next.js (Pages Router)">
+  ```tsx
+  // pages/_app.tsx
+  import Script from 'next/script';
+  import type { AppProps } from 'next/app';
+
+  export default function App({ Component, pageProps }: AppProps) {
+    return (
+      <>
+        <Component {...pageProps} />
+        <Script
+          src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          data-product="prod_abc123"
+          strategy="afterInteractive"
+        />
+      </>
+    );
+  }
+  ```
+  </TabItem>
+
+  <TabItem label="Astro">
+  ```astro
+  ---
+  // src/layouts/Layout.astro
+  ---
+  <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <title>My Site</title>
+    </head>
+    <body>
+      <slot />
+      <script
+        src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        data-product="prod_abc123"
+        is:inline
+        async
+      ></script>
+    </body>
+  </html>
+  ```
+  </TabItem>
+</Tabs>
+
+## How It Works
+
+<Steps>
+
+1. `script.js` is a tiny loader. It loads asynchronously, so it does not block page rendering, and adds the banner itself (`bundle.js`) to the page
+2. The banner makes one API call (`GET /v1/banner/config/:key`, with `product` and the visitor id) to fetch the config for the visitor's country. It gives up after 5 seconds
+3. The response is cached in `sessionStorage` for 5 minutes, per key and product
+4. A discount banner renders inside a closed **Shadow DOM** element, using your campaign's [banner design](/banner/customization)
+5. The banner reports `impression`, `copy` and `dismiss` events to your [analytics](/banner/events)
+6. Page loads within those 5 minutes use the cache, with no additional API calls. A dismissed banner stays hidden for the rest of the browser session
+
+</Steps>
+
+## Shadow DOM Isolation
+
+The banner is rendered inside a [Shadow DOM](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_shadow_DOM), which means:
+
+- Your site's CSS cannot accidentally break the banner
+- The banner's CSS cannot leak into your site
+- No layout shifts — the banner uses `position: fixed` and overlays your content (a `top` bar covers the top of the page rather than pushing it down)
+
+Shadow DOM isolates styles, not code: like any script you add, the banner runs in your page. It reads its own script tag and the storage keys listed below, and sends requests only to the API it was loaded from.
+
+<Aside type="note">
+Because the banner uses Shadow DOM, you cannot style it with your site's CSS. See [Banner Customization](/banner/customization) for what you can change.
+</Aside>
+
+## Reading the Discount and Experiment Arm
+
+After each config response, the banner dispatches a `gopaylocal:config` event on `document`, whether or not a banner shows:
+
+```js
+document.addEventListener('gopaylocal:config', (e) => {
+  const { show, country, discount, code, campaignId, experimentId, variant } = e.detail;
+  // show: whether a discount applies
+  // experimentId / variant ('a' | 'b'): set during an A/B experiment, else null
+});
+```
+
+Add the listener before the banner script runs (for example in an inline script above it), since the event fires once per page load. It does not fire after the visitor has closed the banner in this browser session, because the banner then makes no request at all.
+
+## A/B experiments
+
+When the product has a running [A/B experiment](/guides/ab-testing), the API puts each visitor in arm A or B. To keep a visitor in the same arm, the banner sends a random visitor id generated with Web Crypto and kept in `localStorage` under `gpl_vid`. It is sent only to the GoPayLocal API. The [JS SDK](/js/installation#ab-experiments) and [React SDK](/react/provider#ab-experiments) use the same key, so a visitor gets the same arm everywhere on your site.
+
+- `data-visitor-id` uses your own id instead and stores nothing.
+- `data-no-storage` sends no id. The API then assigns the arm from a hash of IP address and user agent.
+- With storage blocked, no id is sent and the banner still works.
+
+## Storage
+
+| Key | Storage | What |
+|---|---|---|
+| `gpl_c_<key>_<product>` | `sessionStorage` | The config response, reused for 5 minutes |
+| `gpl_d_<key>_<product>` | `sessionStorage` | Set when the visitor closes the banner |
+| `gpl_vid` | `localStorage` | Random visitor id for A/B experiments |
+
+Every storage access is wrapped, so blocked storage costs only these features, never the banner. `data-no-storage` turns all three off.
+
+## Script Size
+
+| Metric | Size |
+|---|---|
+| Uncompressed | ~8.2 KB |
+| Gzipped | ~3.6 KB |
+| Brotli | ~3.2 KB |
+
+That is the banner bundle; the loader in front of it is about 200 bytes. The browser caches the loader for an hour and the bundle for a day.
+
+## Content Security Policy (CSP)
+
+If your site uses a Content Security Policy, add these directives:
+
+```
+script-src 'self' https://api.gopaylocal.com;
+connect-src 'self' https://api.gopaylocal.com;
+```
+
+`script-src` covers the loader and the bundle; `connect-src` covers the config request and the analytics events. The banner needs no `style-src` change: it adds its styles as a constructed stylesheet, which `style-src` does not block. Browsers without constructable stylesheets (Safari before 16.4, Firefox before 101) get a `<style>` element instead, which needs `style-src 'unsafe-inline'`.
+
+When self-hosting, use your own API's origin instead of `https://api.gopaylocal.com`.
+
+## Subresource Integrity (SRI)
+
+SRI hashes don't fit here: the loader is generated for your key, and the bundle it loads changes with every release, so a pinned hash would break the banner at the next update. Both are served over HTTPS.
+
+## Only Load on Pricing Pages
+
+If you only want the banner on specific pages (e.g., your pricing page), conditionally add the script:
+
+```html
+<script>
+  if (window.location.pathname === '/pricing') {
+    const s = document.createElement('script');
+    s.src = 'https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+    s.dataset.product = 'prod_abc123'; // data-product
+    s.async = true;
+    document.body.appendChild(s);
+  }
+</script>
+```
+
+## Self-hosting
+
+If you run your own GoPayLocal API, load the script from it:
+
+```html
+<script
+  src="https://ppp.example.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  data-product="prod_abc123"
+  async
+></script>
+```
+
+The banner sends every request to the host it was loaded from, so there is nothing else to configure. Use the same URL as `apiBase` in the [JS SDK](/js/installation#self-hosting) and [React SDK](/react/provider#self-hosting).

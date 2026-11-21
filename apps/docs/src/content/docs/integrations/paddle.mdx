@@ -1,0 +1,120 @@
+---
+title: Paddle
+description: Integrate GoPayLocal with Paddle Billing for automatic PPP discount codes.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+GoPayLocal creates Paddle Billing discounts automatically, one per discount level in your campaign, and tracks when customers redeem them. Paddle is a merchant of record, so it handles sales tax and VAT on these sales.
+
+## Setup
+
+<Steps>
+
+1. **Get your Paddle API key**
+
+   Go to [Paddle Dashboard](https://vendors.paddle.com) > **Developer Tools > Authentication**. Create an API key.
+
+   For testing, create the key in the [Paddle Sandbox](https://sandbox-vendors.paddle.com) instead. Sandbox keys start with `pdl_sdbx_apikey_`.
+
+2. **Connect in GoPayLocal**
+
+   In your GoPayLocal dashboard, open **Integrations** in the sidebar and click **Connect** on the Paddle card. Enter your API key in the dialog. The key is saved for the environment selected in the sidebar, so switch to **Test** first for a sandbox key.
+
+   Click **Test** after connecting to verify your credentials.
+
+3. **Create a campaign**
+
+   Select **Paddle** as the payment provider in your campaign settings.
+
+</Steps>
+
+## Percentage Discounts
+
+GoPayLocal creates standard Paddle discounts that recur for the life of a subscription:
+
+```json
+{
+  "description": "PPP IN 30%",
+  "type": "percentage",
+  "amount": "30",
+  "code": "PPPIN30K7QX",
+  "enabled_for_checkout": true,
+  "recur": true,
+  "maximum_recurring_intervals": null
+}
+```
+
+Paddle discount codes contain letters and digits only, so GoPayLocal codes for Paddle look like `PPPIN30K7QX`.
+
+## Price Overrides
+
+Paddle can also set different prices per country directly on a Price, with `unit_price_overrides`:
+
+```json
+{
+  "unit_price": {
+    "amount": "9900",
+    "currency_code": "USD"
+  },
+  "unit_price_overrides": [
+    {
+      "country_codes": ["IN"],
+      "unit_price": {
+        "amount": "49900",
+        "currency_code": "INR"
+      }
+    }
+  ]
+}
+```
+
+GoPayLocal does not create or change price overrides; it works with discount codes.
+
+## Auto-Apply
+
+Paddle supports auto-applying discounts through the checkout overlay:
+
+```js
+Paddle.Checkout.open({
+  items: [{ priceId: 'pri_xxx', quantity: 1 }],
+  discountCode: 'PPPIN30K7QX',
+});
+```
+
+Or via the inline checkout:
+
+```html
+<div
+  class="paddle-checkout"
+  data-items='[{"priceId": "pri_xxx", "quantity": 1}]'
+  data-discount-code="PPPIN30K7QX"
+></div>
+```
+
+## Sandbox Environment
+
+Paddle provides a full sandbox for testing:
+
+- Sandbox URL: `https://sandbox-vendors.paddle.com`
+- Separate API keys for sandbox
+- Test cards available
+- Webhooks fire in sandbox
+
+GoPayLocal sends a sandbox key (`pdl_sdbx_apikey_...`) to Paddle's sandbox API and a live key (`pdl_live_apikey_...`) to the production API, whichever environment it is saved under.
+
+## Webhooks
+
+When you save a key, GoPayLocal creates a notification destination for `transaction.completed` in that key's Paddle account: one in your sandbox account for a sandbox key, one in your live account for a live key. A redemption is counted when a checkout or API-created transaction completes with a GoPayLocal discount. Subscription renewals that carry the discount are not counted again.
+
+GoPayLocal reads the tax Paddle reports for the transaction, so tax is never counted as revenue saved. The integration card shows whether redemption tracking is active.
+
+<Aside type="note">
+GoPayLocal counts transactions whose origin is `web` (checkout) or `api`. Paddle marks renewals with origin `subscription_recurring`, so they are skipped.
+</Aside>
+
+## Limitations
+
+- A Paddle transaction carries one discount, so a PPP code can't be combined with another discount code
+- Price overrides are limited to one per country per price
+- Sandbox and production use separate Paddle accounts

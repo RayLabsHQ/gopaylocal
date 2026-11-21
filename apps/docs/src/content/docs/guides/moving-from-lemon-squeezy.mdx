@@ -1,0 +1,77 @@
+---
+title: Moving from Lemon Squeezy
+description: Lemon Squeezy stops processing payments on March 31, 2027. How to keep your PPP discounts working on Stripe.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+Lemon Squeezy is winding down. GoPayLocal removed its Lemon Squeezy integration in November 2026, so it no longer creates discount codes in Lemon Squeezy or tracks Lemon Squeezy redemptions. This guide covers moving your PPP discounts to Stripe, which is where Lemon Squeezy recommends its merchants go.
+
+## Key dates
+
+From Lemon Squeezy's [migration guide](https://docs.lemonsqueezy.com/migration) and its [announcement](https://www.lemonsqueezy.com/blog/saying-goodbye-to-lemon-squeezy) (November 16, 2026):
+
+| Date | What happens |
+|---|---|
+| November 16, 2026 | Lemon Squeezy stops accepting new users and new store sign-ups |
+| December 2, 2026 | Lemon Squeezy's migration tooling for Stripe Managed Payments opens for eligible stores |
+| Mid-January 2027 | Lemon Squeezy's recommended latest date to start migrating (the full move can take up to 8 weeks) |
+| March 31, 2027 | Lemon Squeezy stops processing transactions, including subscription renewals |
+
+Lemon Squeezy says it will not extend the deadline.
+
+## Where to move
+
+Lemon Squeezy recommends [Stripe Managed Payments](/integrations/stripe/#stripe-managed-payments), Stripe's merchant of record product for digital goods. Stripe calculates and remits sales tax, VAT and GST, as Lemon Squeezy did.
+
+Managed Payments is only available to businesses based in [Stripe's supported locations](https://docs.stripe.com/payments/managed-payments/eligibility#supported-business-locations) that sell [eligible digital products](https://docs.stripe.com/payments/managed-payments/eligibility#product-eligibility). If yours isn't eligible, Lemon Squeezy's guide says you need another provider before March 31, 2027. GoPayLocal also works with Paddle, Dodo Payments, Polar and other providers; see the [integrations overview](/integrations/overview/).
+
+Lemon Squeezy's [comparison](https://docs.lemonsqueezy.com/migration/comparison) lists what Managed Payments doesn't include, such as storefronts, file and license-key delivery, affiliates and PayPal. Check it before you commit.
+
+## Move your PPP discounts to Stripe
+
+Lemon Squeezy's migration tooling moves your products, payment links, customers and eligible subscriptions to Stripe. It does not move GoPayLocal campaigns. GoPayLocal needs its own discount codes in your Stripe account, so you recreate the campaigns there.
+
+<Steps>
+
+1. **Connect Stripe in GoPayLocal**
+
+   Follow the [Stripe setup](/integrations/stripe/#setup) with a test key first (`sk_test_...`, environment **Test** in the sidebar). The account must be the Stripe account your Managed Payments checkout runs on, the one Lemon Squeezy's tooling creates or connects. GoPayLocal also creates a webhook endpoint there to count redemptions.
+
+2. **Recreate each campaign on Stripe**
+
+   For every campaign that used Lemon Squeezy, create a campaign with **Stripe** as the payment provider and the same countries and discounts. GoPayLocal creates a Stripe coupon and promotion code for each discount.
+
+   Stripe codes contain letters and digits only (for example `PPPIN30K7QX`). Your visitors will see new codes, not the ones they saw on Lemon Squeezy.
+
+3. **Let your checkout accept the codes**
+
+   Managed Payments works with Stripe Checkout and Payment Links.
+   - **Payment Links:** create the link with **Enable Managed Payments** and promotion codes allowed, then append the visitor's code: `https://buy.stripe.com/xxx?prefilled_promo_code=PPPIN30K7QX`. An existing Payment Link can't be switched to Managed Payments; create a new one.
+   - **Checkout Sessions in your code:** add `managed_payments: { enabled: true }` and pass the visitor's promotion code in `discounts` (or set `allow_promotion_codes: true`). See [Auto-Apply on Stripe](/integrations/stripe/#auto-apply).
+
+4. **Test one discounted purchase in Stripe test mode**
+
+   Open a checkout with a GoPayLocal code from a Test campaign, pay with Stripe's test card `4242 4242 4242 4242`, and check that the discount applied and that the redemption shows up in GoPayLocal.
+
+   <Aside type="caution">
+   Stripe's documentation does not yet say outright that promotion codes work on Managed Payments checkouts. They are not on its list of parameters Managed Payments rejects. GoPayLocal's support is **not yet verified live**, so this test purchase is the check that matters for your account.
+   </Aside>
+
+5. **Switch to live**
+
+   Connect your live Stripe key (environment **Live**), recreate the campaigns in live, and update the links on your site. Once your new checkout is in place, pause or delete the old Lemon Squeezy campaigns in GoPayLocal so the banner only shows Stripe codes. Neither action contacts Lemon Squeezy.
+
+</Steps>
+
+## What happens to your old Lemon Squeezy codes
+
+- **They stay in Lemon Squeezy only.** GoPayLocal created them in your Lemon Squeezy store, and Lemon Squeezy's migration tooling does not list discount codes among what it moves. They don't exist in Stripe, so a Lemon Squeezy code typed into a Stripe checkout won't apply.
+- **They work only as long as your Lemon Squeezy checkout does.** That means until you switch your links to Stripe, and at the latest until March 31, 2027.
+- **GoPayLocal no longer manages them.** It won't edit or delete them in Lemon Squeezy, and redemptions made with them are not tracked. To remove them, delete them in your Lemon Squeezy dashboard.
+- **Existing subscribers are handled by the migration.** Subscriptions that started with a Lemon Squeezy PPP code move through Lemon Squeezy's migration tooling, not through GoPayLocal. Lemon Squeezy's guide advises keeping discounts that are attached to active subscriptions. Check in its Migration Hub how a migrated subscription's price is carried over.
+
+## Sources
+
+- Lemon Squeezy: [Lemon Squeezy is winding down](https://docs.lemonsqueezy.com/migration), [Comparing Lemon Squeezy and Stripe Managed Payments](https://docs.lemonsqueezy.com/migration/comparison), [Saying goodbye to Lemon Squeezy](https://www.lemonsqueezy.com/blog/saying-goodbye-to-lemon-squeezy) (November 16, 2026)
+- Stripe: [Managed Payments](https://docs.stripe.com/payments/managed-payments), [eligibility](https://docs.stripe.com/payments/managed-payments/eligibility), [set up](https://docs.stripe.com/payments/managed-payments/set-up), [Payment Links with Managed Payments](https://docs.stripe.com/payments/managed-payments/use-payment-links), [promotion codes on Payment Links](https://docs.stripe.com/payment-links/promotions)

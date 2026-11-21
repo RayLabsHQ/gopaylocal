@@ -1,0 +1,69 @@
+---
+title: Polar
+description: Connect Polar so GoPayLocal creates PPP discounts in your Polar organization and counts their redemptions.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+GoPayLocal creates percentage discounts in your Polar organization and counts the orders that use them.
+
+## Setup
+
+<Steps>
+
+1. **Create a Polar organization access token**
+
+   In [Polar](https://polar.sh), create an **organization** access token (it starts with `polar_oat_`) with these scopes: `discounts:read`, `discounts:write`, `checkouts:write` and `webhooks:write`. A personal access token doesn't work.
+
+2. **Connect in GoPayLocal**
+
+   In the GoPayLocal dashboard, go to **Integrations**, set the environment switch to **Live** or **Test**, and click **Connect** on the **Polar** card. Paste the token.
+
+   GoPayLocal checks the token and sets up redemption tracking. **Test** on the card checks it again later.
+
+3. **Create a campaign**
+
+   Create a campaign and choose **Polar** as its payment integration. When the campaign becomes active, GoPayLocal creates its discounts in Polar.
+
+</Steps>
+
+## How Discounts Work
+
+Polar takes percentages in basis points (1 basis point = 0.01%), so 30% is `3000`. GoPayLocal converts for you:
+
+```json
+{
+  "name": "PPP IN 30%",
+  "code": "PPPIN30K7QX",
+  "type": "percentage",
+  "basis_points": 3000,
+  "duration": "forever"
+}
+```
+
+- Codes have no hyphens; Polar accepts letters and digits only.
+- `duration: forever`: on a subscription, the discount applies to every renewal.
+- Discounts aren't restricted to a product and have no expiry date or redemption limit.
+
+## Applying the Code at Checkout
+
+The customer enters the code on Polar's checkout. Polar's checkout API applies a discount by its ID, not by its code, so the code from the banner can't be passed to it directly.
+
+## Test Mode
+
+Polar's sandbox (`sandbox.polar.sh`) has its own organizations and tokens. Connect a sandbox token while the dashboard is on **Test**. Test campaigns then create their discounts in the sandbox.
+
+## Redemption Tracking
+
+When you connect a token, GoPayLocal creates a webhook in that Polar organization for `order.paid`. Deliveries are checked with the webhook's signing secret.
+
+A redemption is counted for the order that first applied a GoPayLocal discount. Renewal orders that carry the discount aren't counted again.
+
+<Aside type="note">
+This integration has not yet been run against a live Polar organization. It is built from Polar's API documentation and covered by tests that stand in for Polar's API.
+</Aside>
+
+## Limitations
+
+- Product import isn't supported for Polar. Create your products in GoPayLocal by hand.
+- The code can't be pre-applied at checkout.

@@ -1,0 +1,24 @@
+# GoPayLocal
+
+> GoPayLocal adds purchasing power parity (PPP) discounts to a website. A small banner script, or the React or JavaScript SDK, detects the visitor's country at the Cloudflare edge and offers a country-appropriate coupon code that GoPayLocal creates in the merchant's payment provider.
+
+- Works with Stripe, Paddle, Gumroad, Chargebee, Dodo Payments, Polar, Whop, Creem and WooCommerce.
+- Products, campaigns and discount levels are configured in the dashboard at https://app.gopaylocal.com; the site itself only needs a script tag or an SDK and a public API key.
+- A/B tests split a product's visitors between two discount campaigns and show impressions, copies, redemptions and rates for each campaign side by side.
+- Visitors detected as using a VPN or a datacenter network are not offered a discount.
+- Prices can be shown in the visitor's currency, converted at the day's exchange rate and rounded with the campaign's charm pricing. They are estimates: the payment provider charges the product's own currency.
+- A management API for products, campaigns, A/B tests and analytics takes a secret key (`Authorization: Bearer gpl_sk_...`).
+- Open source: the service (apps) is AGPL-3.0-only and the SDKs and banner script are MIT. It can be self-hosted on your own Cloudflare account and Postgres database.
+
+## Docs
+
+- [Documentation index for LLMs](https://docs.gopaylocal.com/llms.txt): every docs page with a one-line description and a Markdown link
+- [Reference card for coding agents](https://docs.gopaylocal.com/ai/reference-card.md): endpoints, SDK entry points, template tokens, A/B tests and common mistakes, checked against the source code
+- [Integration prompt](https://docs.gopaylocal.com/ai/integration-prompt.md): a prompt that makes a coding agent add GoPayLocal to a codebase
+- [Quickstart](https://docs.gopaylocal.com/getting-started/quickstart.md): add the banner script to a site
+
+## Optional
+
+- [Self-hosting guide](https://docs.gopaylocal.com/self-hosting.md): run GoPayLocal on your own Cloudflare account and Postgres database
+- [Complete documentation](https://docs.gopaylocal.com/llms-full.txt): all docs pages in one Markdown file
+- [Source code](https://github.com/RayLabsHQ/gopaylocal)

@@ -1,0 +1,13 @@
+{
+  "_source": "WebhookEntity, the 200 response of POST /v1/webhooks at https://docs.creem.io/api-reference/endpoint/create-webhook (required: id, mode, object, store_id, name, url, delivery_mode, status, events; `secret` is 'Only returned when the endpoint is created'). Example values from that schema; the wh_ id prefix from the CLI examples at https://docs.creem.io/code/webhooks.",
+  "id": "wh_5Tq8Rz2Lm4Np6Vx",
+  "mode": "test",
+  "object": "webhook",
+  "store_id": "sto_1234567890",
+  "name": "GoPayLocal",
+  "url": "https://api.gopaylocal.com/v1/webhooks/creem/01HZINTEGRATION",
+  "delivery_mode": "http",
+  "status": "enabled",
+  "events": ["checkout.completed"],
+  "secret": "whsec_xxxxxxxxxxxxxxxxxxxx"
+}

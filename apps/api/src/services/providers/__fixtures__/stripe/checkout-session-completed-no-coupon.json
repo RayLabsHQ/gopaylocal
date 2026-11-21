@@ -1,0 +1,88 @@
+{
+  "id": "evt_1QxYzELkdIwHu7ixNoCoupon",
+  "object": "event",
+  "api_version": "2025-02-24.acacia",
+  "created": 1740000100,
+  "data": {
+    "object": {
+      "id": "cs_test_noCoupon000000000000000000000000000000000000000000000",
+      "object": "checkout.session",
+      "after_expiration": null,
+      "allow_promotion_codes": true,
+      "amount_subtotal": 2000,
+      "amount_total": 2000,
+      "automatic_tax": {
+        "enabled": false,
+        "liability": null,
+        "status": null
+      },
+      "billing_address_collection": null,
+      "cancel_url": null,
+      "client_reference_id": null,
+      "consent": null,
+      "consent_collection": null,
+      "created": 1740000000,
+      "currency": "usd",
+      "custom_fields": [],
+      "custom_text": {
+        "shipping_address": null,
+        "submit": null
+      },
+      "customer": "cus_RmQ9xLkdIwHu7i",
+      "customer_creation": "always",
+      "customer_details": {
+        "address": null,
+        "email": "buyer@example.com",
+        "name": null,
+        "phone": null,
+        "tax_exempt": "none",
+        "tax_ids": []
+      },
+      "customer_email": null,
+      "discounts": [],
+      "expires_at": 1740086400,
+      "invoice": "in_1QxYzBLkdIwHu7ixIjKlMnOp",
+      "invoice_creation": null,
+      "livemode": false,
+      "locale": null,
+      "metadata": {},
+      "mode": "subscription",
+      "payment_intent": null,
+      "payment_link": null,
+      "payment_method_collection": "always",
+      "payment_method_options": {},
+      "payment_method_types": [
+        "card"
+      ],
+      "payment_status": "paid",
+      "phone_number_collection": {
+        "enabled": false
+      },
+      "recovered_from": null,
+      "return_url": null,
+      "setup_intent": null,
+      "shipping_address_collection": null,
+      "shipping_cost": null,
+      "shipping_details": null,
+      "shipping_options": [],
+      "status": "complete",
+      "submit_type": null,
+      "subscription": "sub_1QxYzCLkdIwHu7ixQrStUvWx",
+      "success_url": "https://example.com/success",
+      "total_details": {
+        "amount_discount": 0,
+        "amount_shipping": 0,
+        "amount_tax": 0
+      },
+      "url": null,
+      "ui_mode": "hosted"
+    }
+  },
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": {
+    "id": null,
+    "idempotency_key": null
+  },
+  "type": "checkout.session.completed"
+}

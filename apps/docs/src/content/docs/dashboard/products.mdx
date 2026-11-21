@@ -1,0 +1,70 @@
+---
+title: Products
+description: Creating and importing products in the GoPayLocal dashboard.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+A product in GoPayLocal represents something you sell. Products are the foundation for campaigns, which define how PPP discounts are applied.
+
+## Creating a Product
+
+<Steps>
+
+1. Go to [app.gopaylocal.com](https://app.gopaylocal.com) and log in
+2. Click **Products** in the sidebar
+3. Click **Add Product**
+4. Fill in the product details
+5. Click **Create Product**
+
+</Steps>
+
+Only the workspace owner and admins can add products (see [Team](/dashboard/team/)).
+
+The product is created in the environment selected in the sidebar switch (Live or Test).
+
+## Product Fields
+
+| Field | Required | Description |
+|---|---|---|
+| **Product Name** | Yes | Display name (e.g., "Pro Plan", "Lifetime Access") |
+| **Product URL** | Yes | The page where this product is sold (e.g., `https://yourapp.com/pricing`) |
+| **Currency** | Yes | The currency your price is set in: USD or a country's local currency (default: USD) |
+| **Base Price** | Yes | The price before any discount (e.g., 49.00), with no more decimals than the currency has (none for JPY); the form won't save a price that doesn't fit |
+
+The base price and currency are used for the price preview when you create a campaign. The banner shows the currency's symbol.
+
+## Product Limits
+
+| Plan | Products |
+|---|---|
+| Free | 1 |
+| Pro | Unlimited |
+| Self-hosted | Unlimited |
+
+When the limit is reached, the dashboard says so and links to **Settings > Billing**.
+
+## Importing Products
+
+If a connected payment provider can list its products, you can import them instead of creating them by hand.
+
+1. Go to **Integrations**
+2. On the connected provider's card, click **Import**
+3. Select the products you want to import
+4. Click **Import**
+
+Product listing works for Stripe, Paddle, Gumroad, Dodo Payments, Creem and WooCommerce. Chargebee, Polar and Whop don't support it; GoPayLocal answers "This provider does not support product listing".
+
+Products are imported into the environment selected in the sidebar. A product already in that environment with the same URL is skipped; a product without a URL is matched by name. Stripe and Paddle don't return a product page, so products imported from them have an empty URL.
+
+## Managing Products
+
+The dashboard lists your products with their currency, base price and creation date. It has no screen for editing or deleting a product; both are available only through the [Products API](/api/products/) (`PATCH` and `DELETE /v1/teams/:orgId/products/:id`), with a secret key or the dashboard session. A secret key, owners and admins can edit and delete any product. Members can edit the products they have access to and can't delete products.
+
+Changing a product's environment is refused (`409`, `product_has_campaigns`) while the product has campaigns. Deleting a product is refused (`409`, "Delete this product's campaigns before deleting it.") while it still has campaigns. Deleting a product also deletes its ended A/B tests.
+
+## Multiple Products
+
+Each product has its own campaigns, so each product can have its own pricing mode, maximum discount and payment integration.
+
+Your API key belongs to the workspace, not to a product. On a page that sells one specific product, tell the banner which one with `data-product` (or `productId` in the SDKs). Without it, the banner answers for the product of your most recently created active campaign. See [Banner installation](/banner/installation/).

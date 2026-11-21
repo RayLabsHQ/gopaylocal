@@ -1,0 +1,92 @@
+---
+title: Creem
+description: Connect GoPayLocal to a Creem store for PPP discount codes and redemption tracking.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution" title="Status">
+The Creem integration is implemented and covered by automated tests against Creem's documented API. It has **not yet been verified against a live Creem account**.
+</Aside>
+
+[Creem](https://creem.io) is a merchant of record for SaaS and digital products: it sells to your customers and handles tax for you. GoPayLocal connects to your Creem store with an API key. It creates a percentage discount code in Creem for each country your campaign discounts, shows visitors the code for their country, and counts a redemption when a customer completes a Creem checkout with that code.
+
+## Connect your Creem store
+
+<Steps>
+
+1. **Create an API key in Creem**
+
+   In the [Creem dashboard](https://creem.io/dashboard/developers), open **Developers** and create an API key. Test mode and production have separate keys: switch on **Test Mode** at the bottom of Creem's left sidebar to create a test key. Test keys start with `creem_test_`.
+
+   A **Full access** key works. If you restrict the key, give it:
+
+   | Permission | Used for |
+   |---|---|
+   | Products: read | Listing your products, and scoping each code to them |
+   | Discounts: read and write | Creating, listing and deleting the discount codes |
+   | Webhooks: read and write | Creating the redemption webhook, and removing it when you disconnect |
+
+   Creem's documentation doesn't name the permission for creating checkout sessions. GoPayLocal doesn't create checkout sessions in normal use, so a key without it still works for codes and redemption tracking.
+
+2. **Connect in GoPayLocal**
+
+   In the GoPayLocal dashboard, pick **Live** or **Test** in the sidebar switch, open **Integrations**, find **Creem** and click **Connect**. Paste the key for that mode. A live key goes in **Live** and a `creem_test_` key goes in **Test**. A test key saved as live doesn't work: every call with it fails with an error that says so.
+
+   Click **Test** on the Creem card to check the key.
+
+3. **Use it in a campaign**
+
+   Choose your Creem integration when you create or edit a campaign. GoPayLocal then creates the discount codes in the Creem store for the campaign's mode (live or test).
+
+</Steps>
+
+## What GoPayLocal creates in your Creem store
+
+**Discount codes.** One percentage discount per country, created with Creem's [discounts API](https://docs.creem.io/api-reference/endpoint/create-discount-code):
+
+```json
+{
+  "name": "PPP IN 40%",
+  "code": "PPPIN40K7QX",
+  "type": "percentage",
+  "percentage": 40,
+  "duration": "forever",
+  "applies_to_products": ["prod_...", "prod_..."]
+}
+```
+
+- **Duration `forever`.** On a subscription, the discount applies to every payment, not only the first.
+- **All active products.** Creem requires every discount to list the products it applies to. GoPayLocal lists every product that is active in your store when the code is created.
+- **Code format.** Codes are letters and digits only, such as `PPPIN40K7QX`: your prefix, the country and percentage, and a random suffix so one country's code doesn't reveal another's.
+
+You'll see the codes under **Discounts** in the Creem dashboard. When a country's discount changes, GoPayLocal deletes the old code in Creem and creates a new one.
+
+**One webhook endpoint per mode.** When you connect, GoPayLocal registers an endpoint named **GoPayLocal** in your store (under **Developers > Webhooks**) through Creem's [webhooks API](https://docs.creem.io/api-reference/endpoint/create-webhook). It subscribes only to `checkout.completed`. GoPayLocal stores the endpoint's signing secret; you don't copy anything.
+
+**Disconnecting** deletes the webhook endpoint. Discount codes already created stay in Creem, because customers may still hold them; the dashboard tells you how many were left.
+
+## Applying the code at checkout
+
+Customers can type the code on Creem's checkout page. To apply it for them, pass it to Creem yourself:
+
+- **Checkout session** (your server): send it as `discount_code` when you create the session ([create checkout](https://docs.creem.io/api-reference/endpoint/create-checkout)).
+- **Payment link**: append `?discount_code=<code>` to the link ([checkout links](https://docs.creem.io/features/checkout/checkout-link)).
+
+## How redemptions are tracked
+
+Creem sends `checkout.completed` to GoPayLocal when a customer completes a checkout. GoPayLocal:
+
+1. **Verifies the signature.** Every delivery carries a `creem-signature` header, an HMAC-SHA256 of the request body made with the endpoint's secret ([Creem webhooks](https://docs.creem.io/code/webhooks)). Deliveries that fail verification are rejected.
+2. **Matches the code.** It reads the discount used on the order (its code and id) and matches it to the GoPayLocal code. Checkouts without a discount, or with a code GoPayLocal didn't create, are ignored.
+3. **Counts it once per order.** The order id is the key, so Creem's automatic retries and a manual resend from the Creem dashboard don't count twice.
+4. **Records revenue saved before tax.** For products priced tax-exclusive, the discount amount Creem reports is used. For tax-inclusive prices, that amount contains tax, so the saving is worked out from the amount paid minus tax.
+
+Subscription renewals arrive as a different Creem event (`subscription.paid`), which GoPayLocal doesn't subscribe to, so a subscriber is counted once, at the first checkout.
+
+## Limits
+
+- **New products aren't covered by existing codes.** A code applies to the products that were active in Creem when it was created. Creem discounts can't be edited, and GoPayLocal doesn't re-create codes when you add a product, so a product added later is only covered by codes created after it (for example when a country's discount changes).
+- **Percentage discounts only.** GoPayLocal doesn't create fixed-amount discounts in Creem.
+- **Webhook signatures carry no timestamp.** Creem's signature scheme can't reject an old delivery that is sent again; counting once per order is what keeps a replay from being counted.
+- **Currencies.** Creem prices products in USD or EUR, so amounts arrive in those currencies.

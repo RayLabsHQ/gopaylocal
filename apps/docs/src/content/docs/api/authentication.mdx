@@ -1,0 +1,203 @@
+---
+title: Authentication
+description: Public keys for the banner, secret keys for the management API, and the dashboard session.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+GoPayLocal accepts three kinds of credentials:
+
+| Credential | Format | Works on | Safe in a browser? |
+|---|---|---|---|
+| **Public key** | `gpl_pk_` followed by 64 lowercase hex characters | The banner script, the [banner config endpoint](/api/banner/) and `POST /v1/events` | Yes |
+| **Secret key** | `gpl_sk_` followed by 64 lowercase hex characters | The management API under `/v1/teams/{orgId}/`, and `GET /v1/me` | No |
+| **Dashboard session** | Better Auth session cookie | The management API, from the dashboard | Not applicable |
+
+Keys belong to the workspace and are created under **Settings > API Keys** (see [API Keys](/dashboard/api-keys/)). There are no separate live and test keys: whether something is live or test is set on the product and its campaigns, not on the key.
+
+The keys in these docs are placeholders. A public key looks like `gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef`, and a secret key like `gpl_sk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef`.
+
+## Public Keys
+
+The public endpoints take the public key in the URL or the request body. No `Authorization` header, session or cookie is involved.
+
+<Tabs>
+  <TabItem label="Script tag">
+  ```html
+  <script src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" async></script>
+  ```
+  </TabItem>
+  <TabItem label="Config endpoint">
+  ```
+  GET https://api.gopaylocal.com/v1/banner/config/gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  ```
+  </TabItem>
+</Tabs>
+
+A public key ends up in your page source, so it is not a secret. It can only fetch the banner config and report banner events. Sent to the management API as a Bearer token, it is refused with `401` and `"code": "public_key_not_allowed"`.
+
+### A Secret Key on a Public Endpoint
+
+The public endpoints refuse a secret key:
+
+| Endpoint | Status | Body |
+|---|---|---|
+| `GET /v1/banner/config/{key}` | `401` | JSON, `"code": "secret_key_not_allowed"` |
+| `GET /v1/banner/script.js?key={key}` | `400` | A JavaScript comment (`application/javascript`) with the same message |
+| `POST /v1/events` | `401` | JSON, `"code": "secret_key_not_allowed"` |
+
+```json
+{
+  "error": "Secret keys (gpl_sk_) must never be used in a browser. This key is now exposed: revoke it in the dashboard, replace it with a new secret key on your server, and use your public key (gpl_pk_) here.",
+  "code": "secret_key_not_allowed"
+}
+```
+
+The key is recognised by its `gpl_sk_` prefix alone (in any letter case), before any lookup. It is not echoed back or logged, and nothing is counted or recorded. A secret key that reached a web page is exposed, and it is not revoked automatically: revoke it in the dashboard, replace it with a new secret key on your server, and use your public key in the page.
+
+## Secret Keys
+
+A secret key calls the management API from your own server. Send it as a Bearer token:
+
+```
+Authorization: Bearer gpl_sk_...
+```
+
+Every management route is under `/v1/teams/{orgId}/`, where `orgId` is the workspace id. `GET /v1/me` tells a key which workspace it belongs to. The id is also shown under **Settings > API Keys**, with a request to copy.
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl https://api.gopaylocal.com/v1/me \
+    -H "Authorization: Bearer $GOPAYLOCAL_SECRET_KEY"
+  ```
+  </TabItem>
+  <TabItem label="JavaScript (server)">
+  ```js
+  const res = await fetch('https://api.gopaylocal.com/v1/me', {
+    headers: { Authorization: `Bearer ${process.env.GOPAYLOCAL_SECRET_KEY}` },
+  });
+  const { data } = await res.json();
+  const orgId = data.organization.id;
+  ```
+  </TabItem>
+</Tabs>
+
+**Response:**
+
+```json
+{
+  "data": {
+    "organization": { "id": "org_123", "name": "Acme" },
+    "apiKey": {
+      "id": "01JD8Q0R3S4T5U6V7W8X9Y0Z1A",
+      "name": "Catalog sync",
+      "keyPrefix": "gpl_sk_01234567...",
+      "createdAt": "2026-11-18T10:30:00.000Z"
+    },
+    "permissions": ["products.view", "products.create", "..."]
+  }
+}
+```
+
+`permissions` lists every action a secret key may take. `GET /v1/me` answers only to a secret key: without an `Authorization: Bearer` header (no header, or another scheme such as `Basic`) it returns `401` with `"code": "missing_api_key"`.
+
+Then call the workspace's routes:
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl https://api.gopaylocal.com/v1/teams/$ORG_ID/products \
+    -H "Authorization: Bearer $GOPAYLOCAL_SECRET_KEY"
+  ```
+  </TabItem>
+  <TabItem label="JavaScript (server)">
+  ```js
+  const res = await fetch(`https://api.gopaylocal.com/v1/teams/${orgId}/products`, {
+    headers: { Authorization: `Bearer ${process.env.GOPAYLOCAL_SECRET_KEY}` },
+  });
+  const { data: products } = await res.json();
+  ```
+  </TabItem>
+</Tabs>
+
+<Aside type="danger">
+Never put a secret key in a web page, a frontend bundle or a public repository. The management API accepts browser requests only from GoPayLocal's own apps, so a key in a page elsewhere doesn't work there anyway, and the public endpoints refuse it. A leaked secret key can create an active campaign, which creates real discount codes at your payment provider.
+</Aside>
+
+### What a Secret Key Can Do
+
+A secret key works on every product of its workspace, with the same request and response bodies as the dashboard, plan limits included. On the Free plan, for example, creating a second product returns `403` with `"error": "Product limit reached"`.
+
+| Area | Routes under `/v1/teams/{orgId}` | Reference |
+|---|---|---|
+| Products | `GET`, `POST /products`; `GET`, `PATCH`, `DELETE /products/:id` | [Products API](/api/products/) |
+| Campaigns | `GET`, `POST /campaigns`; `GET`, `PATCH`, `DELETE /campaigns/:id` | [Campaigns API](/api/campaigns/) |
+| A/B tests | `GET`, `POST /experiments`; `GET`, `PATCH /experiments/:id`; `POST /experiments/:id/end` | [Experiments API](/api/experiments/) |
+| Banner settings | `GET`, `PUT /banner-configs/:campaignId` | [Campaigns API](/api/campaigns/#banner-settings) |
+| Exchange rates | `GET /fx-rates` | |
+| Parity groups | `GET`, `POST /parity-groups`; `PATCH`, `DELETE /parity-groups/:id`; `PUT /parity-groups/:id/countries`; `POST /parity-groups/seed-defaults` | [Parity Groups API](/api/parity-groups/) |
+| Integrations | `GET /integrations`; `GET /integrations/:id/products`; `POST /integrations/:id/products/import` | [Integrations API](/api/integrations/) |
+| API keys | `GET /api-keys` (list only) | [API Keys API](/api/api-keys/) |
+| Analytics | `GET /analytics/overview`, `/analytics/by-country`, `/analytics/by-campaign` | [Analytics API](/api/analytics/) |
+
+`GET /fx-rates` returns `{ "data": { "available": false } }` when the banner endpoint would not convert prices, otherwise `{ "data": { "available": true, "fx": { ... } } }` with the stored exchange-rate document (`asOf`, `rates` in units per US dollar, and more).
+
+### What a Secret Key Cannot Do
+
+A secret key can't manage people, money or the keys themselves. These routes answer `403` with `"code": "forbidden_api_key"`:
+
+- **Team:** `GET /members`, `GET /invitations`, and `GET` or `PUT /members/:userId/product-access`
+- **Billing:** `GET /billing`, `GET /billing/usage`, `POST /billing/checkout`, `POST /billing/portal`
+- **API key management:** `POST /api-keys` and `DELETE /api-keys/:id`
+- **Integration connections:** `POST /integrations` (connect), `POST /integrations/:id/webhook`, `POST /integrations/:id/test` and `DELETE /integrations/:id` (disconnect)
+- **The workspace:** `DELETE /v1/teams/{orgId}`
+
+```json
+{
+  "error": "Forbidden: an API key cannot do this (create and revoke api keys)",
+  "code": "forbidden_api_key",
+  "permission": "apiKeys.manage"
+}
+```
+
+Inviting people, changing roles, renaming the workspace and leaving it are routes of the sign-in service, under `/api/auth/organization/*`, which does not accept API keys. An invite sent with a key answers `401` and creates no invitation.
+
+See [Team](/dashboard/team/) for the full permission table, with a column for secret keys.
+
+### Errors
+
+| Status | Body | When |
+|---|---|---|
+| `401` | `{"error":"Invalid API key","code":"invalid_api_key"}` | The `Bearer` header or the key is malformed, or the key is unknown or revoked |
+| `401` | `{"error":"Public keys (gpl_pk_) only work in the banner. Use a secret key (gpl_sk_) for this API.","code":"public_key_not_allowed"}` | A public key was sent as the Bearer token |
+| `401` | `{"error":"Missing API key. Send Authorization: Bearer gpl_sk_...","code":"missing_api_key"}` | `GET /v1/me` without an `Authorization: Bearer` header |
+| `403` | `{"error":"Forbidden: not a member of this organization"}` | The key belongs to another workspace than the `orgId` in the path |
+| `403` | `{"error":"Forbidden: an API key cannot do this (...)","code":"forbidden_api_key","permission":"..."}` | A route a key may not call (see above) |
+| `403` | `{"error":"Forbidden: account suspended"}` | An owner of the workspace, or the person who created the key, is suspended |
+| `429` | `{"error":"rate_limited"}` with `Retry-After: 60` | Too many requests (see below) |
+| `503` | `{"error":"Service unavailable"}` | The key could not be checked |
+
+The `401` answers also carry a `WWW-Authenticate` header. Ids of records in another workspace answer `404` under your own workspace's path.
+
+### Rate Limits
+
+- **300 requests per minute per key**, counted in each Cloudflare location.
+- **10 failed key lookups per minute per address** (unknown or revoked keys), counted per IPv4 address or per IPv6 /64, in each Cloudflare location. After that, further failed attempts from that address get `429` instead of `401`. Valid keys from the same address are unaffected.
+
+Over a limit, the answer is `429` with `{"error":"rate_limited"}` and `Retry-After: 60`. There are no rate-limit headers on other responses.
+
+### Key Lifecycle
+
+- A key belongs to the workspace, not to the person who created it. It keeps working after they leave the workspace, so when someone leaves, revoke the keys they had access to. The key list shows who created each key (`createdBy`).
+- Revoking a key deletes it. The next request with it answers `401` `invalid_api_key`.
+- Deleting the workspace deletes its keys.
+- While any owner of the workspace is suspended, its keys are refused with `403`. They work again once the suspension is lifted or that owner is removed.
+- While the person who created a key is suspended, that key is refused with the same `403`, even if they have left the workspace. It works again once the suspension is lifted. A key whose creator's account has been deleted keeps working.
+- A key's **last used** time is updated at most once every 5 minutes.
+
+## Dashboard Session
+
+The dashboard signs in with Google or GitHub through Better Auth and sends the session cookie with every request to the management API. A request that carries an `Authorization: Bearer` header (in any letter case) is authenticated by the key alone: a cookie on the same request is ignored, and a key never acts as the signed-in person. An `Authorization` header with another scheme, for example `Basic` from HTTP basic auth in front of a self-hosted API, is ignored, and the request is authenticated by its session cookie as usual.
+
+Without a session or a key, the management API answers `401` with `{"error":"Unauthorized"}`.

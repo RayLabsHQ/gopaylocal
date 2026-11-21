@@ -1,0 +1,131 @@
+---
+title: Campaigns
+description: Configuring PPP discount campaigns in the GoPayLocal dashboard.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+A campaign links a product to a set of discount rules. It defines how discounts are calculated, which payment provider the coupon codes are created in, and what the banner looks like.
+
+## Creating a Campaign
+
+Go to **Campaigns** and click **New Campaign**. The form has these fields:
+
+| Field | Description |
+|---|---|
+| **Campaign Name** | Required |
+| **Product** | Required. The product this campaign discounts |
+| **Pricing Mode** | How the discount for each country is calculated (see below) |
+| **Max Discount (%)** | Upper limit for every country's discount |
+| **Discount Delivery** | Banner + Coupon Code, or Auto-apply at checkout |
+| **Payment Integration** | The connected provider the coupon codes are created in, or **None — banner only** |
+| **Charm Pricing** | How converted local prices are rounded: None, .99 ending, Round to X9, Nearest $5 or Region-aware (see below) |
+| **Initial Status** | Draft, Active or Paused |
+
+The right-hand side previews the discount and final price for every country GoPayLocal has a PPP factor for.
+
+The campaign is saved in the mode the sidebar's Live/Test switch shows, and the form says which. The **Product** list shows only that mode's products, because a campaign is always in its product's mode. A test campaign creates its codes with your providers' test keys and is listed only while the switch is on **Test**.
+
+## Campaign Settings
+
+### Pricing Mode
+
+Choose how discounts are calculated:
+
+| Mode | How the discount is calculated |
+|---|---|
+| **PPP Factor (automatic)** | From the country's PPP factor: `(1 − factor) × 100`, rounded. GoPayLocal has factors for 75 countries; every other country gets no discount. This is the form's default. |
+| **Group-based tiers** | The discount of the parity group the country belongs to, or of GoPayLocal's default tiers while your workspace has no parity groups. |
+| **Custom per-country** | A percentage you set per country; a country without one falls back to its parity group. |
+
+<Aside type="caution">
+A new workspace has no parity groups, and the dashboard has no editor for parity groups or for custom per-country percentages. While the workspace has no groups, **Group-based tiers** uses GoPayLocal's [default tiers](/dashboard/parity-groups/#default-tiers). **Custom per-country** has no default: every country without its own percentage gets 0% until groups or percentages are added through the API. The preview on the New Campaign page uses the same calculation as the served banner. See [Parity Groups](/dashboard/parity-groups/).
+</Aside>
+
+See [Pricing Modes guide](/guides/pricing-modes) for detailed comparison.
+
+### Max Discount
+
+Caps the discount in every pricing mode. The form accepts 1 to 90% (the slider moves in steps of 5).
+
+```
+Example: Max discount = 50%
+India's PPP factor suggests 80% → capped at 50%
+```
+
+### Discount Delivery
+
+| Mode | Description |
+|---|---|
+| **Banner + Coupon Code** | The banner shows the visitor's code; the visitor copies it and enters it at checkout. |
+| **Auto-apply at checkout** | Your checkout applies the visitor's code for them. GoPayLocal serves the same code either way; applying it is done by your checkout code (see [Auto-Apply](/guides/auto-apply/)). |
+
+An auto-apply campaign needs a payment integration before it can be active: the dashboard won't activate one without it, and disconnecting the integration pauses its active auto-apply campaigns.
+
+### Payment Integration
+
+Links the campaign to a connected provider, and GoPayLocal creates the coupon codes there. With **None — banner only**, visitors from discounted countries still see the banner with their discount, but there is no code.
+
+The provider needs a key for the campaign's mode before the campaign can be activated: a live key for a live campaign, a test key for a test campaign. A draft can be saved without one. Gumroad and WooCommerce have no test mode, so a test campaign can't use them.
+
+### Charm Pricing
+
+When a visitor's country uses another currency, the banner endpoint converts your product's price into it ([Multi-Currency Display](/guides/multi-currency/)). Charm pricing is applied to these converted local prices: it rounds the price the visitor pays up to a natural-looking price point, and the struck-through original down. For a $19 product at 60% off with **Round to X9**, a visitor in India sees ₹719 (was ₹1,769).
+
+The form offers None, .99 ending, Round to X9, Nearest $5 and Region-aware, and the setting can be changed later on the campaign's page. New campaigns start with **None**, which turns charm pricing off: a converted price is only rounded to the currency's smallest unit. A visitor who pays in your product's own currency always sees the exact price, whatever the setting. See [Charm Pricing](/guides/charm-pricing/) for what each option does.
+
+<Aside type="caution" title="Local prices are estimates">
+Local prices are estimates. They convert your price at the day's mid-market rate and round up to a charm price, at most 8% above the converted amount and never below it (an amount under 13 of the currency's smallest unit can round up by more than 8%, to the next one). Your payment provider charges the exact discounted price in your currency; the amount on the customer's statement depends on their bank's exchange rate.
+</Aside>
+
+### Coupon Prefix and Allowed Domains
+
+Codes start with the prefix `PPP` (see [Coupon codes](#coupon-codes)). Campaigns can also have a different prefix and a list of allowed domains that the banner works on, but the dashboard has no fields for either.
+
+## Banner
+
+The campaign page's **Setup** tab has a **Banner** card with a live preview:
+
+| Setting | Description |
+|---|---|
+| **Position** | Bar at the top, Bar at the bottom, Card bottom left, Card bottom right |
+| **Message** | Text with placeholders such as `{{country}}`, `{{discount}}` and `{{code}}`, up to 500 characters; click a placeholder to insert it |
+| **Button text** | The copy-code button's label (default "Copy Code"), up to 50 characters. The button only appears when the visitor has a code |
+| **Background, Text, Button and Button text colors** | Color picker or a typed CSS color, up to 64 characters each; the card warns about low contrast and about colors browsers don't recognize |
+| **Show the visitor's country flag** | Flag emoji before the message |
+| **Show a close button** | Lets visitors dismiss the banner |
+
+Click **Save Banner**. New visitors usually see the change within about a minute; a visitor who already loaded the banner can keep the old design for up to 5 minutes. Roles that can't edit banners see the card as view only.
+
+See [Banner Customization](/banner/customization) for details.
+
+The **Setup** tab also shows the campaign ID and ready-to-paste snippets for the script tag, React, Next.js and the config API, with your public key and the campaign's product filled in.
+
+## Coupon Codes
+
+When the campaign has a payment integration, GoPayLocal creates one percentage code per country and discount in that provider. Codes look like `PPP-IN40-K7QX`: the prefix, the country and percentage, and a random suffix so one country's code doesn't reveal another's. Stripe, Paddle, Polar and Creem codes have no hyphens (`PPPIN40K7QX`), Dodo Payments codes are at most 16 characters, and Whop codes start with `GPL_`. See [Integrations](/integrations/overview/#discount-code-format).
+
+When a campaign with an integration becomes **Active**, GoPayLocal creates the codes for every country in your parity groups. Any other country's code is created the first time a visitor from that country loads the banner.
+
+## Campaign Lifecycle
+
+1. **Draft**: created but not serving
+2. **Active**: serving discounts
+3. **Paused**: not serving (useful for seasonal promotions)
+
+The button next to the status reads **Activate**, **Pause** or **Resume**. While the campaign is part of a running A/B test it can't be paused or deleted.
+
+Deleting a campaign removes it and its banner from GoPayLocal. Codes already created at your payment provider stay there.
+
+## Multiple Campaigns
+
+A product can have several active campaigns. For each request the banner picks one:
+
+1. If an [A/B test](/guides/ab-testing/) is running for the product, its two campaigns split the visitors.
+2. Otherwise the product's most recently created active campaign answers.
+
+Live campaigns are considered before test ones. A page with no `data-product` (or `productId` in the SDKs) is answered for the product of the most recently created active campaign in the workspace. See [Banner API](/api/banner/).
+
+## Campaign Analytics
+
+Banner events (impressions, clicks, copies) and redemptions are recorded against the campaign that served the visitor. The [Overview](/dashboard/analytics) shows the workspace's totals, and an [A/B test](/guides/ab-testing/) shows its two campaigns side by side.

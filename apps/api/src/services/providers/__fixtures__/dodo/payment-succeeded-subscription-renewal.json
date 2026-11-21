@@ -1,0 +1,63 @@
+{
+  "business_id": "bus_H4ekzPSlcg",
+  "type": "payment.succeeded",
+  "timestamp": "2026-12-15T10:30:00Z",
+  "data": {
+    "payload_type": "Payment",
+    "payment_id": "pay_R3n3wa1Xc8b2Lm0Pq9ZtY",
+    "business_id": "bus_H4ekzPSlcg",
+    "brand_id": "brd_9aLm0x",
+    "status": "succeeded",
+    "total_amount": 700,
+    "tax": 0,
+    "currency": "USD",
+    "settlement_amount": 650,
+    "settlement_currency": "USD",
+    "created_at": "2026-12-15T10:29:51Z",
+    "customer": {
+      "customer_id": "cus_8VbC6JDZzPEqfBPUdpj0K",
+      "email": "buyer@example.com",
+      "name": "Asha Buyer"
+    },
+    "billing": { "country": "IN", "zipcode": "560001" },
+    "discount_id": "dsc_qxxEmg5PuM1uNTE0LgkP9",
+    "discounts": [
+      {
+        "position": 0,
+        "discount_id": "dsc_qxxEmg5PuM1uNTE0LgkP9",
+        "business_id": "bus_H4ekzPSlcg",
+        "type": "percentage",
+        "code": "PPP-IN30-K7QX",
+        "amount": 3000,
+        "times_used": 5,
+        "restricted_to": [],
+        "created_at": "2026-11-01T08:00:00Z",
+        "preserve_on_plan_change": false,
+        "metadata": {},
+        "cycles_remaining": null,
+        "subscription_cycles": null
+      }
+    ],
+    "charge_type": "renewal",
+    "product_cart": null,
+    "subscription_id": "sub_7Hq2LmNcXa0pQ",
+    "subscription_ids": ["sub_7Hq2LmNcXa0pQ"],
+    "is_multi_subscription": false,
+    "is_update_payment_method": false,
+    "includes_usage": false,
+    "service_periods": [
+      {
+        "subscription_id": "sub_7Hq2LmNcXa0pQ",
+        "starts_at": "2026-12-15T10:29:00Z",
+        "ends_at": "2027-01-15T10:29:00Z",
+        "proration_factor": "1"
+      }
+    ],
+    "retry_attempt": 0,
+    "payment_provider": "dodo",
+    "digital_products_delivered": false,
+    "disputes": [],
+    "refunds": [],
+    "metadata": {}
+  }
+}

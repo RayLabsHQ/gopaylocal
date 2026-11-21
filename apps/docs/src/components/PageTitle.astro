@@ -1,0 +1,25 @@
+---
+/**
+ * Wraps starlight-theme-black's PageTitle and adds the page-actions control in its
+ * own row under the title and description. Registered by the `pageActions` plugin
+ * in astro.config.mjs, which runs after the theme.
+ *
+ * The row sits below the theme's markup instead of being positioned into it, so
+ * it works with both theme layouts: 0.6 (breadcrumb, h1, description) and 0.7
+ * (h1 with prev/next buttons beside it, then the description).
+ */
+import ThemePageTitle from 'starlight-theme-black/overrides/PageTitle.astro';
+import PageActions from './PageActions.astro';
+---
+
+<ThemePageTitle />
+<div class="gpl-title-actions">
+  <PageActions />
+</div>
+
+<style>
+  .gpl-title-actions {
+    display: flex;
+    margin-top: 1rem;
+  }
+</style>

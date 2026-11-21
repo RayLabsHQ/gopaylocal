@@ -1,0 +1,128 @@
+---
+title: Key Concepts
+description: Core concepts in GoPayLocal — PPP, pricing modes, parity tiers, discount delivery, products, campaigns and API keys.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Before diving into integrations and SDKs, it helps to understand the core concepts that power GoPayLocal.
+
+## Purchasing Power Parity (PPP)
+
+PPP measures the relative cost of goods between countries. A basket of goods that costs $100 in the US might cost the equivalent of $20 in India, meaning India has a PPP factor of about 0.20.
+
+GoPayLocal turns PPP factors into discounts. A 30% discount for India means your $100 product costs $70: still more than local equivalents, but much more accessible than the full US price.
+
+## Pricing Modes
+
+Each campaign uses one of three pricing modes:
+
+### PPP Factor Pricing
+
+The discount comes from the country's PPP factor: `(1 − factor) × 100`, rounded. GoPayLocal has a fixed table of factors for 75 countries; other countries get no discount. This mode needs no setup, and the New Campaign form selects it by default.
+
+**Example:** India (factor 0.20) gets 80% and Brazil (factor 0.44) gets 56%, unless the campaign's max discount is lower.
+
+### Group Pricing
+
+Countries in the same parity tier get the same discount. The tiers come from your workspace's parity groups (see below).
+
+**Example:** every country in a 35% tier gets 35% off.
+
+### Custom Pricing
+
+A percentage per country, set through the [Campaigns API](/api/campaigns/) (`discountOverrides`); the dashboard has no field for it yet. A country without its own percentage gets its parity group's discount.
+
+Every mode is capped by the campaign's **max discount**. See [Pricing Modes](/guides/pricing-modes/).
+
+## Parity Tiers (Groups)
+
+Parity groups put countries with similar purchasing power together and give each group one discount. GoPayLocal has a default 5-tier setup covering 75 countries:
+
+| Tier | Discount | Example Countries |
+|---|---|---|
+| Tier 1 | 0% | US, UK, Canada, Australia, Germany |
+| Tier 2 | 20% | Portugal, Poland, Mexico, Turkey, Thailand |
+| Tier 3 | 35% | Brazil, Argentina, Colombia, South Africa, China |
+| Tier 4 | 50% | Philippines, Indonesia, Vietnam, Egypt, Nigeria |
+| Tier 5 | 65% | India, Pakistan, Bangladesh, Kenya, Ethiopia |
+
+<Aside type="caution">
+A new workspace has no parity groups, and the dashboard has no screen for them yet. While it has none, Group pricing uses these default tiers, and Custom pricing gives 0% to countries without their own percentage. Once the workspace has any group of its own, Group pricing uses only its own groups. See [Parity Groups](/dashboard/parity-groups/).
+</Aside>
+
+## Discount Delivery
+
+GoPayLocal serves the same thing in both modes, a discount and a coupon code. The difference is who applies the code.
+
+### Banner + Coupon Code
+
+The default. A banner shows the visitor's discount and code; the visitor copies the code and enters it at checkout.
+
+**Pros:**
+- Works with every payment provider
+- No checkout code to write
+- Visitor sees the discount upfront
+
+**Cons:**
+- The visitor has to enter the code
+- Some visitors won't
+
+### Auto-Apply
+
+Your checkout applies the visitor's code for them, using the code from the banner script or SDK. The campaign needs a connected payment integration before it can be active.
+
+**Pros:**
+- Nothing for the visitor to enter
+
+**Cons:**
+- You write the checkout code, and it differs per provider
+- Not every provider's checkout accepts a code (Polar and Whop don't)
+
+See the [Auto-Apply guide](/guides/auto-apply) for provider-specific details.
+
+## Local Prices and Charm Pricing
+
+Every banner response carries the visitor's price after the discount (`localPrice`) and before it (`localOriginalPrice`). When the visitor's country uses another currency and a usable exchange rate exists, both are converted into that currency and rounded by the campaign's charm pricing setting (None, .99 ending, Round to X9, Nearest $5, Region-aware). Otherwise they are the exact prices in your product's currency.
+
+For a $19 product at 60% off with Round to X9, a visitor in India sees ₹719 (was ₹1,769), and a visitor in the US sees exactly $7.60 (was $19).
+
+<Aside type="caution" title="Local prices are estimates">
+Local prices are estimates. They convert your price at the day's mid-market rate and round up to a charm price, at most 8% above the converted amount and never below it (an amount under 13 of the currency's smallest unit can round up by more than 8%, to the next one). Your payment provider charges the exact discounted price in your currency; the amount on the customer's statement depends on their bank's exchange rate.
+</Aside>
+
+See [Multi-Currency Display](/guides/multi-currency/) and [Charm Pricing](/guides/charm-pricing/).
+
+## Products
+
+A **product** in GoPayLocal represents something you sell. Each product has:
+
+- **Name**: display name (e.g., "Pro Plan")
+- **URL**: the page where this product is sold
+- **Currency**: the currency your price is set in (default USD)
+- **Base Price**: the price before any discount
+
+## Campaigns
+
+A **campaign** links a product to a set of discount rules. Each campaign specifies:
+
+- **Pricing mode**: PPP Factor, Group or Custom
+- **Max discount**: the cap on every country's discount
+- **Discount delivery**: Banner + Coupon Code or Auto-apply
+- **Payment integration**: the provider the codes are created in, or none
+- **Banner**: position, colors, message and button text
+
+Campaigns can also have a coupon prefix (default `PPP`) and a list of allowed domains, which the dashboard has no fields for.
+
+<Aside type="note">
+A product can have several active campaigns. The banner serves the product's running A/B test if there is one, and otherwise its most recently created active campaign. See [Campaigns](/dashboard/campaigns/#multiple-campaigns).
+</Aside>
+
+## API Keys
+
+| Key Type | Prefix | Purpose |
+|---|---|---|
+| **Public Key** | `gpl_pk_` | Banner script, SDKs and the banner config endpoint |
+| **Secret Key** | `gpl_sk_` | Your server, calling the management API (products, campaigns, A/B tests, parity groups, analytics) |
+
+Public keys are safe to include in client-side code. Keep secret keys on your server: the banner endpoints refuse them. See [API Keys](/dashboard/api-keys/) and [Authentication](/api/authentication/).

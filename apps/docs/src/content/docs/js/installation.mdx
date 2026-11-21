@@ -1,0 +1,202 @@
+---
+title: JavaScript SDK Installation
+description: Install the GoPayLocal JavaScript SDK for vanilla JS, Vue, Svelte, and other frameworks.
+---
+
+import { Tabs, TabItem, Aside, Steps } from '@astrojs/starlight/components';
+
+The JavaScript SDK provides an imperative API for adding PPP discounts to any JavaScript application — vanilla JS, Vue, Svelte, WordPress, or any framework.
+
+`@gopaylocal/js` is open source under the MIT license, so you can bundle it into closed-source and commercial sites. Keep its license notice in the bundles you ship. Its source lives in [`packages/js-sdk`](https://github.com/RayLabsHQ/gopaylocal/tree/main/packages/js-sdk).
+
+## Install
+
+<Tabs>
+  <TabItem label="npm">
+  ```bash
+  npm install @gopaylocal/js
+  ```
+  </TabItem>
+  <TabItem label="pnpm">
+  ```bash
+  pnpm add @gopaylocal/js
+  ```
+  </TabItem>
+  <TabItem label="yarn">
+  ```bash
+  yarn add @gopaylocal/js
+  ```
+  </TabItem>
+  <TabItem label="bun">
+  ```bash
+  bun add @gopaylocal/js
+  ```
+  </TabItem>
+</Tabs>
+
+The package ships ES module and CommonJS builds with TypeScript declarations for both, so `import` and `require` both work.
+
+## Quick Start
+
+<Steps>
+
+1. **Create a client instance**
+
+   ```js
+   import { GoPayLocal } from '@gopaylocal/js';
+
+   const gpl = new GoPayLocal({
+     apiKey: 'gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+     baseCurrencyCode: 'USD', // the currency your prices are written in
+   });
+   ```
+
+2. **Initialize and fetch PPP data**
+
+   ```js
+   const data = await gpl.init(); // null when no discount applies
+
+   if (data) {
+     console.log(`${data.countryName}: ${data.discount}% off`);
+     console.log(`Coupon: ${data.code}`);
+   }
+   ```
+
+3. **Get discounted prices**
+
+   ```js
+   const pricing = gpl.getPrice(19);
+   // A visitor from India with 60% off (rates of 18 November 2026):
+   console.log(pricing.formatted);         // "₹719"
+   console.log(pricing.formattedOriginal); // "₹1,769"
+   // A visitor from the United States with 60% off:
+   console.log(pricing.formatted);         // "$7.60"
+   console.log(pricing.formattedOriginal); // "$19"
+   ```
+
+</Steps>
+
+<Aside type="note" title="Local prices are estimates">
+When the API converted your product's price for this visitor, `getPrice()` converts your other prices with the same rate and rounds them with the campaign's [charm pricing](/guides/charm-pricing/), exactly as the API does. Converted prices are estimates: your payment provider charges the exact discounted price in your currency. A visitor who pays in your currency sees the exact price. The SDK converts only when `baseCurrencyCode` is your product's currency; see [Multi-currency display](/guides/multi-currency/).
+</Aside>
+
+## Configuration
+
+```js
+const gpl = new GoPayLocal({
+  // Required
+  apiKey: 'gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+
+  // Optional
+  apiBase: 'https://api.gopaylocal.com',     // Your own API URL when self-hosting
+  productId: 'prod_abc123',                  // Only this product's campaign
+  visitorId: undefined,                      // Your own A/B experiment visitor id
+  persistVisitorId: true,                    // Keep a random visitor id in localStorage
+  baseCurrencyCode: 'USD',                   // The currency your prices are written in
+  baseCurrencySymbol: '$',                   // Its symbol
+  cacheTtl: 5 * 60 * 1000,                   // Cache TTL in ms (default: 5 min)
+
+  // Callbacks
+  onLoad: (data) => console.log('Discount:', data.discount),
+  onError: (error) => console.error('GoPayLocal:', error.message),
+});
+```
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `apiKey` | `string` | **(required)** | Public API key (starts with `gpl_pk_`) |
+| `apiBase` | `string` | `'https://api.gopaylocal.com'` | API base URL. Self-hosted deployments set the URL of their own API Worker. |
+| `productId` | `string` | — | Only use this product's campaign. Without it, the API picks the campaign (see [Banner API](/api/banner)). An unknown id, or a product with no active campaign, means no discount, never another product's campaign. |
+| `visitorId` | `string` | — | Your own visitor id for [A/B experiments](#ab-experiments), such as a signed-in user's id. 16 to 64 characters of `A-Z a-z 0-9 _ -`; anything else is ignored with a console warning. |
+| `persistVisitorId` | `boolean` | `true` | Keep a random visitor id in localStorage (key `gpl_vid`) so the visitor stays in the same experiment arm. |
+| `baseCurrencyCode` | `string` | The product's currency | The currency the prices you pass to `getPrice()` are written in. Prices are converted to the visitor's currency only when this is your product's currency. Unset, it is the product's currency from the API, and `'USD'` before the API answers or when no discount applies. |
+| `baseCurrencySymbol` | `string` | The product's symbol | Its symbol. Unset, it is the product's symbol from the API when `baseCurrencyCode` is the product's currency, otherwise the symbol of `baseCurrencyCode` in the visitor's locale. |
+| `cacheTtl` | `number` | `300000` (5 min) | How long a response with a discount is reused from `sessionStorage`. `0` always asks the API. |
+| `onLoad` | `(data: PPPData) => void` | — | Called when a discount applies (not when there is none) |
+| `onError` | `(error: Error) => void` | — | Called when the request fails, including a timeout after 8 seconds |
+
+## A/B experiments
+
+When a product has a running [A/B experiment](/guides/ab-testing), the API puts each visitor in arm A or B and serves that arm's campaign. To keep a visitor in the same arm, the SDK sends a visitor id:
+
+- By default it generates a random id with Web Crypto, keeps it in `localStorage` under `gpl_vid`, and sends it only to the GoPayLocal API. The banner script and the React SDK use the same key, so a visitor gets the same arm from every GoPayLocal integration on your site.
+- Pass `visitorId` to use your own id instead, for example to keep a signed-in user in one arm across devices. It is never stored. Do not use personal data such as an email address (those are rejected anyway).
+- Pass `persistVisitorId: false` to store nothing. No id is sent and the API assigns the arm from a hash of IP address and user agent instead.
+- If storage is blocked, the SDK sends no id and still works.
+
+Read the assigned arm with `getExperiment()`. It is set even when the visitor's arm gives them no discount (then `init()` resolves to `null`), so count it for every visitor:
+
+```js
+await gpl.init();
+const experiment = gpl.getExperiment(); // { experimentId, variant: 'a' | 'b' } or null
+if (experiment) {
+  analytics.track('pricing_viewed', experiment);
+}
+```
+
+Responses with a discount also carry `experimentId` and `variant` on the data.
+
+## Self-hosting
+
+If you run your own GoPayLocal API, point the SDK at it:
+
+```js
+const gpl = new GoPayLocal({
+  apiKey: 'gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+  apiBase: 'https://ppp.example.com', // trailing slashes are ignored
+});
+```
+
+Every request then goes to `https://ppp.example.com/v1/...`. The same URL is the `apiBase` prop of the [React SDK](/react/provider) and the host you load the [banner script](/banner/installation#self-hosting) from.
+
+## What's Included
+
+```js
+import {
+  GoPayLocal,
+  formatCurrency,
+  countryToFlag,
+  splitPrice,
+  DEFAULT_API_BASE,
+  VISITOR_ID_STORAGE_KEY,
+} from '@gopaylocal/js';
+```
+
+| Export | Description |
+|---|---|
+| `GoPayLocal` | Main SDK class |
+| `formatCurrency` | Format a number as currency |
+| `countryToFlag` | Convert country code to flag emoji |
+| `splitPrice` | Split formatted price into integer/decimal parts |
+| `DEFAULT_API_BASE` | `'https://api.gopaylocal.com'` |
+| `VISITOR_ID_STORAGE_KEY` | `'gpl_vid'`, the localStorage key of the visitor id |
+
+## TypeScript
+
+Full type definitions are included:
+
+```ts
+import type {
+  GoPayLocalConfig,
+  PPPData,
+  PricingResult,
+  BannerOptions,
+  BannerDesign,
+  TrackableEvent,
+} from '@gopaylocal/js';
+```
+
+## When to Use JS SDK vs. Banner Script
+
+| | Banner Script | JavaScript SDK |
+|---|---|---|
+| **Setup** | One `<script>` tag | npm install + code |
+| **Control** | Campaign's banner design | Full programmatic control |
+| **Custom UI** | No | Yes — build any UI |
+| **Data access** | Experiment arm via a DOM event | Full access to PPP data |
+| **Framework** | Any (HTML) | Any (JS runtime) |
+| **Best for** | Quick setup | Custom pricing displays |
+
+<Aside type="tip">
+For React apps, consider the [React SDK](/react/installation) instead — it provides hooks and components that integrate directly with React's rendering model.
+</Aside>

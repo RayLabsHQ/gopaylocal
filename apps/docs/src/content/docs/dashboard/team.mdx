@@ -1,0 +1,214 @@
+---
+title: Team Management
+description: Roles, permissions, product access and invitations in a GoPayLocal workspace.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+A workspace has one owner and any number of admins and members (up to your plan's seat limit). Each person's role decides what they can do. The API enforces every rule below, and the dashboard hides the controls your role can't use.
+
+## Roles
+
+- **Owner**: the person who created the workspace. Can do everything, and is the only one who manages the team, billing, and the workspace itself.
+- **Admin**: runs the workspace's setup (products, parity groups, integrations, API keys) and all campaigns. Cannot invite or remove people, change billing, or rename or delete the workspace.
+- **Member**: works on campaigns, A/B tests, banners and analytics for the products they have access to. Cannot change workspace-wide setup.
+
+## What each role can do
+
+"Their products" means the action is allowed only for the products in that member's [product access](#product-access-for-members), and for those products' campaigns, A/B tests, banners and analytics.
+
+The last column is a [secret API key](#secret-api-keys) (`gpl_sk_`) calling the API from your server.
+
+{/* permission-table:start (generated from packages/shared/src/permissions; a test fails if this copy differs) */}
+**Products**
+
+| Action | Owner | Admin | Member | Secret API key |
+| --- | --- | --- | --- | --- |
+| View products | Yes | Yes | Their products | Yes |
+| Add products (manually or imported from an integration) | Yes | Yes | No | Yes |
+| Edit products | Yes | Yes | Their products | Yes |
+| Delete products | Yes | Yes | No | Yes |
+
+**Campaigns**
+
+| Action | Owner | Admin | Member | Secret API key |
+| --- | --- | --- | --- | --- |
+| View campaigns | Yes | Yes | Their products | Yes |
+| Create campaigns | Yes | Yes | Their products | Yes |
+| Edit, activate and pause campaigns | Yes | Yes | Their products | Yes |
+| Delete campaigns | Yes | Yes | Their products | Yes |
+
+**A/B tests**
+
+| Action | Owner | Admin | Member | Secret API key |
+| --- | --- | --- | --- | --- |
+| View A/B tests and their results | Yes | Yes | Their products | Yes |
+| Start A/B tests | Yes | Yes | Their products | Yes |
+| Change and end A/B tests | Yes | Yes | Their products | Yes |
+
+**Banners**
+
+| Action | Owner | Admin | Member | Secret API key |
+| --- | --- | --- | --- | --- |
+| View banner settings | Yes | Yes | Their products | Yes |
+| Edit banner settings | Yes | Yes | Their products | Yes |
+
+**Parity groups**
+
+| Action | Owner | Admin | Member | Secret API key |
+| --- | --- | --- | --- | --- |
+| View parity groups | Yes | Yes | Yes | Yes |
+| Create, edit and delete parity groups | Yes | Yes | No | Yes |
+
+**Integrations**
+
+| Action | Owner | Admin | Member | Secret API key |
+| --- | --- | --- | --- | --- |
+| View connected integrations | Yes | Yes | Yes | Yes |
+| Connect, test and disconnect integrations, set up their webhooks | Yes | Yes | No | No |
+| List an integration's products and import them | Yes | Yes | No | Yes |
+
+**API keys**
+
+| Action | Owner | Admin | Member | Secret API key |
+| --- | --- | --- | --- | --- |
+| View API keys (secret keys show only their prefix) | Yes | Yes | Yes | Yes |
+| Create and revoke API keys | Yes | Yes | No | No |
+
+**Analytics**
+
+| Action | Owner | Admin | Member | Secret API key |
+| --- | --- | --- | --- | --- |
+| View analytics | Yes | Yes | Their products | Yes |
+| Export analytics as CSV | Yes | Yes | Their products | Yes |
+
+**Team**
+
+| Action | Owner | Admin | Member | Secret API key |
+| --- | --- | --- | --- | --- |
+| See who is in the workspace | Yes | Yes | Yes | No |
+| See pending invitations and their links | Yes | No | No | No |
+| Invite people | Yes | No | No | No |
+| Cancel invitations | Yes | No | No | No |
+| Change someone's role | Yes | No | No | No |
+| Remove someone from the workspace | Yes | No | No | No |
+| View a member's product access | Yes | Yes | No | No |
+| Change a member's product access | Yes | No | No | No |
+| Leave the workspace (1) | Yes | Yes | Yes | No |
+
+**Billing**
+
+| Action | Owner | Admin | Member | Secret API key |
+| --- | --- | --- | --- | --- |
+| View the plan and usage | Yes | Yes | Yes | No |
+| Upgrade, change or cancel the plan | Yes | No | No | No |
+
+**Workspace**
+
+| Action | Owner | Admin | Member | Secret API key |
+| --- | --- | --- | --- | --- |
+| Rename the workspace (name, slug, logo) | Yes | No | No | No |
+| Delete the workspace | Yes | No | No | No |
+
+(1) An owner can leave only while another owner remains.
+{/* permission-table:end */}
+
+### Secret API keys
+
+A secret key belongs to the workspace, not to the person who created it.
+
+- It works on every product in the workspace. Members' product access does not apply to it.
+- It keeps working after its creator leaves the workspace or is removed. When someone leaves, revoke the keys they had access to. **Settings > API Keys** lists every key with who created it ("Unknown" for keys created before that was recorded, or whose creator's account has been deleted), and owners and admins can revoke a key there.
+- It stops working when it is revoked or the workspace is deleted.
+- It is refused while any owner of the workspace is suspended, and while the person who created it is suspended.
+- It can't manage people, billing, API keys or the workspace itself.
+- It can't connect, test or disconnect an integration, because those steps handle the provider's credentials. It can list an integration's products and import them.
+
+## Product access for members
+
+Product access applies only to members, because owners and admins always work on every product.
+
+- A new member gets access to **all products**.
+- The owner can limit a member to specific products under **Settings > Team > Manage access**.
+- If a member's list of products is empty, they have access to **no** products. A list never falls back to "all".
+- Deleting a product removes it from every member's list.
+- Removing someone from the workspace deletes their product access. If they are invited back later, they start again with all products.
+
+## Inviting members
+
+Only the owner can invite people.
+
+1. Go to [app.gopaylocal.com](https://app.gopaylocal.com) > **Settings > Team**
+2. Click **Invite Member**
+3. Enter their email address
+4. Select a role (Member or Admin)
+5. Click **Send Invite**
+
+The invited person receives an email with a link to accept. You can also copy the link from the **Pending Invitations** list, which only the owner sees. They must sign in with the email address you invited.
+
+<Aside type="note">
+Invitations expire after 48 hours. Pending invitations count toward your plan's seat limit.
+</Aside>
+
+## Team limits
+
+| Plan | Seats (the owner counts as one) |
+|---|---|
+| Free | 1 (owner only) |
+| Pro ($19/mo or $180/yr) | Unlimited |
+| Self-hosted | Unlimited |
+
+## Changing roles, removing people, cancelling invitations, renaming and leaving
+
+The dashboard has no buttons for these actions yet. Until it does, they are available through Better Auth's organization endpoints under `/api/auth`:
+
+- changing someone's role (owner only): `organization/update-member-role`;
+- removing someone from the workspace (owner only): `organization/remove-member`;
+- cancelling an invitation (owner only): `organization/cancel-invitation`;
+- renaming the workspace (owner only): `organization/update`;
+- leaving the workspace (anyone): `organization/leave`.
+
+A workspace can have more than one owner: the owner can give another person the owner role. Better Auth refuses any change that would leave the workspace without an owner.
+
+## Workspace names
+
+A workspace name is 2 to 60 characters long and may contain:
+
+- letters, in any language;
+- numbers and spaces;
+- the punctuation `& ' - . , ( ) + ! _`, and `· ・ （ ） ＆ ׳ ״` for names written in other scripts.
+
+A name can't look like a link, because it appears in invitation emails: `www.`, `://`, slashes and `@` are refused. Dots are fine, so a brand name like "Cal.com" works. Line breaks, control characters and invisible characters are refused, and repeated spaces are collapsed into one.
+
+Invitation emails say "a workspace" instead of the name when the name contains a domain such as "Cal.com", because mail apps turn those into clickable links. They do the same for an older name, created before this rule existed, that breaks it.
+
+## Deleting a workspace
+
+Only the owner can delete a workspace, from the **Danger zone** at the bottom of **Settings > Team**. Deleting a workspace permanently removes:
+
+- its products, campaigns, A/B tests, coupons and parity groups;
+- its API keys and integrations;
+- its analytics and usage records;
+- its subscription record, invitations and members.
+
+GoPayLocal also tries to remove the webhooks it registered with your payment providers, in both live and test mode. Discount codes already created at your provider are left in place.
+
+### Workspaces on Pro
+
+Deleting a workspace does not cancel its Pro subscription, so the delete is refused while the subscription is still set to renew. Cancel it first under **Settings > Billing > Manage Billing**, then delete the workspace. Either kind of cancellation works:
+
+- cancelled now;
+- set to end at the end of the billing period.
+
+Before deleting, GoPayLocal checks the subscription with Dodo Payments. If that check fails, the delete is refused and nothing is deleted; try again a few minutes later.
+
+Self-hosted deployments have no billing, so this check never blocks a delete there.
+
+## Authentication
+
+Team members sign in with:
+
+- **Google**
+- **GitHub**
+
+All authentication is handled by Better Auth, running on Cloudflare Workers.

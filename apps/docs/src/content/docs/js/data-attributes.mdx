@@ -1,0 +1,213 @@
+---
+title: Data Attributes
+description: Update pricing on your page with zero custom JavaScript using GoPayLocal data attributes.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The JavaScript SDK can automatically update any HTML element that has a GoPayLocal data attribute. This lets you show discounted pricing with no custom rendering code.
+
+## How It Works
+
+1. Add data attributes to your HTML elements
+2. Initialize the SDK
+3. Call `gpl.bindPriceElements()` to update all attributed elements
+
+```html
+<div class="pricing-card">
+  <h3>Pro Plan</h3>
+  <span data-gopaylocal-price="19">$19</span>/mo
+  <p>Use code <code data-gopaylocal-coupon></code> for
+    <span data-gopaylocal-discount></span> off
+  </p>
+</div>
+
+<script type="module">
+  import { GoPayLocal } from '@gopaylocal/js';
+
+  const gpl = new GoPayLocal({ apiKey: 'gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' });
+  await gpl.init();
+  gpl.bindPriceElements();
+</script>
+```
+
+<Aside type="note">
+A bare `import ... from '@gopaylocal/js'` works when your build tool (Vite, webpack, Astro, etc.) bundles the page script. In a plain HTML page without a build step, the browser needs an [import map](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script/type/importmap) that points `@gopaylocal/js` at a copy of the package's `dist/index.js`. If you only need a banner, the [script tag](/banner/installation) needs neither.
+</Aside>
+
+After initialization, the elements update automatically:
+
+```html
+<!-- Before (or when no discount applies) -->
+<span data-gopaylocal-price="19">$19</span>
+
+<!-- After: a visitor from India with 60% off (rates of 18 November 2026) -->
+<span data-gopaylocal-price="19">₹719</span>
+
+<!-- After: a visitor from the United States with 60% off -->
+<span data-gopaylocal-price="19">$7.60</span>
+```
+
+Each price goes through [`getPrice()`](/js/client/#getprice): when the API converted your product's price for this visitor, it is converted to their currency and rounded with the campaign's [charm pricing](/guides/charm-pricing/), otherwise it is the exact discounted price in your base currency. Converted prices are estimates; your payment provider charges the exact discounted price in your currency.
+
+## Available Data Attributes
+
+### data-gopaylocal-price
+
+Replace the element's text content with the discounted price.
+
+```html
+<span data-gopaylocal-price="19">$19</span>
+<!-- → "₹719" for a visitor from India with 60% off -->
+<!-- → "$7.60" for a visitor from the United States with 60% off -->
+```
+
+The attribute value is the **base price** in your base currency (`baseCurrencyCode`). The fallback text content (`$19`) is shown before the SDK loads.
+
+### data-gopaylocal-price-original
+
+Replace with the original (non-discounted) price, in the same currency as `data-gopaylocal-price`. Useful for strikethrough display. A converted original is rounded down, so the discount the two prices imply is never larger than the real one.
+
+```html
+<s data-gopaylocal-price-original="19">$19</s>
+<span data-gopaylocal-price="19">$19</span>
+<!-- → <s>₹1,769</s> ₹719 for a visitor from India with 60% off -->
+<!-- → <s>$19</s> $7.60 for a visitor from the United States with 60% off -->
+```
+
+### data-gopaylocal-currency-symbol
+
+Replace with the symbol of the currency the prices are shown in: the visitor's currency when converted, otherwise your base currency.
+
+```html
+<span data-gopaylocal-currency-symbol>$</span>
+<!-- → "₹" for a visitor from India, "$" for a visitor from the United States -->
+```
+
+### data-gopaylocal-currency-code
+
+Replace with the code (ISO 4217) of the currency the prices are shown in.
+
+```html
+<span data-gopaylocal-currency-code>USD</span>
+<!-- → "INR" for a visitor from India, "USD" for a visitor from the United States -->
+```
+
+### data-gopaylocal-country
+
+Replace with the visitor's country name.
+
+```html
+<span data-gopaylocal-country></span>
+<!-- → "India", "Germany", "Japan" -->
+```
+
+### data-gopaylocal-country-flag
+
+Replace with the visitor's country flag emoji.
+
+```html
+<span data-gopaylocal-country-flag></span>
+<!-- → "🇮🇳", "🇩🇪", "🇯🇵" -->
+```
+
+### data-gopaylocal-discount
+
+Replace with the discount percentage.
+
+```html
+<span data-gopaylocal-discount></span>
+<!-- → "60%" -->
+```
+
+### data-gopaylocal-coupon
+
+Replace with the coupon code.
+
+```html
+<code data-gopaylocal-coupon></code>
+<!-- → "PPP-IN60-K7QX" -->
+```
+
+## Complete Example
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Pricing</title>
+  <style>
+    .pricing-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 300px;
+    }
+    .price { font-size: 2rem; font-weight: 700; }
+    .original { text-decoration: line-through; opacity: 0.5; }
+    .discount-banner {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 16px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="discount-banner" id="ppp-banner">
+    <span data-gopaylocal-country-flag></span>
+    <span data-gopaylocal-discount></span> off for
+    <span data-gopaylocal-country></span>!
+    Use code <code data-gopaylocal-coupon></code>
+  </div>
+
+  <div class="pricing-card">
+    <h3>Pro Plan</h3>
+    <div>
+      <s class="original" data-gopaylocal-price-original="9.99">$9.99</s>
+      <span class="price" data-gopaylocal-price="9.99">$9.99</span>
+      <span>/mo</span>
+    </div>
+    <ul>
+      <li>Unlimited projects</li>
+      <li>Priority support</li>
+    </ul>
+    <button>Get Started</button>
+  </div>
+
+  <script type="module">
+    import { GoPayLocal } from '@gopaylocal/js';
+
+    const gpl = new GoPayLocal({ apiKey: 'gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' });
+    const data = await gpl.init();
+
+    if (data) {
+      gpl.bindPriceElements();
+      // Show the discount banner
+      document.getElementById('ppp-banner').style.display = 'block';
+    }
+  </script>
+
+</body>
+</html>
+```
+
+<Aside type="tip">
+Data attributes work well for static sites, WordPress, and server-rendered pages where you don't have a JavaScript framework managing the DOM. For React apps, use the [React SDK](/react/installation) components instead.
+</Aside>
+
+## Re-binding After DOM Changes
+
+If you dynamically add new elements with data attributes (e.g., after loading more products via a template), call `bindPriceElements()` again to update the new elements:
+
+```js
+// After adding new DOM elements via your templating system
+gpl.bindPriceElements();
+```
+
+<Aside type="caution">
+`bindPriceElements()` replaces the `textContent` of matching elements. If an element contains child nodes, they will be removed. Use only on leaf elements (elements with no children).
+</Aside>

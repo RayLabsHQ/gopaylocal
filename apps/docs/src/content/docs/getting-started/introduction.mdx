@@ -1,0 +1,76 @@
+---
+title: Introduction
+description: What is GoPayLocal and why PPP matters for your global SaaS business.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+GoPayLocal is an open-source **Purchasing Power Parity (PPP)** discount tool. It detects each visitor's country at Cloudflare's edge and shows them a discount suited to that country, with a coupon code created in your payment provider. VPN detection and A/B testing are built in.
+
+## Why PPP Matters
+
+Software prices are typically set in USD. A $99/year product is affordable in the US, but represents a significant portion of monthly income in countries like India, Brazil, or Nigeria.
+
+**Purchasing Power Parity** adjusts your prices based on each country's economic conditions, so your product is fairly priced everywhere. This means:
+
+- **Higher conversion rates** in emerging markets
+- **More global customers** without race-to-the-bottom pricing
+- **Revenue you would never have captured** at full price
+
+## What GoPayLocal Does
+
+Add one script tag to your site:
+
+```html
+<script src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" async></script>
+```
+
+Visitors from countries with a discount see a banner with their discount and a coupon code for your payment provider. They enter the code at checkout, or your checkout applies it for them ([auto-apply](/guides/auto-apply/)).
+
+## Key Features
+
+- **3 Pricing Modes**: PPP factor-based (works out of the box), parity groups, or custom per-country discounts. See [Pricing Modes](/guides/pricing-modes/).
+- **9 Integrations**: Stripe, Paddle, Gumroad, Chargebee, Dodo Payments, Polar, Whop, Creem and WooCommerce. GoPayLocal creates the codes in your provider and counts redemptions from its webhooks.
+- **VPN Detection**: no discount for visitors on VPN, proxy, datacenter or Tor connections. See [VPN Detection](/guides/vpn-detection/).
+- **A/B Testing**: split a product's visitors between two campaigns and compare their results side by side.
+- **Auto-Apply**: your checkout can apply the visitor's code for them, with providers whose checkout accepts a code.
+- **Banner Customization**: position, colors, message template, country flag and close button, edited in the dashboard with a live preview.
+- **Analytics**: impressions, clicks, copies and redemptions per country.
+- **SDKs**: a lightweight banner script, a JavaScript SDK and a React SDK.
+
+## Plans
+
+Every feature is available on every plan, including Free.
+
+| | Free | Pro | Self-hosted |
+|---|---|---|---|
+| Price | $0 | $19/month, or $180/year | No billing |
+| Products | 1 | Unlimited | Unlimited |
+| API calls per month | 10,000 | Unlimited (fair use) | Unlimited |
+| Team members | 1 | Unlimited | Unlimited |
+| Analytics history | 7 days | 365 days | No limit |
+| GoPayLocal branding | Shown | Removed | Removed |
+
+See [Billing](/dashboard/billing/) for what counts as an API call, and [Self-hosting](/self-hosting/) to run GoPayLocal yourself.
+
+## Architecture
+
+GoPayLocal runs on Cloudflare:
+
+| Layer | Technology | Hosting |
+|---|---|---|
+| API + Banner | Hono (TypeScript) | Cloudflare Workers |
+| Dashboard | React, TanStack Router (Vite) | Cloudflare Workers (static assets) |
+| Database | PostgreSQL (Drizzle ORM), through Hyperdrive | Any Postgres |
+| Edge Cache | Cloudflare KV | Cloudflare |
+| Auth | Better Auth | Workers |
+| Analytics | Daily totals in PostgreSQL | — |
+| Billing (hosted service) | Dodo Payments | — |
+
+<Aside type="tip">
+The banner bundle is about 8.2 KB (about 3.6 KB gzipped) and renders inside a Shadow DOM, so it never interferes with your site's styles or scripts.
+</Aside>
+
+## Next Steps
+
+Ready to get started? Head to the [Quickstart](/getting-started/quickstart) guide to add PPP discounts to your site in under 5 minutes.

@@ -1,0 +1,103 @@
+---
+title: Integrations Overview
+description: The nine payment providers GoPayLocal creates PPP discount codes in, and how connecting one works.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+GoPayLocal works with nine payment providers. Once you connect one, a campaign linked to it gets one percentage discount code per country, created in that provider. The banner shows each visitor the code for their country, and the provider's webhook tells GoPayLocal when a code is used.
+
+## Supported Providers
+
+| Provider | What GoPayLocal creates | Example code | Test mode | Product import |
+|---|---|---|---|---|
+| [Stripe](/integrations/stripe/) | Coupon + promotion code | `PPPIN40K7QX` | Yes (test-mode key) | Yes |
+| [Paddle](/integrations/paddle/) | Discount | `PPPIN40K7QX` | Yes (sandbox key) | Yes |
+| [Gumroad](/integrations/gumroad/) | Offer code for all products | `PPP-IN40-K7QX` | No | Yes |
+| [Chargebee](/integrations/chargebee/) | Coupon | `PPP-IN40-K7QX` | Yes (test site) | No |
+| [Dodo Payments](/integrations/dodo-payments/) | Discount code | `PPP-IN40-K7QX` | Yes (test-mode key) | Yes |
+| [Polar](/integrations/polar/) | Discount | `PPPIN40K7QX` | Yes (sandbox) | No |
+| [Whop](/integrations/whop/) | Promo code | `GPL_PPP-IN40-K7QX` | Yes (sandbox) | No |
+| [Creem](/integrations/creem/) | Discount | `PPPIN40K7QX` | Yes (test-mode key) | Yes |
+| [WooCommerce](/integrations/woocommerce/) | Coupon | `PPP-IN40-K7QX` | No | Yes |
+
+Every code is a percentage discount. GoPayLocal doesn't restrict codes to the campaign's product, set an expiry date or limit how many times a code can be used. On subscriptions, Stripe, Paddle, Chargebee, Polar and Creem codes keep applying to renewals.
+
+<Aside type="note">
+None of the nine integrations has been run against a live merchant account yet. Each one is built from the provider's API documentation and covered by tests that stand in for the provider's API.
+</Aside>
+
+### Test mode
+
+Gumroad and WooCommerce have no test mode, so they connect in **Live** only. In **Test** their cards show **Live only**, and a test campaign can't use them: the API refuses it with `400` and the code `provider_has_no_test_mode`.
+
+For every other provider, connect a test or sandbox key while the dashboard's environment switch is on **Test**. Test campaigns create their codes with that key.
+
+## How Integrations Work
+
+1. **Connect**: enter the provider's API key on the **Integrations** page.
+2. **Codes**: when a campaign linked to the provider becomes active, GoPayLocal creates the codes for every country in your [parity groups](/dashboard/parity-groups/). Any other country's code is created the first time a visitor from there loads the banner.
+3. **Serve**: the banner shows each visitor the code for their country.
+4. **Track**: the provider's webhook reports orders that used a code, and GoPayLocal counts them as redemptions.
+
+```
+Campaign activated → GoPayLocal creates codes → Payment provider
+Visitor sees banner → Uses the code at checkout → Payment provider
+Payment provider → Webhook → GoPayLocal (counts the redemption)
+```
+
+## Applying the Code at Checkout
+
+The visitor can always type the code at checkout. Your own checkout code can also apply it, using the code from the banner response:
+
+| Provider | How your checkout can apply the code |
+|---|---|
+| Stripe | Look up the promotion code and pass it in `discounts` when you create the Checkout Session, or set `allow_promotion_codes: true` so the customer can enter it |
+| Paddle | Pass the code to Paddle.js checkout (`discountCode`) |
+| Gumroad | Add the code to the product link: `{product URL}/{code}` |
+| Chargebee | Pass the code in `coupon_ids` when you create the hosted checkout page |
+| Dodo Payments | Pass the code in `discount_codes` when you create a Checkout Session. Static payment links take no code |
+| Polar | Polar's checkout API applies a discount by its ID, not by its code, so the customer enters the code |
+| Whop | The customer enters the code. Whop's checkout API has no promo-code field |
+| Creem | Pass the code in `discount_code` when you create a checkout |
+| WooCommerce | The customer enters the code in the cart or at checkout. On WooCommerce 10.0 or later, a checkout link can apply it: `https://<store>/checkout-link/?products=<productId>:1&coupon=<code>` |
+
+See [Auto-Apply](/guides/auto-apply/) for a full example.
+
+## Connecting a Provider
+
+<Aside type="tip">
+You can connect several providers at once, one connection per provider. Each campaign picks one of them, or none.
+</Aside>
+
+1. Go to **Integrations** in the [dashboard](https://app.gopaylocal.com).
+2. Set the environment switch to **Live** or **Test**.
+3. Click **Connect** on the provider's card.
+4. Enter the API key for that environment. Chargebee also needs your site name, Whop your account ID (`biz_...`) and WooCommerce your store URL.
+5. Click **Connect**. To add the other environment's key later, switch environments and click **Add test key** or **Add live key**.
+
+When you connect, GoPayLocal checks the key and sets up redemption tracking: it creates a webhook in your provider account that points back to GoPayLocal. If that step fails, the provider is still connected and its card says so; you can retry from the card. **Test** checks the key again at any time.
+
+Only the workspace owner and admins can connect and disconnect providers. See [Team](/dashboard/team/).
+
+## Disconnecting a Provider
+
+**Disconnect** removes both the test and live keys and the webhooks GoPayLocal created, and unlinks the provider's campaigns. Active auto-apply campaigns on it are paused, so disconnecting is refused while one of those campaigns is part of a running A/B test.
+
+Codes already created in the provider stay there, because customers may still have them. Delete them in the provider's dashboard if you want them gone.
+
+## Discount Code Format
+
+Codes look like `PPP-IN40-K7QX`:
+
+- the prefix (`PPP` unless the campaign has its own; the dashboard has no field for it);
+- the country and the percentage (`IN40`: India, 40%);
+- a random part, so one country's code doesn't reveal another's.
+
+A few providers change this:
+
+- Stripe, Paddle, Polar and Creem: no hyphens (`PPPIN40K7QX`).
+- Dodo Payments: at most 16 characters.
+- Whop: `GPL_` in front, which lets GoPayLocal recognize its own promo codes.
+
+The banner always shows the code exactly as the provider stored it.

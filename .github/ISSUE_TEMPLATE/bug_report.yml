@@ -1,0 +1,95 @@
+name: Bug report
+description: Something in GoPayLocal does not work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. For security problems, do not use this form: follow [SECURITY.md](https://github.com/RayLabsHQ/gopaylocal/blob/main/SECURITY.md) instead.
+        For a problem with a specific payment provider integration, use the **Payment provider problem or verification result** form.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - API
+        - Merchant dashboard
+        - Admin dashboard
+        - Banner script
+        - JavaScript SDK (@gopaylocal/js)
+        - React SDK (@gopaylocal/react)
+        - Docs site
+        - Marketing site
+        - Local development / tooling
+        - Other or not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Where did it happen?
+      options:
+        - Hosted service (gopaylocal.com)
+        - Self-hosted instance
+        - Local development
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: For self-hosted or local, the commit SHA you are running. For the SDKs, the package version.
+      placeholder: e.g. 62654f4 or @gopaylocal/react 0.0.1
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Include any error messages exactly as shown.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to ...
+        2. Click ...
+        3. See ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser and OS for UI or banner problems; Node.js and pnpm versions for local development problems.
+      placeholder: e.g. Firefox on macOS, or the output of `node -v` and `pnpm -v`
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or console output
+      description: Remove API keys, secrets, session cookies and customer data before pasting.
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and this has not been reported.
+          required: true
+        - label: I removed API keys, secrets, cookies and personal data from everything above.
+          required: true

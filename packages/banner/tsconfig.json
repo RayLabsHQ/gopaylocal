@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    // src/ imports ../js-sdk/src/core.ts, which esbuild bundles into dist.
+    "rootDir": "..",
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["src"]
+}

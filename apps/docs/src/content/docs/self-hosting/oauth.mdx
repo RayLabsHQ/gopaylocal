@@ -1,0 +1,68 @@
+---
+title: OAuth setup
+description: Create the Google or GitHub OAuth app that people use to sign in to a self-hosted GoPayLocal, and why OAuth is required.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+People sign in to GoPayLocal with Google or GitHub. You need at least one of them.
+
+## Why OAuth is required
+
+Public email sign-up is disabled in the API (`emailAndPassword: { disableSignUp: true }` in `apps/api/src/auth.ts`, and a test in `apps/api/src/auth.test.ts` keeps it that way). Nobody can create an account with an email address and password through the API, so OAuth is how every account gets created.
+
+Email and password sign-in still works for accounts created on the command line with `apps/api/scripts/create-test-user.ts`. That script exists for automated tests and local development. The dashboard hides the password form unless the login URL has `?pw=1`. Do not use it for real accounts.
+
+## The callback URL
+
+GoPayLocal handles sign-in in the API Worker (with [Better Auth](https://www.better-auth.com/docs/concepts/oauth)). Each provider redirects back to:
+
+```text
+<API_BASE_URL>/api/auth/callback/google
+<API_BASE_URL>/api/auth/callback/github
+```
+
+`API_BASE_URL` is the variable in `apps/api/wrangler.toml`, for example `https://api.example.com`. If the API's hostname changes later, update the callback URL at the provider as well.
+
+## GitHub
+
+1. On GitHub, open **Settings** > **Developer settings** > **OAuth Apps** > **New OAuth App** (for an organization-owned app, use the organization's settings).
+2. **Homepage URL:** your dashboard, for example `https://app.example.com`.
+3. **Authorization callback URL:** `https://api.example.com/api/auth/callback/github`.
+4. Register the app, then generate a client secret.
+5. From `apps/api`, store both values:
+
+   ```sh
+   pnpm wrangler secret put GITHUB_CLIENT_ID
+   pnpm wrangler secret put GITHUB_CLIENT_SECRET
+   ```
+
+Create an OAuth App, as above, rather than a GitHub App. GoPayLocal asks GitHub for the `read:user` and `user:email` scopes (Better Auth's defaults); a GitHub App would also need its "Email addresses" permission set to read-only. Better Auth's [GitHub guide](https://www.better-auth.com/docs/authentication/github) has more detail.
+
+## Google
+
+1. In the [Google Cloud console](https://console.cloud.google.com/), pick or create a project and set up the OAuth consent screen.
+2. Create an **OAuth client ID** of type **Web application**.
+3. Under **Authorized redirect URIs**, add `https://api.example.com/api/auth/callback/google`.
+4. From `apps/api`, store the client ID and secret:
+
+   ```sh
+   pnpm wrangler secret put GOOGLE_CLIENT_ID
+   pnpm wrangler secret put GOOGLE_CLIENT_SECRET
+   ```
+
+Better Auth's [Google guide](https://www.better-auth.com/docs/authentication/google) has more detail.
+
+## Checking it
+
+Each provider is enabled only when both its client ID and its secret are set. If one is missing, the API logs `Google OAuth provider is disabled because GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is missing.` (or the GitHub equivalent) and that provider's sign-in fails.
+
+The dashboard's sign-in page always shows both a Google and a GitHub button, so only use the one you configured.
+
+<Aside type="note">
+The admin app's sign-in page only offers Google. The admin app talks to the same API with the same session cookie as the dashboard, so if you only set up GitHub, sign in on the dashboard first and then open the admin app. See [First admin user](/self-hosting/first-admin/).
+</Aside>
+
+## Local development
+
+For `wrangler dev`, create a separate OAuth app with the callback `http://localhost:8787/api/auth/callback/github` (or `.../google`) and put its credentials in `apps/api/.dev.vars`. [CONTRIBUTING.md](https://github.com/RayLabsHQ/gopaylocal/blob/main/CONTRIBUTING.md#signing-in-locally) covers this.

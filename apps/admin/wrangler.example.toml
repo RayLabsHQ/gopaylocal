@@ -1,0 +1,35 @@
+# GoPayLocal admin app: example configuration for a self-hosted deployment.
+# Copy over wrangler.toml if you want to change anything below:
+#   cp apps/admin/wrangler.example.toml apps/admin/wrangler.toml
+# This Worker only serves static files (no code, no bindings, no secrets). It is
+# optional: deploy it if you want the platform admin screens (overview, organizations,
+# users, alerts, audit log). Only users with role "admin" can use it; see the guide's
+# "First admin user" page.
+# Guide: https://docs.gopaylocal.com/self-hosting/cloudflare/
+#
+# The admin app reads ONE setting, at build time, not from this file:
+#   VITE_API_URL   Required. Public URL of your API Worker (the API's API_BASE_URL),
+#                  no trailing slash. Without it the build points at
+#                  http://localhost:8787. Build and deploy with:
+#     VITE_API_URL=https://api.<YOUR_DOMAIN> pnpm --filter @gopaylocal/admin build
+#     pnpm --filter @gopaylocal/admin run deploy:worker
+# The API must list this Worker's URL in ADMIN_BASE_URL, and both must be on the same
+# site (for example admin.<YOUR_DOMAIN> and api.<YOUR_DOMAIN>): the session cookie is
+# SameSite=Lax, so the browser does not send it to an API on another site.
+
+# Any name works; it becomes part of the workers.dev hostname.
+name = "gopaylocal-admin"
+compatibility_date = "2025-01-01"
+
+# Optional. Serve on your own hostname (the zone must be active on Cloudflare).
+# Without it the Worker is reachable on its workers.dev hostname only. Top-level
+# key: keep it above the [assets] table.
+# routes = [
+#   { pattern = "admin.<YOUR_DOMAIN>", custom_domain = true },
+# ]
+
+# Required. The Vite build output, served as a single-page app (unknown paths return
+# index.html so client-side routes work on reload).
+[assets]
+directory = "dist/client"
+not_found_handling = "single-page-application"

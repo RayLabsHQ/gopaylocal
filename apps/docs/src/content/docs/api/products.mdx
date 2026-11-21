@@ -1,0 +1,180 @@
+---
+title: Products API
+description: API reference for listing, creating, editing and deleting products.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+A product is something you sell: a name, a page URL, a currency and a base price. Campaigns discount a product, and the banner's [local prices](/guides/multi-currency/) start from its base price.
+
+<Aside type="note">
+These endpoints sit under `/v1/teams/{orgId}/` and accept a [secret API key](/api/authentication/#secret-keys) (`Authorization: Bearer gpl_sk_...`) or the dashboard session. A secret key works on every product of its workspace. With a session, owners and admins work on every product; members list, view and edit only the products they have access to, and can't create or delete products.
+</Aside>
+
+## The Product Object
+
+```json
+{
+  "id": "01JD8PZK2M1N0B9V8C7X6Z5A4S",
+  "organizationId": "org_123",
+  "name": "Pro plan",
+  "url": "https://example.com/pricing",
+  "currency": "USD",
+  "basePrice": 29,
+  "environment": "live",
+  "createdAt": "2026-11-18T10:30:00.000Z",
+  "updatedAt": "2026-11-18T10:30:00.000Z"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Product id |
+| `organizationId` | `string` | The workspace |
+| `name` | `string` | 1 to 200 characters |
+| `url` | `string` | The product's page |
+| `currency` | `string` | Three-letter currency code (ISO 4217, upper case) of `basePrice` |
+| `basePrice` | `number` | Price before any discount, in `currency`: a whole number of the currency's smallest unit and at least one (up to 2 decimals for USD, none for JPY, 3 for KWD) |
+| `environment` | `"live"` \| `"test"` | Which mode the product (and its campaigns) belongs to |
+
+## List Products
+
+```
+GET /v1/teams/{orgId}/products?environment=live
+```
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl "https://api.gopaylocal.com/v1/teams/$ORG_ID/products?environment=live" \
+    -H "Authorization: Bearer $GOPAYLOCAL_SECRET_KEY"
+  ```
+  </TabItem>
+  <TabItem label="JavaScript (server)">
+  ```js
+  const res = await fetch(`https://api.gopaylocal.com/v1/teams/${orgId}/products?environment=live`, {
+    headers: { Authorization: `Bearer ${process.env.GOPAYLOCAL_SECRET_KEY}` },
+  });
+  const { data: products } = await res.json();
+  ```
+  </TabItem>
+</Tabs>
+
+`environment` (`live` or `test`) is optional; without it, products of both environments are returned.
+
+**Response:** `{ "data": [ <product>, ... ] }`
+
+## Get Product
+
+```
+GET /v1/teams/{orgId}/products/:id
+```
+
+**Response:** `{ "data": <product> }`, or `404`.
+
+## Create Product
+
+```
+POST /v1/teams/{orgId}/products
+```
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl -X POST https://api.gopaylocal.com/v1/teams/$ORG_ID/products \
+    -H "Authorization: Bearer $GOPAYLOCAL_SECRET_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{"name":"Pro plan","url":"https://example.com/pricing","basePrice":29}'
+  ```
+  </TabItem>
+  <TabItem label="JavaScript (server)">
+  ```js
+  const res = await fetch(`https://api.gopaylocal.com/v1/teams/${orgId}/products`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.GOPAYLOCAL_SECRET_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ name: 'Pro plan', url: 'https://example.com/pricing', basePrice: 29 }),
+  });
+  const { data: product } = await res.json();
+  ```
+  </TabItem>
+</Tabs>
+
+**Request body:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | `string` | Yes | 1 to 200 characters |
+| `url` | `string` | Yes | A full URL |
+| `basePrice` | `number` | Yes | At least one smallest unit of `currency` (0.01 USD, 1 JPY), with no more decimals than the currency has |
+| `currency` | `string` | No | One of the 151 supported currencies: USD or a country's local currency, as an ISO 4217 code. Case doesn't matter (`"eur"` is stored as `"EUR"`); defaults to `"USD"` |
+| `environment` | `"live"` \| `"test"` | No | Defaults to `"live"` |
+
+**Response:** `201` with `{ "data": <product> }`.
+
+**Errors:**
+- `400` with `{ "error": "Validation failed", "details": { ... } }` for an invalid body.
+- `400` for a currency code outside the supported list (for example `XXX`, `CLF`, or `BGN`, which Bulgaria replaced with the euro), with `"Use USD or the local currency of a country, as an ISO 4217 code such as EUR or INR"` in `details.fieldErrors.currency`. The same rule applies to `PATCH`.
+- `403` when the plan's product limit is reached: `{ "error": "Product limit reached", "plan": "free", "maxProducts": 1, "currentCount": 1 }`. The Free plan allows one product; see [Billing](/dashboard/billing/).
+
+## Update Product
+
+```
+PATCH /v1/teams/{orgId}/products/:id
+```
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl -X PATCH https://api.gopaylocal.com/v1/teams/$ORG_ID/products/$PRODUCT_ID \
+    -H "Authorization: Bearer $GOPAYLOCAL_SECRET_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{"basePrice":39}'
+  ```
+  </TabItem>
+</Tabs>
+
+Send only the fields to change (`name`, `url`, `currency`, `basePrice`, `environment`); they are validated as on create. A change reaches the banner, including its local prices, usually within about a minute ([Caching and changes](/api/banner/#caching-and-changes)). A `basePrice` or `currency` sent alone is checked against the product's current value of the other, so moving a USD 19.99 product to JPY needs a whole-yen `basePrice` in the same request. A price that doesn't fit is refused with `400`, for example `"JPY prices are whole numbers of at least 1"` or `"USD prices have at most 2 decimals and are at least 0.01"` in `details.fieldErrors.basePrice`.
+
+**Response:** `{ "data": <product> }`, `400` for an invalid body, or `404`.
+
+Changing `environment` is refused while the product has campaigns, because they would be left in the other mode:
+
+```json
+{
+  "error": "Move or delete this product's campaigns before changing its environment.",
+  "code": "product_has_campaigns"
+}
+```
+
+(`409`). A product without campaigns can switch, and sending its current environment again is always accepted.
+
+## Delete Product
+
+```
+DELETE /v1/teams/{orgId}/products/:id
+```
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl -X DELETE https://api.gopaylocal.com/v1/teams/$ORG_ID/products/$PRODUCT_ID \
+    -H "Authorization: Bearer $GOPAYLOCAL_SECRET_KEY"
+  ```
+  </TabItem>
+</Tabs>
+
+**Response:** `{ "success": true }`, or `404`.
+
+A product that still has campaigns can't be deleted:
+
+```json
+{
+  "error": "Delete this product's campaigns before deleting it.",
+  "code": "product_in_use"
+}
+```
+
+(`409`). Delete its campaigns first with the [Campaigns API](/api/campaigns/#delete-campaign). Deleting a product also deletes its ended A/B tests and removes it from members' product access.

@@ -1,0 +1,116 @@
+---
+title: WooCommerce
+description: Connect GoPayLocal to your WooCommerce store for PPP coupons and redemption tracking.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution" title="Status">
+The WooCommerce integration is implemented and covered by automated tests against WooCommerce's documented REST API. It has **not yet been verified against a live WooCommerce store**.
+</Aside>
+
+WooCommerce runs on your own WordPress site, so GoPayLocal connects to your store's address with a REST API key that you create. It creates a percentage coupon in your store for each country your campaign discounts, shows visitors the code for their country, and counts a redemption when a paid order uses that code.
+
+To show the banner on the site itself, add the script as described in [WordPress](/platforms/wordpress/).
+
+## Requirements
+
+- **WooCommerce 3.5 or later** on **WordPress 4.4 or later**. Checkout links that apply the code (see [below](#applying-the-code)) need **WooCommerce 10.0 or later**.
+- **Pretty permalinks.** In **Settings > Permalinks**, choose anything except **Plain**. WooCommerce's REST API doesn't work with plain permalinks ([REST API requirements](https://developer.woocommerce.com/docs/apis/rest-api/)).
+- **HTTPS.** WooCommerce only accepts an API key sent this way over HTTPS ([authentication](https://developer.woocommerce.com/docs/apis/rest-api/authentication)).
+- **A public address.** GoPayLocal connects from the internet to your store's address, so it accepts:
+  - an `https://` address with a domain name, on the standard port
+  - the folder WordPress is installed in, if it isn't the site root (for example `https://example.com/store`)
+
+  It refuses IP addresses, `localhost` and internal names (`.local`, `.internal`, a name without a dot), a port number, a user name or password in the address, and `?` or `#` parts. If you paste an address that ends in `/wp-json/…` or `/wp-admin/…`, that part is removed.
+
+## Connect your store
+
+<Steps>
+
+1. **Create a REST API key in WooCommerce**
+
+   Go to **WooCommerce > Settings > Advanced > REST API** and click **Add key** ([generate keys](https://developer.woocommerce.com/docs/apis/rest-api/#generate-keys)).
+
+   - **User:** an **Administrator** or **Shop Manager**. GoPayLocal creates webhooks, which need the `manage_woocommerce` capability.
+   - **Permissions:** **Read/Write**. A Read key can't create coupons or webhooks.
+
+   Click **Generate API key** and copy the **Consumer key** (`ck_…`) and **Consumer secret** (`cs_…`). WooCommerce shows the secret only once.
+
+2. **Connect in GoPayLocal**
+
+   WooCommerce has no test mode: a key always acts on your real store. Pick **Live** in the dashboard's sidebar switch, open **Integrations**, find **WooCommerce** and click **Connect**. In **Test** mode the card shows **Live only** instead of **Connect**, and the API refuses a test-mode WooCommerce connection.
+
+   - **API Key:** the consumer key, a colon, then the consumer secret, as `ck_…:cs_…`.
+   - **Store URL:** your store's address, for example `https://shop.example.com`.
+
+   Click **Test** on the WooCommerce card to check the key.
+
+3. **Use it in a campaign**
+
+   Choose your WooCommerce integration when you create or edit a campaign. GoPayLocal then creates the coupons in your store.
+
+</Steps>
+
+## What GoPayLocal creates in your store
+
+**Coupons.** One percentage coupon per country, created with WooCommerce's [coupons API](https://developer.woocommerce.com/docs/apis/rest-api/v3/coupons):
+
+```json
+{
+  "code": "PPP-IN40-K7QX",
+  "discount_type": "percent",
+  "amount": "40",
+  "individual_use": true,
+  "description": "Created by GoPayLocal: PPP IN 40%",
+  "meta_data": [{ "key": "gopaylocal", "value": "true" }]
+}
+```
+
+- **Individual use.** The coupon can't be combined with your other coupons: applying it removes the others from the cart.
+- **Every product.** No product restriction, expiry date or usage limit.
+- **Code format.** Codes look like `PPP-IN40-K7QX`: your prefix, the country and percentage, and a random suffix so one country's code doesn't reveal another's. WooCommerce saves codes in lower case and matches them without regard to case, so `PPP-IN40-K7QX` and `ppp-in40-k7qx` both work.
+- **The `gopaylocal` meta field** marks the coupons GoPayLocal manages. Coupons without it are never listed or changed.
+
+You'll see the coupons under **Marketing > Coupons**. When a country's discount changes, GoPayLocal deletes the old coupon and creates a new one.
+
+**Two webhooks.** When you connect, GoPayLocal creates two webhooks through WooCommerce's [webhooks API](https://developer.woocommerce.com/docs/apis/rest-api/v3/webhooks): **GoPayLocal redemptions (order.created)** and **GoPayLocal redemptions (order.updated)**. They are listed under **WooCommerce > Settings > Advanced > Webhooks**. Both use one signing secret, which GoPayLocal generates and stores; you don't copy anything.
+
+**Disconnecting** deletes both webhooks. Coupons already created stay in your store, because customers may still hold them.
+
+## Applying the code
+
+Customers type the code in the coupon field on your cart or checkout page.
+
+On WooCommerce 10.0 or later, a [checkout link](https://woocommerce.com/document/creating-sharable-checkout-urls-in-woocommerce/) can apply it for them. The link adds the product, applies the coupon and opens checkout:
+
+```
+https://shop.example.com/checkout-link/?products=123:1&coupon=PPP-IN40-K7QX
+```
+
+`123` is the product id (for a variable product, the variation id). The link empties the cart before adding the product.
+
+## How redemptions are tracked
+
+WooCommerce sends the order to GoPayLocal when it is created and each time it is updated. GoPayLocal:
+
+1. **Verifies the signature.** Every delivery carries an `X-WC-Webhook-Signature` header: a base64 HMAC-SHA256 of the request body made with the webhook's secret ([webhooks](https://developer.woocommerce.com/docs/apis/rest-api/v3/webhooks)). Deliveries that fail verification are rejected.
+2. **Counts paid orders only.** An order counts when its status is **Processing** or **Completed**, the statuses WooCommerce treats as paid. Pending, On hold, Failed and Cancelled orders don't count. Orders paid by bank transfer or check count once you mark them Processing or Completed.
+3. **Matches the code.** It reads the coupon codes on the order and matches them to GoPayLocal's coupons. Orders without a coupon, with only coupons GoPayLocal didn't create, or where the coupon discounted nothing, are ignored.
+4. **Counts it once per order.** The order id is the key, so the creation delivery and every later update of the same order count once.
+5. **Records revenue saved before tax.** WooCommerce reports each coupon's discount without tax (the tax part is separate), and that amount is used.
+
+Refunds and cancellations after payment are not subtracted.
+
+## Limits
+
+- **No test mode.** Every coupon GoPayLocal creates is a real coupon in your store. If you have a staging copy of the store on its own `https://` address, you can connect that instead.
+- **WooCommerce doesn't retry webhooks.** A delivery that fails is not sent again, and WooCommerce [disables a webhook](https://woocommerce.com/document/webhooks/) after more than five consecutive failed deliveries. If redemptions stop arriving, open the two GoPayLocal webhooks under **WooCommerce > Settings > Advanced > Webhooks**: a webhook WooCommerce turned off shows the status **Disabled**, and setting it back to **Active** resumes delivery. WooCommerce logs each delivery under **WooCommerce > Status > Logs** (source `webhooks-delivery`).
+- **Deliveries can be delayed.** WooCommerce queues webhook deliveries and sends them in the background, so a redemption can appear a while after the order.
+- **Subscriptions.** With WooCommerce Subscriptions, a standard coupon discounts only the first payment; renewals are full price ([subscription coupons](https://woocommerce.com/document/subscriptions/subscriptions-coupons/)). GoPayLocal counts an order only when the coupon actually discounted it, so full-price renewals aren't counted.
+- **Percentage coupons only,** applied to the whole cart.
+- **Redirects aren't followed.** GoPayLocal never sends your key to another address. If your store redirects (for example from `shop.example.com` to `www.shop.example.com`), connect with the address it redirects to; the error message names it.
+- **Firewalls and security plugins** can block API requests from GoPayLocal. Allow requests to `/wp-json/wc/v3/` on your store.
+- **The key is sent only in the `Authorization` header.** Some servers (often FastCGI setups) drop that header, and WooCommerce then rejects a correct key. WooCommerce's [fallback](https://developer.woocommerce.com/docs/apis/rest-api/) of putting the key in the URL isn't used, because URLs end up in logs. Your host has to pass the header through.
+- **Large coupon lists.** The **Test** button and coupon sync read all of your store's coupons, 100 at a time. They stop with an error in a store with more than 5,000 coupons.
+- **Timeouts.** Each request to your store must finish within 15 seconds.

@@ -1,0 +1,165 @@
+---
+title: Banner Positioning
+description: Choose where the GoPayLocal PPP banner appears on your site.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+GoPayLocal supports four banner positions. New campaigns use `bottom`. Change a campaign's position in the dashboard's [banner editor](/banner/customization#editing-the-design), where the live preview shows each one; the script tag and both SDKs then use it. The [JS SDK](/js/banner) and [React SDK](/react/components#pppbanner) can also override it in code (see [Choosing a Position](#choosing-a-position)).
+
+## Positions
+
+### Top Bar
+
+```
+position: "top"
+```
+
+A full-width bar fixed to the top of the viewport. Similar to notification bars used by GitHub, Vercel, and other SaaS tools.
+
+```
+┌─────────────────────────────────────────────────┐
+│ 🇮🇳 30% off for India! Use code PPP-IN │ Copy  │ ✕
+├─────────────────────────────────────────────────┤
+│                                                 │
+│              Your page content                  │
+│                                                 │
+└─────────────────────────────────────────────────┘
+```
+
+**Best for:** Landing pages, pricing pages where you want maximum visibility.
+
+**Details:**
+- `position: fixed` at top of viewport
+- Full width with centered content
+- Subtle shadow: `0 2px 6px rgba(0,0,0,0.12)`
+- Wraps content on mobile
+
+### Bottom Bar
+
+```
+position: "bottom"
+```
+
+A full-width bar fixed to the bottom of the viewport. Like a cookie consent banner.
+
+```
+┌─────────────────────────────────────────────────┐
+│                                                 │
+│              Your page content                  │
+│                                                 │
+├─────────────────────────────────────────────────┤
+│ 🇮🇳 30% off for India! Use code PPP-IN │ Copy  │ ✕
+└─────────────────────────────────────────────────┘
+```
+
+**Best for:** Sites that already have top navigation bars and don't want visual competition. This is the default for new campaigns.
+
+**Details:**
+- `position: fixed` at bottom of viewport
+- Full width with centered content
+- Shadow: `0 -2px 6px rgba(0,0,0,0.12)`
+
+### Bottom-Left Floating Card
+
+```
+position: "bottom-left"
+```
+
+A compact floating card in the bottom-left corner. Non-intrusive and familiar (like chat widgets).
+
+```
+┌─────────────────────────────────────────────────┐
+│                                                 │
+│              Your page content                  │
+│                                                 │
+│  ┌──────────────────┐                           │
+│  │ 🇮🇳 India         │                           │
+│  │ 30% off for you! │                           │
+│  │ Use code PPP-IN  │                           │
+│  │ ┌──────────────┐ │                           │
+│  │ │  Copy Code   │ │                           │
+│  │ └──────────────┘ │                           │
+│  └──────────────────┘                           │
+└─────────────────────────────────────────────────┘
+```
+
+**Best for:** SaaS apps, dashboards, or pages with existing bottom bars.
+
+**Details:**
+- Fixed position: `bottom: 16px; left: 16px`
+- Width: 300px (max: `calc(100vw - 32px)`)
+- Border radius: 10px
+- Shadow: `0 6px 20px rgba(0,0,0,0.15)`
+- Country name shown as a header above the message
+- Full-width CTA button
+
+### Bottom-Right Floating Card
+
+```
+position: "bottom-right"
+```
+
+Same as bottom-left, but positioned in the bottom-right corner.
+
+```
+┌─────────────────────────────────────────────────┐
+│                                                 │
+│              Your page content                  │
+│                                                 │
+│                           ┌──────────────────┐  │
+│                           │ 🇮🇳 India         │  │
+│                           │ 30% off for you! │  │
+│                           │ Use code PPP-IN  │  │
+│                           │ ┌──────────────┐ │  │
+│                           │ │  Copy Code   │ │  │
+│                           │ └──────────────┘ │  │
+│                           └──────────────────┘  │
+└─────────────────────────────────────────────────┘
+```
+
+**Best for:** Sites with left-side navigation. This is also where `<PPPBanner>` goes if a response has no position.
+
+<Aside type="tip">
+If your site uses a chat widget (Intercom, Crisp, etc.) in the bottom-right corner, use `bottom-left` to avoid overlap.
+</Aside>
+
+## Mobile Behavior
+
+On mobile devices:
+- **Bar positions** (top/bottom) remain full-width but content wraps gracefully
+- **Floating cards** use `max-width: calc(100vw - 32px)` to fit the screen with padding
+- The close button stays in reach: at the end of the bar, or in the card's top-right corner
+
+## Z-Index
+
+The banner uses `z-index: 2147483647` (maximum 32-bit integer) to ensure it appears above all other content. This is the same technique used by browser extensions and payment overlays.
+
+## Animations
+
+The banner slides into view with a 300ms ease-out animation:
+- **Top bar:** slides down from above the viewport
+- **Bottom bar:** slides up from below the viewport
+- **Bottom-left:** slides in from the left
+- **Bottom-right:** slides in from the right
+
+## Choosing a Position
+
+| Position | Visibility | Intrusiveness | Best For |
+|---|---|---|---|
+| `top` | High | Medium | Landing pages, pricing pages |
+| `bottom` | Medium | Low | Default — sites with top navbars |
+| `bottom-left` | Low | Very low | Apps with right-side chat widgets |
+| `bottom-right` | Low | Very low | Apps with left-side navigation |
+
+Pick the position in the campaign's banner editor (**Position**: bar at the top, bar at the bottom, card bottom left, card bottom right), or override it in code for one page:
+
+```js
+// JavaScript SDK
+gpl.showBanner({ position: 'bottom-left' });
+```
+
+```tsx
+// React SDK
+<PPPBanner position="bottom-left" />
+```

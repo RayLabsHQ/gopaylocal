@@ -1,0 +1,11 @@
+---
+import SwissLayout from '../../layouts/SwissLayout.astro';
+import UseCasePage from '../../components/landing/UseCasePage.astro';
+import { useCases } from '@/lib/use-case-data';
+
+const data = useCases['digital-products'];
+---
+
+<SwissLayout title="GoPayLocal for Digital Products — Sell Templates & Ebooks Globally" description="Sell templates, ebooks, and digital assets worldwide with fair local pricing. Works with Gumroad, Polar, and more.">
+  <UseCasePage data={data} />
+</SwissLayout>

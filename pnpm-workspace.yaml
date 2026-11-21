@@ -1,0 +1,14 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Since pnpm 10, dependencies may not run install scripts unless they are
+# listed here (pnpm 11 replaced `onlyBuiltDependencies` with this map, and
+# an install fails on any unlisted package that has a build script).
+allowBuilds:
+  # Native binaries: esbuild (banner bundle, vite, tsup, wrangler), workerd
+  # (wrangler's local runtime) and sharp (Astro image processing). Their
+  # install scripts verify or select the prebuilt binary for the platform.
+  esbuild: true
+  sharp: true
+  workerd: true

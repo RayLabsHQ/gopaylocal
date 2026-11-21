@@ -1,0 +1,65 @@
+---
+title: Charm Pricing
+description: How GoPayLocal rounds converted local prices to natural price points without ever understating them.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+A converted price is rarely a price anyone would set: 60% off $19 is ₹709.28 for an Indian visitor. Charm pricing rounds it to a price point that looks local, **₹719**, so the banner reads like a price you chose for that market.
+
+Charm pricing applies only to [converted local prices](/guides/multi-currency/). A visitor who pays in your product's own currency always sees the exact discounted price, because that is what the payment provider charges.
+
+<Aside type="caution" title="Local prices are estimates">
+Local prices are estimates. They convert your price at the day's mid-market rate and round up to a charm price, at most 8% above the converted amount and never below it (an amount under 13 of the currency's smallest unit can round up by more than 8%, to the next one). Your payment provider charges the exact discounted price in your currency; the amount on the customer's statement depends on their bank's exchange rate.
+</Aside>
+
+## Choosing a strategy
+
+Each campaign has a **Charm Pricing** setting, chosen when you create the campaign and changeable on its page in the dashboard. New campaigns start with **None**, which shows the converted price rounded only to the currency's smallest unit.
+
+| Setting | Value in the API | What it does |
+|---|---|---|
+| None | `none` | The converted price, rounded to the currency's smallest unit (cents, paise; whole yen) |
+| .99 ending | `dot99` | Ends in .99 (`.990` for three-decimal currencies such as the Kuwaiti dinar). For currencies without decimals, such as the yen, it works like Round to X9 |
+| Round to X9 | `round_x9` | Rounds at the second significant digit and ends in 9s (29, 639, 1,599, 12,999, 119,999). If that is too far, it rounds at the third digit, then to .99 |
+| Nearest $5 | `nearest_5` | A multiple of a round step that grows with the price: 5 for two-digit prices, 50 for three-digit prices, 500 for four-digit prices, and so on (30, 650). If that is too far, a multiple of a tenth of the step (1,600, 115,000) |
+| Region-aware | `region_aware` | Local conventions: Korean won prices end in 900 (₩13,900), Indonesian rupiah and Vietnamese dong in 9,000 (Rp119,000). Every other currency works like Round to X9 |
+
+The same price under each strategy, rounded up as for the price a visitor pays:
+
+| Converted price | None | .99 ending | Round to X9 | Nearest $5 | Region-aware |
+|---|---|---|---|---|---|
+| INR 1,583.75 | 1,583.75 | 1,583.99 | 1,599 | 1,600 | 1,599 |
+| USD 29.20 | 29.20 | 29.99 | 29.99 | 30 | 29.99 |
+| JPY 1,234.57 | 1,235 | 1,299 | 1,299 | 1,250 | 1,299 |
+| KRW 13,550 | 13,550 | 13,999 | 13,999 | 14,000 | 13,900 |
+| IDR 112,345.67 | 112,346 | 119,999 | 119,999 | 115,000 | 119,000 |
+| KWD 5.912 | 5.912 | 5.990 | 5.990 | 6.000 | 5.990 |
+
+Prices in the 15 currencies written without decimals (AFN, ALL, COP, HUF, IDR, IQD, IRR, KPW, LAK, LBP, MMK, PKR, SOS, SYP, YER) are whole numbers, so .99 ending behaves like Round to X9 there.
+
+## The rules
+
+- **The price the visitor pays is rounded up.** It is never below the converted price and at most 8% above it (below 13 of the currency's smallest unit, rounding up to one unit can be more). ₹1,583.75 becomes ₹1,599 with Round to X9, never ₹1,499.
+- **The struck-through original is rounded down**, never above the converted original and at most 8% below it.
+- **The tidiest pair that keeps every rule wins.** Each strategy proposes price points from coarse to fine for both prices. The pair shown is the tidiest one inside both 8% windows whose implied discount is at most 2 percentage points below the coupon and at least four fifths of it. If no pair qualifies, both prices are the converted amounts rounded to the currency's smallest unit: the paid price up, the original down.
+- **The discount shown is never larger than the real one.** Because the paid price goes up and the original goes down, the discount the two prices imply is at most the coupon's. Your banner's `{{discount}}%` stays the true figure. It is also at most 2 points below the coupon and at least four fifths of it whenever a pair qualifies (see above), so "15% off: ₹1,599 instead of ₹1,699" (5.9%) is shown as ₹1,509 instead of ₹1,769 (14.7%).
+- **Very small prices and discounts:** if even the smallest-unit rounding makes the paid price equal to or higher than the original, the visitor sees the exact price in your currency instead, as when no exchange rate is available.
+
+The coupon itself never changes. A visitor with a 40% code gets exactly 40% off your price at checkout.
+
+## Example: one product, five strategies
+
+A $19.99 product at 40% off, for a visitor in India (rates of 18 November 2026):
+
+| Strategy | Price paid (`localPrice`) | Original (`localOriginalPrice`) |
+|---|---|---|
+| None | ₹1,119.36 | ₹1,865.58 |
+| .99 ending | ₹1,119.99 | ₹1,864.99 |
+| Round to X9 | ₹1,129 | ₹1,859 |
+| Nearest $5 | ₹1,150 | ₹1,865.58 |
+| Region-aware | ₹1,129 | ₹1,859 |
+
+## In the SDKs
+
+The API response carries the campaign's strategy as `charmPricingStrategy`. The JavaScript and React SDKs round any other converted price on your page with the same code the server uses, so a product shown both in the banner and in a pricing table has the same price in both.

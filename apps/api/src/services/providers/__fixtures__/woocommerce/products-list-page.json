@@ -1,0 +1,17 @@
+{
+  "_source": "Response body of GET /wp-json/wc/v3/products?status=publish&_fields=id,name,price,permalink&per_page=100&page=1. The two products of the 'List all products' example at https://developer.woocommerce.com/docs/apis/rest-api/v3/products#list-all-products (a variable product with price \"\" and a simple product at \"21.99\"), reduced to the requested _fields. The test serves `body` as the response.",
+  "body": [
+    {
+      "id": 799,
+      "name": "Ship Your Idea",
+      "permalink": "https://example.com/product/ship-your-idea-22/",
+      "price": ""
+    },
+    {
+      "id": 794,
+      "name": "Premium Quality",
+      "permalink": "https://example.com/product/premium-quality-19/",
+      "price": "21.99"
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+---
+title: Shopify
+description: Add GoPayLocal PPP discounts to your Shopify store.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Add GoPayLocal to your Shopify store by adding the banner script to your theme.
+
+## Installation
+
+<Steps>
+
+1. **Get your API key** from the [GoPayLocal dashboard](https://app.gopaylocal.com)
+
+2. **Add the script to your theme**
+
+   Go to **Online Store > Themes > Edit Code** and open `theme.liquid` (or `layout/theme.liquid`).
+
+   Add the script before the closing `</body>` tag:
+
+   ```html
+   <script
+     src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+     data-product="prod_abc123"
+     async
+   ></script>
+   ```
+
+   `data-product` is the id of the product this site sells; the campaign page in the dashboard shows the snippet with your key and product filled in. You can leave it out if you have only one product. See [all script attributes](/banner/installation#script-attributes).
+
+3. **Configure discounts** in the GoPayLocal dashboard
+
+</Steps>
+
+## Discount Codes
+
+<Aside type="caution">
+GoPayLocal has no Shopify integration. It creates coupon codes only in the payment providers listed under [Integrations](/integrations/overview), each with a random suffix (for example `PPP-IN30-K7QX`), so you cannot create matching codes in Shopify by hand. On a store that checks out through Shopify, the banner has no working code to show.
+</Aside>
+
+The banner script fits a Shopify storefront that sends buyers to a checkout GoPayLocal integrates with, for example a Stripe, Gumroad or Paddle checkout for a digital product.
+
+## Only Show on Specific Pages
+
+To only show the banner on your pricing/product pages:
+
+```html
+{% if template == 'product' or template == 'collection' %}
+  <script
+    src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    data-product="prod_abc123"
+    async
+  ></script>
+{% endif %}
+```
+
+<Aside type="note">
+Shopify's checkout is hosted by Shopify and does not run custom scripts, so the banner appears only on your store pages.
+</Aside>

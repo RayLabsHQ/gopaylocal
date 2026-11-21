@@ -1,0 +1,54 @@
+---
+import BannerDemo from './BannerDemo';
+
+interface Props {
+  /** Anchor id — the landing nav links to this. */
+  id?: string;
+  /** Heading level: h1 on the standalone /demo page, h2 inside a landing page. */
+  as?: 'h1' | 'h2';
+  /** Optional small label above the heading. */
+  eyebrow?: string;
+  title?: string;
+  subtitle?: string;
+  /** Sit on the surface tone so the section can alternate with its neighbours. */
+  surface?: boolean;
+}
+
+const {
+  id = 'demo',
+  as = 'h2',
+  eyebrow,
+  title = 'See what your visitors see',
+  subtitle = "A preview of the banner, using GoPayLocal's built-in discount tiers. Pick a country and the price changes with it.",
+  surface = false,
+}: Props = Astro.props;
+
+const Heading = as;
+const headingSize = as === 'h1' ? 'text-4xl md:text-5xl' : 'text-3xl md:text-4xl';
+---
+
+<section id={id} class:list={["border-y border-border", surface && "bg-bg-surface"]}>
+  <div class="max-w-[1280px] mx-auto px-6 py-16 md:py-24 md:px-20">
+    <div class="max-w-4xl">
+      {eyebrow && (
+        <span class="inline-flex items-center gap-2 border border-border px-3 py-1.5 font-mono text-xs font-medium uppercase tracking-[0.16em] text-text-secondary">
+          <span class="h-2 w-2 bg-accent-500 inline-block"></span>
+          {eyebrow}
+        </span>
+      )}
+      <Heading
+        class:list={[
+          "font-display font-semibold tracking-tight text-text-primary",
+          headingSize,
+          eyebrow && "mt-6",
+        ]}
+      >
+        {title}
+      </Heading>
+      <p class="mt-5 max-w-[62ch] text-lg leading-relaxed text-text-secondary">{subtitle}</p>
+    </div>
+
+    <BannerDemo client:visible className="mt-10 md:mt-12" />
+  </div>
+</section>
+

@@ -1,0 +1,130 @@
+---
+title: GoPayLocal Documentation
+description: PPP discounts that just work. Documentation for integrating GoPayLocal into your app.
+template: splash
+editUrl: false
+lastUpdated: false
+hero:
+  tagline: Give your global customers fair, localized pricing with one script tag.
+  actions:
+    - text: Get Started
+      link: /getting-started/introduction
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/RayLabsHQ/gopaylocal
+      icon: external
+---
+
+import { LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+<div class="homepage-code-preview">
+```html
+<!-- Add one script tag. That's it. -->
+<script
+  src="https://api.gopaylocal.com/v1/banner/script.js?key=YOUR_KEY"
+  async
+></script>
+```
+</div>
+
+<div class="homepage-section">
+
+## Start building
+
+<CardGrid>
+  <LinkCard
+    title="Quickstart"
+    description="Add PPP discounts to your site in under 5 minutes with a single script tag."
+    href="/getting-started/quickstart"
+  />
+  <LinkCard
+    title="How It Works"
+    description="Understand how GoPayLocal detects location, calculates discounts, and displays banners."
+    href="/getting-started/how-it-works"
+  />
+  <LinkCard
+    title="Key Concepts"
+    description="Products, campaigns, parity groups, pricing modes, and more."
+    href="/getting-started/concepts"
+  />
+</CardGrid>
+
+</div>
+
+<div class="homepage-section">
+
+## SDKs & Banner
+
+<CardGrid>
+  <LinkCard
+    title="Banner Script"
+    description="Drop-in script tag that shows a localized discount banner. Zero config required."
+    href="/banner/installation"
+  />
+  <LinkCard
+    title="React SDK"
+    description="Components and hooks for building PPP-aware pricing in React and Next.js."
+    href="/react/installation"
+  />
+  <LinkCard
+    title="JavaScript SDK"
+    description="Imperative API for vanilla JS, Vue, Svelte, and any framework."
+    href="/js/installation"
+  />
+</CardGrid>
+
+</div>
+
+<div class="homepage-section">
+
+## Integrations & API
+
+<CardGrid>
+  <LinkCard
+    title="Integrations"
+    description="Connect Stripe, Paddle, Dodo Payments, Gumroad, and more."
+    href="/integrations/overview"
+  />
+  <LinkCard
+    title="API Reference"
+    description="REST API for products, campaigns, analytics, and webhooks."
+    href="/api/authentication"
+  />
+  <LinkCard
+    title="Platform Guides"
+    description="Step-by-step guides for Next.js, Remix, Astro, WordPress, Shopify, and more."
+    href="/platforms/nextjs"
+  />
+</CardGrid>
+
+</div>
+
+<div class="homepage-section">
+
+## Advanced
+
+<CardGrid>
+  <LinkCard
+    title="Pricing Modes"
+    description="Country grouping, PPP factor-based, or custom per-country discounts."
+    href="/guides/pricing-modes"
+  />
+  <LinkCard
+    title="Charm Pricing"
+    description="Currency-aware rounding so discounted prices look natural everywhere."
+    href="/guides/charm-pricing"
+  />
+  <LinkCard
+    title="VPN Detection"
+    description="Block discount abuse with ASN and IP-based VPN/proxy detection."
+    href="/guides/vpn-detection"
+  />
+  <LinkCard
+    title="A/B Testing"
+    description="Split a product's visitors between two campaigns and compare their results side by side."
+    href="/guides/ab-testing"
+  />
+</CardGrid>
+
+</div>

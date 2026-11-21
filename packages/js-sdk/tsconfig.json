@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    // src/price.ts imports ../shared/src/currency/charm.ts (pure, MIT), which
+    // tsup bundles into dist.
+    "rootDir": "..",
+    "declaration": true,
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["src"]
+}

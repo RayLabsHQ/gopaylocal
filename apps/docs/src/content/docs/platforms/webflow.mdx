@@ -1,0 +1,67 @@
+---
+title: Webflow
+description: Add GoPayLocal PPP discounts to your Webflow site.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+Add GoPayLocal to Webflow using the custom code embed feature.
+
+## Installation
+
+<Steps>
+
+1. **Get your API key** from the [GoPayLocal dashboard](https://app.gopaylocal.com)
+
+2. **Add the script to your site**
+
+   Go to **Project Settings > Custom Code** in Webflow.
+
+   In the **Footer Code** section, paste:
+
+   ```html
+   <script
+     src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+     data-product="prod_abc123"
+     async
+   ></script>
+   ```
+
+   Click **Save Changes** and publish your site.
+
+   `data-product` is the id of the product this site sells; the campaign page in the dashboard shows the snippet with your key and product filled in. You can leave it out if you have only one product. See [all script attributes](/banner/installation#script-attributes).
+
+3. **Configure discounts** in the GoPayLocal dashboard
+
+</Steps>
+
+## Page-Specific Installation
+
+To add the banner only on specific pages (e.g., your pricing page):
+
+1. Open the page in Webflow Designer
+2. Add an **Embed** element at the bottom of the page
+3. Paste the script tag
+4. Publish
+
+## Data Attributes
+
+Use Webflow's custom attributes feature to show discounted prices with the [JavaScript SDK](/js/data-attributes):
+
+1. Select a text element showing a price
+2. Go to **Element Settings > Custom Attributes**
+3. Add: `data-gopaylocal-price` = `99.99`
+4. Add a script embed at the bottom of the page:
+
+```html
+<script type="module">
+  import { GoPayLocal } from 'https://esm.sh/@gopaylocal/js';
+  const gpl = new GoPayLocal({ apiKey: 'gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef', productId: 'prod_abc123' });
+  await gpl.init();
+  gpl.bindPriceElements();
+</script>
+```
+
+<Aside type="tip">
+The banner script is the easiest approach for Webflow. It requires no custom JavaScript and works immediately after adding the script tag.
+</Aside>

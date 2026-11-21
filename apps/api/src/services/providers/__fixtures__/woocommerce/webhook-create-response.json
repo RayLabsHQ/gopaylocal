@@ -1,0 +1,32 @@
+{
+  "_source": "The 'Create a webhook' response example at https://developer.woocommerce.com/docs/apis/rest-api/v3/webhooks#create-a-webhook (id 142, topic order.updated), with name and delivery_url set to what GoPayLocal sends. The docs example's hooks list is kept as published; WooCommerce 11.3.0 maps order.updated to woocommerce_update_order, woocommerce_order_refunded and woocommerce_order_refund_deleted (class-wc-webhook.php get_default_topic_hooks). The secret is write-only and not returned.",
+  "id": 142,
+  "name": "GoPayLocal redemptions (order.updated)",
+  "status": "active",
+  "topic": "order.updated",
+  "resource": "order",
+  "event": "updated",
+  "hooks": [
+    "woocommerce_process_shop_order_meta",
+    "woocommerce_api_edit_order",
+    "woocommerce_order_edit_status",
+    "woocommerce_order_status_changed"
+  ],
+  "delivery_url": "https://api.gopaylocal.com/v1/webhooks/woocommerce/int_123",
+  "date_created": "2016-05-15T23:17:52",
+  "date_created_gmt": "2016-05-15T20:17:52",
+  "date_modified": "2016-05-15T23:17:52",
+  "date_modified_gmt": "2016-05-15T20:17:52",
+  "_links": {
+    "self": [
+      {
+        "href": "https://example.com/wp-json/wc/v3/webhooks/142"
+      }
+    ],
+    "collection": [
+      {
+        "href": "https://example.com/wp-json/wc/v3/webhooks"
+      }
+    ]
+  }
+}

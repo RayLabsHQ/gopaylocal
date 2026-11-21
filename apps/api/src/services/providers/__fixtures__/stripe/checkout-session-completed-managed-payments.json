@@ -1,0 +1,108 @@
+{
+  "id": "evt_1SmPmDLkdIwHu7ixManagedPaid",
+  "object": "event",
+  "api_version": "2026-10-28.endive",
+  "created": 1763400100,
+  "data": {
+    "object": {
+      "id": "cs_test_b1MaNaGeDpAyMeNtS0000000000000000000000000000000000000000",
+      "object": "checkout.session",
+      "after_expiration": null,
+      "allow_promotion_codes": true,
+      "amount_subtotal": 2000,
+      "amount_total": 1440,
+      "automatic_tax": {
+        "enabled": false,
+        "liability": null,
+        "status": null
+      },
+      "billing_address_collection": null,
+      "cancel_url": null,
+      "client_reference_id": null,
+      "consent": null,
+      "consent_collection": null,
+      "created": 1763400000,
+      "currency": "usd",
+      "custom_fields": [],
+      "custom_text": {
+        "shipping_address": null,
+        "submit": null
+      },
+      "customer": "cus_TmP9xLkdIwHu7i",
+      "customer_creation": "always",
+      "customer_details": {
+        "address": {
+          "city": "Paris",
+          "country": "FR",
+          "line1": "1 Rue de Test",
+          "line2": null,
+          "postal_code": "75001",
+          "state": null
+        },
+        "email": "buyer+location_FR@example.com",
+        "name": "Test Buyer",
+        "phone": null,
+        "tax_exempt": "none",
+        "tax_ids": []
+      },
+      "customer_email": "buyer+location_FR@example.com",
+      "discounts": [
+        {
+          "coupon": "PPPFR40M3PX",
+          "promotion_code": "promo_1SmPmALkdIwHu7ixManaged01"
+        }
+      ],
+      "expires_at": 1763486400,
+      "invoice": null,
+      "invoice_creation": null,
+      "livemode": false,
+      "locale": null,
+      "managed_payments": {
+        "enabled": true
+      },
+      "metadata": {},
+      "mode": "payment",
+      "payment_intent": "pi_3SmPmBLkdIwHu7ix0Managed",
+      "payment_link": null,
+      "payment_method_collection": "if_required",
+      "payment_method_options": {},
+      "payment_method_types": [
+        "card",
+        "link"
+      ],
+      "payment_status": "paid",
+      "phone_number_collection": {
+        "enabled": false
+      },
+      "presentment_details": {
+        "presentment_amount": 1290,
+        "presentment_currency": "eur"
+      },
+      "recovered_from": null,
+      "return_url": null,
+      "setup_intent": null,
+      "shipping_address_collection": null,
+      "shipping_cost": null,
+      "shipping_details": null,
+      "shipping_options": [],
+      "status": "complete",
+      "submit_type": null,
+      "subscription": null,
+      "success_url": "https://example.com/success",
+      "total_details": {
+        "amount_discount": 800,
+        "amount_shipping": 0,
+        "amount_tax": 240
+      },
+      "url": null,
+      "ui_mode": "hosted"
+    }
+  },
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": {
+    "id": null,
+    "idempotency_key": null
+  },
+  "type": "checkout.session.completed"
+}

@@ -1,0 +1,116 @@
+---
+title: Remix
+description: Integrate GoPayLocal with Remix.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+GoPayLocal integrates with Remix using either the React SDK or the banner script. The same code works in React Router 7 framework mode, importing from `react-router` instead of `@remix-run/react`.
+
+## Option 1: React SDK
+
+```bash
+npm install @gopaylocal/react
+```
+
+Add the provider in your root layout:
+
+```tsx
+// app/root.tsx
+import { Links, Meta, Outlet, Scripts, ScrollRestoration } from '@remix-run/react';
+import { GoPayLocalProvider } from '@gopaylocal/react';
+
+export default function App() {
+  return (
+    <html lang="en">
+      <head>
+        <Meta />
+        <Links />
+      </head>
+      <body>
+        <GoPayLocalProvider apiKey="gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" productId="prod_abc123">
+          <Outlet />
+        </GoPayLocalProvider>
+        <ScrollRestoration />
+        <Scripts />
+      </body>
+    </html>
+  );
+}
+```
+
+The provider fetches in the browser after hydration, so server-rendered HTML shows your base prices and the discount appears right after. Then use components in any route:
+
+```tsx
+// app/routes/pricing.tsx
+import { PPPPrice, PPPBanner } from '@gopaylocal/react';
+
+export default function Pricing() {
+  return (
+    <div>
+      <PPPBanner position="top" />
+      <h1>Pricing</h1>
+      <div>
+        <h2>Pro Plan</h2>
+        <PPPPrice price={9.99} /> /month
+      </div>
+    </div>
+  );
+}
+```
+
+## Option 2: Banner Script
+
+Add the script in your root layout:
+
+```tsx
+// app/root.tsx
+import { Links, Meta, Outlet, Scripts, ScrollRestoration } from '@remix-run/react';
+
+export default function App() {
+  return (
+    <html lang="en">
+      <head>
+        <Meta />
+        <Links />
+      </head>
+      <body>
+        <Outlet />
+        <ScrollRestoration />
+        <Scripts />
+        <script
+          src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          data-product="prod_abc123"
+          async
+        />
+      </body>
+    </html>
+  );
+}
+```
+
+## Environment Variables
+
+```bash
+# .env
+GOPAYLOCAL_PUBLIC_KEY=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+```
+
+Pass it to the provider through the root loader:
+
+```tsx
+// app/root.tsx
+import { useLoaderData } from '@remix-run/react';
+
+export const loader = async () => ({
+  gopaylocalKey: process.env.GOPAYLOCAL_PUBLIC_KEY!,
+});
+
+export default function App() {
+  const { gopaylocalKey } = useLoaderData<typeof loader>();
+  // ...
+  // <GoPayLocalProvider apiKey={gopaylocalKey}>
+}
+```
+
+Public keys (`gpl_pk_`) are safe to send to the browser.

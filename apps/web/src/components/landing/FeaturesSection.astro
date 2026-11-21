@@ -10,7 +10,7 @@ interface Props {
 const { title, items } = Astro.props;
 ---
 
-<section class="bg-bg">
+<section id="features" class="bg-bg">
   <div class="max-w-7xl mx-auto px-6 py-16 md:py-24 md:px-20">
     <h2 class="font-display text-3xl md:text-4xl font-semibold tracking-tight text-text-primary whitespace-pre-line leading-[1.1]">
       {title}
@@ -18,25 +18,19 @@ const { title, items } = Astro.props;
 
     <div class="mt-12 grid grid-cols-1 md:grid-cols-3">
       {items.slice(0, 6).map((feature, index) => (
-        <div class="relative p-10 backdrop-blur-lg">
-          
-          {index % 3 !== 2 && (
-            <div class="hidden md:block absolute right-0 top-0 bottom-0 w-[1px] bg-red-500/20 shadow-[0_0_30px_3px_rgba(239,68,68,0.8)] z-10 pointer-events-none" />
-          )}
-
-          {index < 3 && (
-            <div class="hidden md:block absolute bottom-0 left-0 right-0 h-[1px] bg-red-500/20 shadow-[0_0_30px_3px_rgba(239,68,68,0.8)] z-10 pointer-events-none" />
-          )}
-          
-          {index < 5 && (
-            <div class="block md:hidden absolute bottom-0 left-10 right-10 h-[1px] bg-red-500/20 shadow-[0_0_30px_rgba(239,68,68,0.5)] z-10 pointer-events-none" />
-          )}
-
-          <div class="text-accent-500 mb-5 relative z-20">
+        <div
+          class:list={[
+            "p-10 border-border",
+            index < 3 ? "border-b" : "",
+            index === 3 || index === 4 ? "border-b md:border-b-0" : "",
+            index % 3 !== 2 ? "md:border-r" : "",
+          ]}
+        >
+          <div class="text-accent-500 mb-5">
             <FeatureIcon name={feature.icon} className="h-5 w-5" client:load />
           </div>
-          <h3 class="font-display text-base font-semibold text-text-primary relative z-20">{feature.title}</h3>
-          <p class="mt-2 text-sm text-text-secondary leading-relaxed relative z-20">{feature.description}</p>
+          <h3 class="font-display text-lg font-semibold leading-snug text-text-primary">{feature.title}</h3>
+          <p class="mt-3 text-base text-text-secondary leading-relaxed">{feature.description}</p>
         </div>
       ))}
     </div>

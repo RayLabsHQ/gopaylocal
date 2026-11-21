@@ -1,0 +1,241 @@
+---
+title: Banner API
+description: API reference for the public banner endpoints.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+The banner endpoints are public. They take a public API key (prefix `gpl_pk_`), which is safe to put in client-side code. They need no secret and no session.
+
+## Get Banner Config
+
+Returns the discount and banner settings for the current visitor.
+
+```
+GET /v1/banner/config/:publicKey
+```
+
+**Query parameters (both optional):**
+
+| Parameter | Format | Description |
+|---|---|---|
+| `product` | Product ID: 1-64 letters, digits, `_` or `-` | The product the page sells. One key answers for every product of the organization. Without it (or when it is empty), the organization's default product is used (see below). |
+| `vid` | Visitor ID: 16-64 letters, digits, `_` or `-` | A stable random ID for the visitor, used to keep them in the same A/B test arm. A value in any other format is ignored. |
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl "https://api.gopaylocal.com/v1/banner/config/gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef?product=01JD8Z3T6M4Q" \
+    -H "Accept: application/json"
+  ```
+  </TabItem>
+  <TabItem label="JavaScript">
+  ```js
+  const url = new URL('https://api.gopaylocal.com/v1/banner/config/gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
+  url.searchParams.set('product', '01JD8Z3T6M4Q');
+  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  const data = await res.json();
+  ```
+  </TabItem>
+</Tabs>
+
+**Response (discount available):**
+
+```json
+{
+  "show": true,
+  "country": "IN",
+  "countryName": "India",
+  "discount": 30,
+  "code": "PPP-IN30-K7QX",
+  "banner": {
+    "position": "bottom",
+    "messageTemplate": "Hey! It looks like you're visiting from {{countryName}}. Use code {{code}} for {{discount}}% off.",
+    "ctaText": "Copy Code",
+    "backgroundColor": "#1a1a2e",
+    "textColor": "#ffffff",
+    "ctaColor": "#e94560",
+    "ctaTextColor": "#ffffff",
+    "showFlag": true,
+    "showCloseBtn": true
+  },
+  "baseCurrencyCode": "USD",
+  "baseCurrencySymbol": "$",
+  "currencyCode": "INR",
+  "currencySymbol": "₹",
+  "fxRate": 93.32614706,
+  "fxAsOf": "2026-11-18",
+  "localPrice": 1249,
+  "localOriginalPrice": 1769,
+  "charmPricingStrategy": "round_x9",
+  "campaignId": "01JD8Z5K2R7W",
+  "showBranding": true
+}
+```
+
+This is a $19 product with **Round to X9** charm pricing, for a visitor in India on 18 November 2026 rates (see [Local prices](#local-prices)).
+
+**Response (A/B test running):** the same fields, plus the test and the visitor's arm:
+
+```json
+{
+  "show": true,
+  "campaignId": "01JD8Z9B4XQ1",
+  "experimentId": "01JD9A0C7N2P",
+  "variant": "b",
+  "...": "..."
+}
+```
+
+**Response (no banner):**
+
+```json
+{ "show": false, "reason": "no_discount" }
+```
+
+### Response Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `show` | `boolean` | Whether to show a banner. When `false`, only `reason` (and, during an A/B test, `experimentId` and `variant`) is present. |
+| `country` | `string` | ISO 3166-1 alpha-2 country code of the visitor |
+| `countryName` | `string` | Country name |
+| `discount` | `number` | Discount percentage |
+| `code` | `string \| null` | Coupon code. `null` for a campaign without a payment integration. |
+| `banner` | `object` | Banner display settings of the campaign |
+| `baseCurrencyCode` | `string` | The product's currency (ISO 4217) |
+| `baseCurrencySymbol` | `string` | Symbol of the product's currency |
+| `currencyCode` | `string` | The currency of `localPrice` and `localOriginalPrice`: the visitor's when the price was converted, otherwise the product's |
+| `currencySymbol` | `string` | Symbol of `currencyCode` |
+| `fxRate` | `number` | Units of `currencyCode` per 1 unit of `baseCurrencyCode`; `1` when not converted |
+| `fxAsOf` | `string` | Only on a converted price: the date of the exchange rates, `YYYY-MM-DD` |
+| `localPrice` | `number` | The product's price after the discount, in `currencyCode` |
+| `localOriginalPrice` | `number` | The product's price before the discount, in `currencyCode` |
+| `charmPricingStrategy` | `"none" \| "dot99" \| "round_x9" \| "nearest_5" \| "region_aware"` | The campaign's [charm pricing](/guides/charm-pricing/) setting, so a client can round other prices the same way |
+| `campaignId` | `string` | The campaign that answered. During an A/B test, the campaign of the visitor's arm. |
+| `experimentId` | `string` | Only while an A/B test applies: the test |
+| `variant` | `"a" \| "b"` | Only while an A/B test applies: the visitor's arm (`a` is campaign A, `b` is campaign B) |
+| `showBranding` | `boolean` | Whether the banner shows the "Powered by GoPayLocal" link (Free plan on the hosted service; always `false` when self-hosted) |
+| `reason` | `string` | Why no banner is shown. Only when `show` is `false`. |
+
+### Local prices
+
+Every `show: true` answer carries the price fields above, computed from the product the answer is for (its price and currency in the dashboard) and the visitor's discount:
+
+- **Converted** (`fxAsOf` is present): the visitor's country uses another currency and a usable exchange rate exists. `localPrice` is `basePrice × (1 − discount/100) × fxRate`, rounded **up** to the campaign's charm price; `localOriginalPrice` is `basePrice × fxRate`, rounded **down**. In the example above, a $19 product at 30% off is ₹1,249 (was ₹1,769). The two are chosen together so that the discount they imply is never above the real one and, except for prices of a few cents, neither more than 2 points below it nor under four fifths of it ([Charm pricing](/guides/charm-pricing/#the-rules)). A 100% discount gives `localPrice` 0 with the converted original.
+- **Exact** (no `fxAsOf`): the visitor pays in the product's currency, the rates are older than 96 hours or missing, or the visitor's currency is left out of the current rates ([held currencies](/guides/multi-currency/#held-currencies)), or no converted pair is possible (the paid price would not be below the original, or the converted price rounds to zero). Then `currencyCode` equals `baseCurrencyCode`, `fxRate` is `1`, `localPrice` is the exact discounted price and `localOriginalPrice` is the product's price. No charm rounding is applied.
+
+`fxRate` is sent rounded to 10 significant digits and the prices are computed from that rounded value, so a client that repeats the calculation for another price with the same `fxRate` and `charmPricingStrategy` gets the same numbers. The JavaScript and React SDKs do this.
+
+<Aside type="caution" title="Local prices are estimates">
+Local prices are estimates. They convert your price at the day's mid-market rate and round up to a charm price, at most 8% above the converted amount and never below it (an amount under 13 of the currency's smallest unit can round up by more than 8%, to the next one). Your payment provider charges the exact discounted price in your currency; the amount on the customer's statement depends on their bank's exchange rate.
+</Aside>
+
+Rate sources, the refresh schedule and the country-to-currency mapping are in [Multi-currency display](/guides/multi-currency/).
+
+### Reasons for `show: false`
+
+| Reason | Description |
+|---|---|
+| `unknown_country` | The visitor's country could not be determined |
+| `vpn_detected` | The request looks like VPN, datacenter or Tor traffic (see [VPN detection](/guides/vpn-detection/)) |
+| `quota_exceeded` | The organization used its monthly API calls (Free plan, see below) |
+| `no_active_campaign` | Nothing can be served for this product: no active campaign with a banner, or `product` is unknown or malformed |
+| `domain_not_allowed` | The campaign has an allowed-domains list and the request's `Origin` (or `Referer`) is not on it or a subdomain of it |
+| `no_discount` | The campaign has no discount for the visitor's country, or no coupon code could be produced for it |
+
+### Errors
+
+| Status | Body | When |
+|---|---|---|
+| `401` | `{ "error": "Invalid API key" }` | The key does not exist or is not a public key |
+| `401` | `{ "error": "Secret keys (gpl_sk_) must never be used in a browser. …", "code": "secret_key_not_allowed" }` | The key is a secret key. It is refused before any lookup and never echoed; revoke it in the dashboard, since it has been exposed ([details](/api/authentication/#a-secret-key-on-a-public-endpoint)) |
+| `429` | `{ "error": "rate_limited" }` | Too many requests from one IP address; retry after the `Retry-After` header (seconds) |
+| `500` | `{ "show": false, "reason": "internal_error" }` | A temporary server problem |
+
+### Country detection
+
+The country comes from Cloudflare's own geolocation of the connection. A `CF-IPCountry` header sent by the client is ignored, so a visitor cannot claim another country.
+
+### Which campaign answers
+
+Only **active** campaigns that have a banner are served. For a product:
+
+1. A **live** campaign is preferred over a test-mode one.
+2. If an A/B test is running for the product, it answers. Otherwise the most recently created campaign answers.
+
+Without `product`, the default product is the product of the most recently created campaign that can be served (live first). A single-product site gets exactly what it got before products were supported.
+
+An unknown or malformed `product` returns `no_active_campaign`; another product's campaign is never served.
+
+### A/B tests
+
+While an A/B test runs, each visitor is assigned to arm `a` or `b` according to the test's traffic split. The assignment is a hash of the test ID and the visitor:
+
+- the `vid` parameter when one is sent (the banner script and the SDKs send one),
+- otherwise the visitor's IP address and user agent.
+
+The same visitor always gets the same arm for the same test. When the assigned arm has no discount for the visitor's country, or its allowed domains reject the page, the answer is `show: false` for that visitor (the other arm is not used instead), still with `experimentId` and `variant`.
+
+If one arm's campaign stops being servable (paused, deleted or without a banner), the other arm answers everyone and the response has no `experimentId` or `variant`. If neither arm can be served, the test is ignored and the normal campaign choice applies. See [A/B testing](/guides/ab-testing/).
+
+## What counts as an API call
+
+One API call is one request to `GET /v1/banner/config/:publicKey` that has a valid key and reaches campaign selection, whatever the answer: a banner, `no_active_campaign`, `domain_not_allowed` or `no_discount`.
+
+Not counted: requests answered `unknown_country`, `vpn_detected` or `quota_exceeded`, rejected keys (`401`), rate-limited requests (`429`), the script files, and analytics events (`POST /v1/events`).
+
+Requests answered by a **test-mode** campaign are recorded separately and do not count against the plan. A request with nothing to serve counts as live.
+
+| | Monthly API calls |
+|---|---|
+| Free | 10,000 live calls per calendar month (UTC). After that, the endpoint answers `quota_exceeded` until the next month. Usage is recomputed every 10 minutes, so the cutoff can lag by up to about 10 minutes. |
+| Pro | No limit (fair use) |
+| Self-hosted | No limit |
+
+On the hosted service, current usage is shown in the dashboard under Settings, Billing.
+
+## Get Banner Script
+
+Returns a small loader that adds the banner bundle to the page.
+
+```
+GET /v1/banner/script.js?key=:publicKey
+```
+
+```html
+<script src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" async></script>
+```
+
+The loader inserts `GET /v1/banner/bundle.js`, which fetches the config above, renders the banner and reports [banner events](/banner/events/). Script tag options (product, visitor ID, storage) are described in [Installation](/banner/installation/).
+
+A missing key, or a key with characters other than letters, digits, `_` and `-`, gets a `400` response with a JavaScript comment body (`// Missing API key` or `// Invalid API key`). A secret key (`gpl_sk_`) also gets a `400` with a comment saying so, and is never written into the loader (see [A secret key on a public endpoint](/api/authentication/#a-secret-key-on-a-public-endpoint)).
+
+| File | Cache-Control |
+|---|---|
+| `script.js` | `public, max-age=3600` |
+| `bundle.js` | `public, max-age=86400` |
+
+<Aside type="note">
+The banner script is the recommended setup. The config endpoint is what the script and the SDKs call; call it directly only for a custom integration.
+</Aside>
+
+## CORS
+
+All banner endpoints answer any origin with `Access-Control-Allow-Origin: *`. The config response also carries `Vary: Origin`.
+
+If the campaign has allowed domains, a request from another site still gets a readable response, but it is `show: false` with `reason: "domain_not_allowed"`.
+
+## Caching and changes
+
+The config response has no `Cache-Control` header, so browsers and Cloudflare don't cache it. The clients keep their own copy in `sessionStorage` for 5 minutes:
+
+| Client | What it reuses |
+|---|---|
+| Banner script | Every successful response, including `show: false`, unless `data-no-storage` is set |
+| JavaScript SDK | Only responses with `show: true` |
+| React SDK | Only responses with `show: true` |
+
+On the server, every change that affects the banner (campaigns, banner settings, products, parity groups, A/B tests, plan) rebuilds the organization's cached answer and discards cached discounts. A change normally applies within seconds, and within about a minute in every location. In the worst case (for example, two changes saved at almost the same moment) it can take up to about 16 minutes. The visitor's own 5-minute copy in `sessionStorage` comes on top.
+
+Exchange rates are refreshed every 6 hours; new rates reach visitors within about 15 minutes of a refresh.

@@ -1,0 +1,44 @@
+{
+  "_source": "Response body of GET /wp-json/wc/v3/coupons?_fields=id,code,amount,discount_type,status,date_expires_gmt,usage_count,usage_limit,meta_data&per_page=100&page=1. Objects follow the 'List all coupons' example at https://developer.woocommerce.com/docs/apis/rest-api/v3/coupons#list-all-coupons (ids 720 and 719, codes \"free shipping\" and 10off) reduced to the requested _fields (https://developer.wordpress.org/rest-api/using-the-rest-api/global-parameters/#_fields), plus one GoPayLocal coupon (id 721) carrying the meta GoPayLocal sends. `status` is not in the docs example; it is in the coupon schema of includes/rest-api/Controllers/Version2/class-wc-rest-coupons-v2-controller.php (WooCommerce 11.3.0), value \"publish\" for a published coupon. The test serves `body` as the response.",
+  "body": [
+    {
+      "id": 721,
+      "code": "ppp-br30-q2zm",
+      "amount": "30.00",
+      "discount_type": "percent",
+      "status": "publish",
+      "date_expires_gmt": null,
+      "usage_count": 0,
+      "usage_limit": null,
+      "meta_data": [
+        {
+          "id": 5022,
+          "key": "gopaylocal",
+          "value": "true"
+        }
+      ]
+    },
+    {
+      "id": 720,
+      "code": "free shipping",
+      "amount": "0.00",
+      "discount_type": "fixed_cart",
+      "status": "publish",
+      "date_expires_gmt": null,
+      "usage_count": 0,
+      "usage_limit": null,
+      "meta_data": []
+    },
+    {
+      "id": 719,
+      "code": "10off",
+      "amount": "10.00",
+      "discount_type": "percent",
+      "status": "publish",
+      "date_expires_gmt": null,
+      "usage_count": 0,
+      "usage_limit": null,
+      "meta_data": []
+    }
+  ]
+}

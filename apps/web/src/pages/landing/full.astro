@@ -1,0 +1,11 @@
+---
+import SwissLayout from '../../layouts/SwissLayout.astro';
+import LandingPage from '../../components/landing/LandingPage.astro';
+import { getLandingData } from '@/lib/landing-data';
+
+const data = getLandingData('full');
+---
+
+<SwissLayout title="GoPayLocal — PPP Discounts That Just Work" description="Fair prices. More customers. Zero effort. Give your global customers fair, localized pricing.">
+  <LandingPage data={data} />
+</SwissLayout>

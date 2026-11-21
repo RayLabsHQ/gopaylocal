@@ -1,0 +1,110 @@
+---
+title: Astro
+description: Integrate GoPayLocal with Astro sites.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Astro's static-first approach works perfectly with GoPayLocal's banner script. Since the banner loads asynchronously and renders in Shadow DOM, it works seamlessly with Astro's island architecture.
+
+## Banner Script (Recommended)
+
+Add the script to your layout:
+
+```astro
+---
+// src/layouts/Layout.astro
+---
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>My Site</title>
+  </head>
+  <body>
+    <slot />
+    <script
+      src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      data-product="prod_abc123"
+      is:inline
+      async
+    ></script>
+  </body>
+</html>
+```
+
+<Aside type="note">
+Use `is:inline` to prevent Astro from bundling the external script. The script must load from GoPayLocal's API to get the visitor's personalized config. `data-product` picks the product's campaign; see [all script attributes](/banner/installation#script-attributes).
+</Aside>
+
+## JavaScript SDK
+
+For more control, use the JavaScript SDK in an Astro component:
+
+```astro
+---
+// src/components/Pricing.astro
+---
+<div id="pricing">
+  <div class="plan">
+    <h3>Pro Plan</h3>
+    <span data-gopaylocal-price="9.99">$9.99</span>/mo
+  </div>
+</div>
+
+<script>
+  import { GoPayLocal } from '@gopaylocal/js';
+
+  const gpl = new GoPayLocal({ apiKey: 'gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef', productId: 'prod_abc123' });
+  await gpl.init();
+  gpl.bindPriceElements();
+</script>
+```
+
+Astro bundles this script for the browser, so the SDK never runs at build time. Install it first:
+
+```bash
+npm install @gopaylocal/js
+```
+
+## React SDK (with Astro React Islands)
+
+If you're using Astro with React islands:
+
+```bash
+npx astro add react
+npm install @gopaylocal/react
+```
+
+```tsx
+// src/components/PricingIsland.tsx
+import { GoPayLocalProvider, PPPPricingTable } from '@gopaylocal/react';
+
+export default function PricingIsland() {
+  return (
+    <GoPayLocalProvider apiKey="gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" productId="prod_abc123">
+      <PPPPricingTable
+        plans={[
+          { name: 'Free', price: 0, features: ['1 project'] },
+          { name: 'Starter', price: 19, features: ['5 projects', 'Email support'], highlighted: true },
+          { name: 'Team', price: 49, features: ['Unlimited projects', 'Priority support'] },
+        ]}
+      />
+    </GoPayLocalProvider>
+  );
+}
+```
+
+```astro
+---
+// src/pages/pricing.astro
+import Layout from '../layouts/Layout.astro';
+import PricingIsland from '../components/PricingIsland';
+---
+<Layout>
+  <h1>Pricing</h1>
+  <PricingIsland client:load />
+</Layout>
+```
+
+Use `client:load` to hydrate the island immediately, so the PPP data is fetched as soon as possible. The island's server-rendered HTML shows your base prices; the discount appears after hydration.

@@ -1,0 +1,39 @@
+{
+  "name": "@gopaylocal/dashboard",
+  "version": "0.0.1",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build && cp dist/client/_shell.html dist/client/index.html",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .output",
+    "deploy:worker": "wrangler deploy",
+    "deploy:worker:preview": "wrangler versions upload"
+  },
+  "dependencies": {
+    "@gopaylocal/shared": "workspace:*",
+    "@radix-ui/react-scroll-area": "^1.4.0",
+    "@radix-ui/react-select": "^2.4.1",
+    "@radix-ui/react-switch": "^1.4.1",
+    "@tanstack/react-query": "^5.108.0",
+    "@tanstack/react-router": "^1.170.46",
+    "@tanstack/react-start": "^1.169.5",
+    "@tanstack/react-table": "^9.3.1",
+    "better-auth": "^1.7.25",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "sonner": "^2.0.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "tailwindcss": "^4.3.5",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "wrangler": "^4.164.0"
+  }
+}

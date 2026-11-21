@@ -1,0 +1,126 @@
+---
+import SwissLayout from '../../layouts/SwissLayout.astro';
+import { ANALYTICS_STORAGE_MONTHS } from '@gopaylocal/shared/constants';
+---
+
+<SwissLayout
+  title="Privacy Policy — GoPayLocal"
+  description="GoPayLocal privacy policy. Learn how we collect, use, and protect your data."
+>
+  <section class="py-24 md:py-32">
+    <div class="mx-auto max-w-[34rem] px-6">
+      <div class="mb-12">
+        <p class="inline-block bg-accent-500 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-white">
+          Legal
+        </p>
+        <h1 class="mt-4 font-display text-4xl font-semibold tracking-tight text-text-primary">
+          Privacy Policy
+        </h1>
+        <p class="mt-4 text-sm text-text-muted">
+          Last updated: November 21, 2026
+        </p>
+      </div>
+
+      <div class="space-y-8">
+        <div>
+          <h2 class="font-display text-xl font-semibold text-text-primary">1. Introduction</h2>
+          <p class="mt-3 leading-relaxed text-text-secondary">
+            GoPayLocal ("we", "our", or "us") is committed to protecting your
+            privacy. This Privacy Policy explains how we collect, use, disclose,
+            and safeguard your information when you use our service.
+          </p>
+        </div>
+
+        <div>
+          <h2 class="font-display text-xl font-semibold text-text-primary">
+            2. Information We Collect
+          </h2>
+          <p class="mt-3 leading-relaxed text-text-secondary">
+            We collect information you provide directly to us, such as when you
+            create an account, configure your settings, or contact us for
+            support. When you sign in to the dashboard, we store the IP address
+            and browser user agent of that sign-in with your session. We use
+            them to protect accounts and the service against abuse and
+            attacks.
+          </p>
+          <p class="mt-3 leading-relaxed text-text-secondary">
+            When a visitor loads a website that uses our script, we use the
+            visitor's IP address to work out their country, to detect VPNs and
+            proxies, and to limit abusive traffic. We do not store visitors'
+            IP addresses. Our script keeps a random identifier in the
+            visitor's browser so that a visitor in an A/B test keeps seeing
+            the same variant; we do not store it on our servers. What we store
+            are counts per country and day: banner impressions, clicks, code
+            copies and redemptions.
+          </p>
+          <p class="mt-3 leading-relaxed text-text-secondary">
+            When a discount code is redeemed, your payment provider notifies
+            us. We keep the code and the order's amounts, not who bought. A
+            notification we cannot process right away is kept for about three
+            days so we can retry, and its contents are then discarded.
+            Payments for our own paid plans are handled by our payment
+            processor, Dodo Payments. We never see or store card numbers; we
+            keep the subscription and billing records they send us.
+          </p>
+        </div>
+
+        <div>
+          <h2 class="font-display text-xl font-semibold text-text-primary">
+            3. How We Use Your Information
+          </h2>
+          <p class="mt-3 leading-relaxed text-text-secondary">
+            We use the information we collect to provide, maintain, and improve
+            our services; to determine appropriate PPP discounts based on
+            visitor location; to detect and prevent fraud (e.g., VPN detection);
+            to send you technical notices and support messages; and to comply
+            with legal obligations.
+          </p>
+        </div>
+
+        <div>
+          <h2 class="font-display text-xl font-semibold text-text-primary">4. Data Retention</h2>
+          <p class="mt-3 leading-relaxed text-text-secondary">
+            We retain your account information for as long as your account is
+            active. Analytics data and API-call counts are deleted after
+            {ANALYTICS_STORAGE_MONTHS} months. A dashboard session, with its IP
+            address and user agent, is deleted when you sign out, or within
+            about two days after it expires. You may request deletion of your
+            data at any time by contacting us.
+          </p>
+        </div>
+
+        <div>
+          <h2 class="font-display text-xl font-semibold text-text-primary">5. Data Security</h2>
+          <p class="mt-3 leading-relaxed text-text-secondary">
+            We implement appropriate technical and organizational measures to
+            protect your personal data against unauthorized access, alteration,
+            disclosure, or destruction.
+          </p>
+        </div>
+
+        <div>
+          <h2 class="font-display text-xl font-semibold text-text-primary">6. Your Rights</h2>
+          <p class="mt-3 leading-relaxed text-text-secondary">
+            Depending on your location, you may have certain rights regarding
+            your personal data, including the right to access, correct, delete,
+            or export your data. To exercise these rights, please contact us at
+            privacy@gopaylocal.com.
+          </p>
+        </div>
+
+        <div>
+          <h2 class="font-display text-xl font-semibold text-text-primary">7. Contact Us</h2>
+          <p class="mt-3 leading-relaxed text-text-secondary">
+            If you have any questions about this Privacy Policy, please contact
+            us at
+            <a
+              href="mailto:privacy@gopaylocal.com"
+              class="text-accent-text hover:text-text-primary underline"
+              >privacy@gopaylocal.com</a
+            >.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+</SwissLayout>

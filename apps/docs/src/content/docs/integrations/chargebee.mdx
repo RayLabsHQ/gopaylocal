@@ -1,0 +1,77 @@
+---
+title: Chargebee
+description: Connect Chargebee so GoPayLocal creates PPP coupons on your Chargebee site and counts their redemptions.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+GoPayLocal creates percentage coupons on your Chargebee site (Product Catalog 2.0) and counts the subscriptions and invoices that use them.
+
+## Setup
+
+<Steps>
+
+1. **Get your Chargebee API key**
+
+   In Chargebee, go to **Settings > Configure Chargebee > API Keys** and create a full-access key. Your test site and live site have separate keys.
+
+2. **Connect in GoPayLocal**
+
+   In the GoPayLocal dashboard, go to **Integrations**, set the environment switch to **Live** or **Test**, and click **Connect** on the **Chargebee** card. Enter:
+   - the **API key** for that site;
+   - the **Site name**: the `acme` in `acme.chargebee.com`. Use the same name in Test; GoPayLocal adds `-test` itself.
+
+   GoPayLocal checks the key and sets up redemption tracking. **Test** on the card checks the key again later.
+
+3. **Create a campaign**
+
+   Create a campaign and choose **Chargebee** as its payment integration. When the campaign becomes active, GoPayLocal creates its coupons on your site.
+
+</Steps>
+
+## How Discounts Work
+
+Each code is a coupon whose ID is the code:
+
+```
+POST https://{site}.chargebee.com/api/v2/coupons/create_for_items
+
+id=PPP-IN30-K7QX
+name=PPP IN 30%
+discount_type=percentage
+discount_percentage=30
+apply_on=invoice_amount
+duration_type=forever
+```
+
+- `duration_type=forever`: on a subscription, the discount applies to every invoice, not just the first.
+- `apply_on=invoice_amount`: the coupon applies to the whole invoice. It isn't restricted to an item, and it has no expiry date or redemption limit.
+
+## Applying the Code at Checkout
+
+The customer can enter the code on Chargebee's checkout. Your server can also apply it when it creates the hosted checkout page (`POST /hosted_pages/checkout_new_for_items`) by passing it in `coupon_ids`:
+
+```
+subscription_items[item_price_id][0]=pro-USD-monthly
+subscription_items[quantity][0]=1
+coupon_ids[0]=PPP-IN30-K7QX
+```
+
+## Test Mode
+
+Chargebee's test site is `{site}-test.chargebee.com`. Connect its API key while the dashboard is on **Test**, with the same site name as live. Test campaigns then create their coupons on the test site.
+
+## Redemption Tracking
+
+When you connect a key, GoPayLocal creates a webhook on that site for `payment_succeeded`. Chargebee doesn't sign webhooks, so GoPayLocal protects the endpoint with a username and password it generates and checks on every delivery.
+
+A redemption is counted for a subscription's first invoice, or for a one-off invoice, that uses a GoPayLocal coupon. Renewal invoices that keep the coupon aren't counted again.
+
+<Aside type="note">
+This integration has not yet been run against a live Chargebee site. It is built from Chargebee's API documentation and covered by tests that stand in for Chargebee's API.
+</Aside>
+
+## Limitations
+
+- Product import isn't supported for Chargebee. Create your products in GoPayLocal by hand.
+- GoPayLocal targets Product Catalog 2.0 sites.

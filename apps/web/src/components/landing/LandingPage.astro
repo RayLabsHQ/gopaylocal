@@ -1,0 +1,38 @@
+---
+import HeroSection from './HeroSection.astro';
+import HowItWorksSection from './HowItWorksSection.astro';
+import DemoSection from './DemoSection.astro';
+import FeaturesSection from './FeaturesSection.astro';
+import IntegrationsSection from './IntegrationsSection.astro';
+import PlatformsSection from './PlatformsSection.astro';
+import SocialProofSection from './SocialProofSection.astro';
+import PricingSection from './PricingSection.astro';
+import FAQSection from './FAQSection.astro';
+import FinalCTASection from './FinalCTASection.astro';
+import type { LandingData } from '@/lib/landing-data';
+
+interface Props {
+  data: LandingData;
+}
+
+const { data } = Astro.props;
+---
+
+<HeroSection data={data.hero} />
+<HowItWorksSection
+  title={data.howItWorks.title}
+  subtitle={data.howItWorks.subtitle}
+  steps={data.howItWorks.steps}
+/>
+<FeaturesSection title={data.features.title} items={data.features.items} />
+<DemoSection surface />
+<IntegrationsSection />
+<PlatformsSection />
+<SocialProofSection
+  title={data.socialProof.title}
+  subtitle={data.socialProof.subtitle}
+  proofPoints={data.socialProof.proofPoints}
+/>
+<PricingSection />
+<FinalCTASection title={data.finalCta.title} subtitle={data.finalCta.subtitle} />
+<FAQSection />

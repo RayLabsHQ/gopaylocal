@@ -1,0 +1,126 @@
+---
+title: Analytics API
+description: API reference for the analytics endpoints, reading aggregated banner analytics and ingesting banner events.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The analytics endpoints return the counts behind the dashboard's Analytics page: impressions, clicks, copies, redemptions and revenue saved.
+
+## Authentication and access
+
+These endpoints sit under `/v1/teams/:orgId/` and accept a [secret API key](/api/authentication/#secret-keys) (`Authorization: Bearer gpl_sk_...`) or the dashboard session (see [Authentication](/api/authentication/#dashboard-session)).
+
+- A secret key, owners and admins see the whole organization.
+- Members see only the campaigns of the products they have been given access to. A member with access to no products gets empty results.
+
+## Query parameters
+
+All three read endpoints take the same parameters:
+
+| Parameter | Default | Description |
+|---|---|---|
+| `period` | `day` | Rollup granularity. Only daily rollups are recorded, so leave it at `day`. |
+| `from` | start of the retention window | Earliest date to include, as an ISO 8601 date or date-time. It is moved forward to the start of the plan's retention window when it is earlier, and ignored when it cannot be parsed. |
+
+**Retention:** 7 days on Free, 365 days on Pro, no limit when self-hosted. Older rows are not returned by these endpoints.
+
+## Get Overview
+
+```
+GET /v1/teams/:orgId/analytics/overview
+```
+
+```js
+const res = await fetch(
+  `https://api.gopaylocal.com/v1/teams/${orgId}/analytics/overview?from=2026-11-01`,
+  { credentials: 'include' }
+);
+const { data } = await res.json();
+```
+
+**Response:**
+
+```json
+{
+  "data": {
+    "totalImpressions": 10230,
+    "totalClicks": 3274,
+    "totalCopies": 2891,
+    "totalRedemptions": 423,
+    "totalRevenueSaved": 1850.5,
+    "revenueSavedByCurrency": { "USD": 1850.5, "INR": 40000 }
+  }
+}
+```
+
+## Get By Country
+
+```
+GET /v1/teams/:orgId/analytics/by-country
+```
+
+Returns one entry per country, most impressions first.
+
+```json
+{
+  "data": [
+    {
+      "countryCode": "IN",
+      "impressions": 3200,
+      "clicks": 890,
+      "copies": 780,
+      "redemptions": 134,
+      "revenueSaved": 0,
+      "revenueSavedByCurrency": { "INR": 40000 }
+    }
+  ]
+}
+```
+
+## Get By Campaign
+
+```
+GET /v1/teams/:orgId/analytics/by-campaign
+```
+
+Returns one entry per campaign, most impressions first. During an A/B test, each arm is its own campaign, so this is where the two arms are compared.
+
+```json
+{
+  "data": [
+    {
+      "campaignId": "01JD8Z5K2R7W",
+      "impressions": 8200,
+      "clicks": 2624,
+      "copies": 2300,
+      "redemptions": 312,
+      "revenueSaved": 1850.5,
+      "revenueSavedByCurrency": { "USD": 1850.5 }
+    }
+  ]
+}
+```
+
+## Fields
+
+| Field | Description |
+|---|---|
+| `impressions`, `clicks`, `copies` | From [banner events](/banner/events/) sent by the banner script |
+| `redemptions` | GoPayLocal codes used at checkout, reported by your payment provider's webhooks. Browser-sent redemption events are not accepted. |
+| `revenueSavedByCurrency` | Discount given on those redemptions, per currency: an object keyed by ISO 4217 code, amounts in each currency's major unit (e.g. `{ "USD": 12.5, "INR": 400 }`). Amounts in different currencies are never added together. |
+| `totalRevenueSaved` / `revenueSaved` | The USD part only, in dollars. Redemptions in other currencies appear only in `revenueSavedByCurrency`. |
+
+Errors: `401` without a session, `403` without access to the organization's analytics, `500` with `{ "error": "..." }` on a server problem.
+
+## Ingest Events
+
+```
+POST /v1/events
+```
+
+The banner script reports `impression`, `click`, `copy` and `dismiss` events here with the public key; see [Banner events](/banner/events/) for the payload, validation and what is stored.
+
+<Aside type="note">
+Analytics events do not count as API calls. Usage for the plan is counted on the banner config endpoint; see [What counts as an API call](/api/banner/#what-counts-as-an-api-call).
+</Aside>

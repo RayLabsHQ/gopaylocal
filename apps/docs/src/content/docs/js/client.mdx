@@ -1,0 +1,367 @@
+---
+title: GoPayLocal Client
+description: Full API reference for the GoPayLocal JavaScript SDK client class.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The `GoPayLocal` class is the core of the JavaScript SDK. It handles initialization, data fetching, price calculation, analytics events and banner rendering.
+
+## Constructor
+
+```js
+import { GoPayLocal } from '@gopaylocal/js';
+
+const gpl = new GoPayLocal({
+  apiKey: 'gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+});
+```
+
+See [Installation](/js/installation#configuration) for all configuration options, including `productId`, `visitorId`, `persistVisitorId` and `apiBase`.
+
+## Methods
+
+### init()
+
+Fetch PPP data for the current visitor. Call this once on page load.
+
+```js
+const data = await gpl.init();
+```
+
+**Returns:** `Promise<PPPData | null>`
+
+- Resolves to `PPPData` when the visitor gets a discount
+- Resolves to `null` when no discount applies (for example a visitor from a full-price country, or a VPN was detected) or when the request failed. Check `getError()` or use `onError` to tell the two apart.
+- Reuses a cached response with a discount from `sessionStorage` (`cacheTtl`, 5 minutes by default)
+- Times out after 8 seconds and reports the timeout through `onError`
+- Calls made while a request is in flight share that request
+
+```js
+const data = await gpl.init();
+
+if (data) {
+  console.log(data.country);        // "IN"
+  console.log(data.countryName);    // "India"
+  console.log(data.discount);       // 60
+  console.log(data.code);           // "PPP-IN60-K7QX"
+  console.log(data.flag);           // "🇮🇳"
+
+  // Your product's price for this visitor (a $19 product, rates of 18 November 2026)
+  console.log(data.baseCurrencyCode);     // "USD" (your product's currency)
+  console.log(data.baseCurrencySymbol);   // "$"
+  console.log(data.currencyCode);         // "INR"
+  console.log(data.currencySymbol);       // "₹"
+  console.log(data.fxRate);               // 93.32614706
+  console.log(data.fxAsOf);               // "2026-11-18" (null when the price is not converted)
+  console.log(data.localPrice);           // 719
+  console.log(data.localOriginalPrice);   // 1769
+  console.log(data.charmPricingStrategy); // "round_x9"
+
+  console.log(data.campaignId);     // the campaign that produced the discount
+  console.log(data.experimentId);   // "01JD8Q0Z6N3V4C2X1B0A9S8D7F" during an A/B experiment, else null
+  console.log(data.variant);        // "a" or "b" during an experiment, else null
+  console.log(data.showBranding);   // true on the Free plan
+  console.log(data.banner);         // the campaign's banner design
+}
+```
+
+<Aside type="note">
+`fxAsOf` set means the prices are converted estimates, rounded with the campaign's [charm pricing](/guides/charm-pricing/). Without it (a visitor who pays in your currency, or no usable exchange rate) `currencyCode` is `baseCurrencyCode`, `fxRate` is `1`, and `localPrice` is the exact discounted price. `localPrice` and `localOriginalPrice` are `null` only with a self-hosted API older than this SDK. See [Multi-currency display](/guides/multi-currency/).
+</Aside>
+
+### getData()
+
+Get the current PPP data without triggering a fetch. Returns `null` if `init()` has not resolved or no discount applies.
+
+```js
+const data = gpl.getData();
+```
+
+**Returns:** `PPPData | null`
+
+### isLoading()
+
+Check if data is currently being fetched.
+
+```js
+if (gpl.isLoading()) {
+  showSpinner();
+}
+```
+
+**Returns:** `boolean`
+
+### getError()
+
+Get the error from the last `init()`, if any.
+
+```js
+const error = gpl.getError();
+if (error) {
+  console.error('GoPayLocal failed:', error.message);
+}
+```
+
+**Returns:** `Error | null`
+
+### getCode()
+
+Get the coupon code.
+
+```js
+const code = gpl.getCode();
+// "PPP-IN60-K7QX" or null
+```
+
+**Returns:** `string | null`
+
+### getCountry()
+
+Get country information for the current visitor.
+
+```js
+const country = gpl.getCountry();
+if (country) {
+  console.log(country.code); // "IN"
+  console.log(country.name); // "India"
+  console.log(country.flag); // "🇮🇳"
+}
+```
+
+**Returns:** `{ code: string; name: string; flag: string } | null`
+
+### getExperiment()
+
+Which [A/B experiment](/guides/ab-testing) arm this visitor is in. It is also set when the visitor's arm has no discount for them (then `init()` resolves to `null`), so you can attribute visitors in both arms.
+
+```js
+const experiment = gpl.getExperiment();
+// { experimentId: "01JD8Q0Z6N3V4C2X1B0A9S8D7F", variant: "b" } or null
+```
+
+**Returns:** `{ experimentId: string; variant: 'a' | 'b' } | null`
+
+---
+
+### getPrice()
+
+Apply the visitor's discount to a base price, convert it to the visitor's currency when the API converted your product's price, and format it.
+
+```js
+const pricing = gpl.getPrice(19);
+```
+
+When `getData().fxAsOf` is set and `baseCurrencyCode` is your product's currency, the price is converted with the response's `fxRate` and rounded with its `charmPricingStrategy`, using the same code as the API: the discounted price rounded up, the original rounded down. A price shown by the banner and by `getPrice()` is therefore the same number. Otherwise the price stays in your base currency, exact: rounded to its minor unit (the cent for USD, the whole yen for JPY), the amount your payment provider charges.
+
+If you set `baseCurrencyCode` to a currency other than your product's, prices are not converted and the SDK logs one console warning.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `basePrice` | `number` | **(required)** | Price in your base currency |
+| `options.localize` | `boolean` | `true` | Convert to the visitor's currency when possible. `false` keeps the price in your base currency, exact. |
+| `options.showDecimal` | `boolean` | — | `true` always shows the currency's decimal digits (in currencies written in whole units, such as JPY, PKR or IDR, only an amount that has decimals shows them), `false` never does. Unset, a whole amount shows none (`₹719`, `$19`) and any other keeps them (`$7.60`). |
+
+**Returns:** `PricingResult`
+
+For a $19 price and a visitor from India with 60% off (rates of 18 November 2026):
+
+```ts
+interface PricingResult {
+  originalPrice: number;      // 19
+  discountedPrice: number;    // about 7.6 (after the discount, in your base currency, unrounded)
+  localPrice: number;         // 719 (converted and charm-rounded up)
+  localOriginalPrice: number; // 1769 (converted and charm-rounded down)
+  converted: boolean;         // true: the prices are estimates
+  formatted: string;          // "₹719"
+  formattedOriginal: string;  // "₹1,769"
+  integer: string;            // "719"
+  decimal: string;            // "" (no decimals shown)
+  currencySymbol: string;     // "₹"
+  currencyCode: string;       // "INR"
+  hasDiscount: boolean;       // true
+  discount: number;           // 60
+}
+```
+
+**Examples:**
+
+```js
+// A visitor from the United States with 60% off: no conversion
+const p1 = gpl.getPrice(19);
+console.log(p1.formatted);         // "$7.60"
+console.log(p1.formattedOriginal); // "$19"
+
+// Always with decimals
+const p2 = gpl.getPrice(19, { showDecimal: true });
+console.log(p2.formattedOriginal); // "$19.00"
+
+// In your base currency even for a visitor from India
+const p3 = gpl.getPrice(19, { localize: false });
+console.log(p3.formatted);         // "$7.60"
+```
+
+Formatting uses `Intl.NumberFormat` with the browser's locale, so the exact output (for example `US$7.60`, or `13,99 €` for a German visitor) depends on the visitor's language settings.
+
+<Aside type="caution" title="Local prices are estimates">
+Local prices are estimates. They convert your price at the day's mid-market rate and round up to a charm price, at most 8% above the converted amount and never below it (an amount under 13 of the currency's smallest unit can round up by more than 8%, to the next one). Your payment provider charges the exact discounted price in your currency; the amount on the customer's statement depends on their bank's exchange rate.
+
+Visitors who pay in your currency see the exact price.
+</Aside>
+
+### formatPrice()
+
+Format a number as currency using `Intl.NumberFormat`. It formats the amount as given, with no discount or conversion, in the currency's usual decimal digits: 2 for USD, 3 for KWD, none for JPY or PKR. An amount with finer decimals than that keeps them, up to the currency's minor unit, so `1838.14` in PKR shows as `PKR 1,838.14`, not `PKR 1,838`.
+
+```js
+const formatted = gpl.formatPrice(17.4);
+// "$17.40"
+
+const formattedEur = gpl.formatPrice(17.4, 'EUR');
+// "€17.40"
+```
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `amount` | `number` | **(required)** | Number to format |
+| `currencyCode` | `string` | The currency `getPrice()` shows prices in | Currency code (ISO 4217). Unset, the visitor's currency when prices are converted, else `baseCurrencyCode`. |
+
+**Returns:** `string`
+
+---
+
+### subscribe()
+
+Subscribe to data changes. The listener is called whenever `init()` finishes, with the data or with `null`.
+
+```js
+const unsubscribe = gpl.subscribe((data) => {
+  if (data) {
+    updatePricingUI(data);
+  }
+});
+
+// Later, to stop listening:
+unsubscribe();
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `listener` | `(data: PPPData \| null) => void` | Callback for data changes |
+
+**Returns:** `() => void` (unsubscribe function)
+
+This is useful for reactive frameworks like Vue or Svelte:
+
+```js
+// Vue 3 example
+import { ref, onMounted, onUnmounted } from 'vue';
+
+const pppData = ref(null);
+let unsubscribe;
+
+onMounted(async () => {
+  unsubscribe = gpl.subscribe((data) => {
+    pppData.value = data;
+  });
+  await gpl.init();
+});
+
+onUnmounted(() => {
+  unsubscribe?.();
+});
+```
+
+---
+
+### showBanner()
+
+Show a PPP discount banner using your campaign's [banner design](/banner/customization), with any options you pass overriding it. Returns a handle with a `remove()` method. Does nothing until `init()` has resolved with data.
+
+```js
+const banner = gpl.showBanner({
+  position: 'bottom-right',
+  onClose: () => console.log('Banner closed'),
+});
+
+// Later, to remove the banner:
+banner.remove();
+```
+
+The banner reports `impression`, `copy` and `dismiss` events to your [analytics](/banner/events), like the script tag does. See [Banner](/js/banner) for all options.
+
+### track()
+
+Report a banner interaction to your GoPayLocal analytics. Use it when you build your own banner or pricing UI instead of calling `showBanner()`, which reports its own events. The event is attributed to the current campaign (the assigned arm during an experiment) and the visitor's country. It does nothing when no discount applies.
+
+```js
+gpl.track('impression'); // when your discount message is shown
+gpl.track('copy');       // when the visitor copies the code (the code is sent with it)
+gpl.track('dismiss');    // when they close it
+gpl.track('click');      // any other click on it
+```
+
+**Parameters:** `event: 'impression' | 'click' | 'copy' | 'dismiss'`
+
+---
+
+## Full Example
+
+```js
+import { GoPayLocal } from '@gopaylocal/js';
+
+const gpl = new GoPayLocal({
+  apiKey: 'gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+  baseCurrencyCode: 'USD',
+  onLoad: (data) => {
+    console.log(`${data.discount}% off for ${data.countryName}`);
+  },
+  onError: (error) => {
+    console.error('Failed to load PPP data:', error);
+  },
+});
+
+async function initPricing() {
+  const data = await gpl.init();
+
+  if (!data) {
+    // No discount — keep the original prices
+    return;
+  }
+
+  // Update pricing display
+  const plans = [
+    { name: 'Pro', basePrice: 9 },
+    { name: 'Business', basePrice: 29 },
+  ];
+
+  for (const plan of plans) {
+    const pricing = gpl.getPrice(plan.basePrice);
+    const el = document.querySelector(`[data-plan="${plan.name}"]`);
+    if (el) {
+      el.querySelector('.price').textContent = pricing.formatted;
+      el.querySelector('.period').textContent = '/mo';
+
+      if (pricing.hasDiscount) {
+        el.querySelector('.original-price').textContent = pricing.formattedOriginal;
+        el.querySelector('.discount-badge').textContent = `${pricing.discount}% off`;
+      }
+    }
+  }
+
+  // Show the discount banner
+  gpl.showBanner({ position: 'bottom-right' });
+}
+
+initPricing();
+```
+
+<Aside type="note">
+The `GoPayLocal` class is designed to be instantiated once and used throughout your app. Do not create multiple instances with the same API key.
+</Aside>

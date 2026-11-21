@@ -1,0 +1,44 @@
+---
+import SwissLayout from '../layouts/SwissLayout.astro';
+import LandingPage from '../components/landing/LandingPage.astro';
+import { getLandingData } from '@/lib/landing-data';
+
+// Default to full variant for SSG; client-side JS handles UTM routing
+const data = getLandingData('full');
+---
+
+<SwissLayout title="GoPayLocal — PPP Discounts That Just Work">
+  <LandingPage data={data} />
+</SwissLayout>
+
+<script>
+  // Client-side UTM routing — redirect to variant pages if UTM params match
+  const DEV_SOURCES = ['github', 'hackernews', 'hn', 'devto', 'dev.to', 'stackoverflow', 'reddit'];
+  const REVENUE_SOURCES = ['linkedin', 'twitter', 'facebook', 'google-ads', 'saastr', 'producthunt'];
+
+  const params = new URLSearchParams(window.location.search);
+  const variant = params.get('variant');
+  const utmSource = (params.get('utm_source') || '').toLowerCase();
+  const utmMedium = (params.get('utm_medium') || '').toLowerCase();
+  const utmCampaign = (params.get('utm_campaign') || '').toLowerCase();
+
+  // Check cookie first
+  const cookieVariant = document.cookie.match(/gpl_variant=(\w+)/)?.[1];
+
+  let target: string | null = null;
+
+  if (variant === 'dev' || variant === 'revenue') {
+    target = variant;
+  } else if (cookieVariant === 'dev' || cookieVariant === 'revenue') {
+    target = cookieVariant;
+  } else if (DEV_SOURCES.includes(utmSource) || utmMedium === 'developer' || utmCampaign.includes('dev')) {
+    target = 'dev';
+  } else if (REVENUE_SOURCES.includes(utmSource) || utmMedium === 'cpc' || utmMedium === 'paid' || utmCampaign.includes('revenue') || utmCampaign.includes('growth')) {
+    target = 'revenue';
+  }
+
+  if (target) {
+    document.cookie = `gpl_variant=${target}; path=/; max-age=2592000; SameSite=Lax`;
+    window.location.replace(`/landing/${target}`);
+  }
+</script>

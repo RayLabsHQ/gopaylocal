@@ -1,0 +1,173 @@
+---
+title: Cloudflare setup
+description: Create the Cloudflare resources for a self-hosted GoPayLocal, write wrangler.toml from the example, set secrets, and deploy the API, the dashboard and the admin app.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+This page deploys the API Worker and the dashboard (and optionally the admin app) to your Cloudflare account. Do [Database and migrations](/self-hosting/database/) first, or at least create the database, because Hyperdrive needs its connection string.
+
+Examples use `example.com`; replace it with your domain. All `pnpm wrangler` commands run from `apps/api` and use the Wrangler version pinned in the repository.
+
+## 1. Get the code
+
+Fork the repository if you want to keep your configuration in Git (recommended), then clone your fork or the original:
+
+```sh
+git clone https://github.com/RayLabsHQ/gopaylocal.git
+cd gopaylocal
+corepack enable
+pnpm install
+```
+
+`corepack enable` is needed once per machine; it makes `pnpm` the exact version pinned in `package.json`.
+
+## 2. Sign in to Cloudflare
+
+```sh
+cd apps/api
+pnpm wrangler login
+```
+
+This opens a browser to authorize Wrangler for your account.
+
+## 3. Create Hyperdrive and the KV namespaces
+
+Start your configuration from the example. It replaces the `wrangler.toml` that ships in the repository, which holds the hosted service's resource ids:
+
+```sh
+cp wrangler.example.toml wrangler.toml
+```
+
+Create a Hyperdrive configuration for your database:
+
+```sh
+pnpm wrangler hyperdrive create gopaylocal-db \
+  --connection-string="postgres://USER:PASSWORD@HOST:5432/DATABASE?sslmode=require"
+```
+
+Create the two KV namespaces:
+
+```sh
+pnpm wrangler kv namespace create CACHE
+pnpm wrangler kv namespace create VPN_DATA
+```
+
+Each command prints an id. Paste them into `wrangler.toml` in place of `<HYPERDRIVE_ID>`, `<CACHE_KV_ID>` and `<VPN_DATA_KV_ID>`. Keep the binding names (`HYPERDRIVE`, `CACHE`, `VPN_DATA`) exactly as they are; the code reads them by name.
+
+## 4. Fill in the rest of `wrangler.toml`
+
+In the `[vars]` section:
+
+- `API_BASE_URL`: the public URL of the API, for example `https://api.example.com`. Sign-in callbacks and provider webhooks use it.
+- `APP_BASE_URL`: the public URL of the dashboard, for example `https://app.example.com`.
+- `ADMIN_BASE_URL`: the public URL of the admin app, if you deploy it.
+- `SELF_HOSTED = "true"`: leave it as it is.
+
+You decide these URLs now, before anything is deployed. They must be on one domain; see [Domains and sign-in cookies](/self-hosting/#domains-and-sign-in-cookies).
+
+Also check:
+
+- **Rate limiters.** The nine `[[ratelimits]]` blocks need nothing created. Their `namespace_id` values (`1001` to `1009`) must be unique within your Cloudflare account, so change them if another Worker in the account already uses those numbers.
+- **Cron triggers.** Keep all three. On Workers Free, the daily VPN refresh cannot finish; see [Cloudflare plan](/self-hosting/#cloudflare-plan) and step 9.
+- **Placement.** The commented-out `[placement]` block can run the Worker near your database. Cloudflare marks host-based placement as experimental ([Placement](https://developers.cloudflare.com/workers/configuration/placement/)). It is optional.
+- **Custom Domain.** To serve the API on `api.example.com`, uncomment the `routes` line near the top. See step 10.
+
+[Configuration reference](/self-hosting/configuration/) explains every entry.
+
+## 5. Set the secrets
+
+```sh
+openssl rand -base64 32    # run once per secret and paste the output when asked
+pnpm wrangler secret put BETTER_AUTH_SECRET
+pnpm wrangler secret put TOKEN_ENCRYPTION_KEY
+```
+
+The first `secret put` asks whether to create the Worker, because it does not exist yet. Answer yes.
+
+Add the OAuth credentials as well; [OAuth setup](/self-hosting/oauth/) shows how to get them:
+
+```sh
+pnpm wrangler secret put GITHUB_CLIENT_ID
+pnpm wrangler secret put GITHUB_CLIENT_SECRET
+# and/or
+pnpm wrangler secret put GOOGLE_CLIENT_ID
+pnpm wrangler secret put GOOGLE_CLIENT_SECRET
+```
+
+Leave the Dodo Payments secrets unset; self-hosted mode does not use them.
+
+## 6. Build the banner and deploy the API
+
+Apply the migrations if you have not yet ([Database and migrations](/self-hosting/database/#apply-the-migrations)). Then, from the repository root:
+
+```sh
+pnpm build:banner
+cd apps/api
+pnpm run deploy
+```
+
+The API Worker serves the banner bundle from `packages/banner/dist/banner.js`, which `pnpm build:banner` creates. Without it, the deploy fails because that file cannot be found. Build it again after every update.
+
+<Aside type="caution">
+Type `pnpm run deploy`, not `pnpm deploy`. `pnpm deploy` is a built-in pnpm command that does something else.
+</Aside>
+
+To migrate, sync admins and deploy in one step, use `pnpm run deploy:full` instead ([details](/self-hosting/database/#migrate-sync-admins-and-deploy-in-one-command)).
+
+Check that the API answers (use the `workers.dev` URL Wrangler printed, or your API hostname once step 10 is done):
+
+```sh
+curl https://api.example.com/health
+# {"status":"ok","timestamp":"..."}
+```
+
+## 7. Build and deploy the dashboard
+
+The dashboard is a static app. The API URL is compiled into it, so set `VITE_API_URL` when you build. Without it, the build points at `http://localhost:8787`. From the repository root:
+
+```sh
+VITE_API_URL=https://api.example.com pnpm --filter @gopaylocal/dashboard build
+pnpm --filter @gopaylocal/dashboard run deploy:worker
+```
+
+`apps/dashboard/wrangler.toml` needs no changes. `apps/dashboard/wrangler.example.toml` shows the optional Custom Domain setting.
+
+## 8. Build and deploy the admin app (optional)
+
+```sh
+VITE_API_URL=https://api.example.com pnpm --filter @gopaylocal/admin build
+pnpm --filter @gopaylocal/admin run deploy:worker
+```
+
+Only users with the admin role can use it; see [First admin user](/self-hosting/first-admin/).
+
+## 9. Load the VPN data
+
+- **Workers Paid:** the daily cron (`30 9 * * *`, UTC) loads and refreshes the data. Nothing to do.
+- **Workers Free:** build the dataset on your computer and upload it with Wrangler, then repeat now and then. Follow [VPN detection: Workers Free](/guides/vpn-detection/#workers-free-build-locally-and-upload).
+
+Until the data is loaded, VPN detection only checks the visitor's network against a built-in list of datacenter and VPN networks.
+
+## 10. Use your own hostnames
+
+Each Worker is reachable on its `workers.dev` hostname after deploy. To use your domain (whose zone must be active on Cloudflare), either:
+
+- add a Custom Domain to each Worker in the Cloudflare dashboard (**Workers & Pages** > your Worker > **Settings** > **Domains & Routes**), or
+- uncomment the `routes` entry in that app's `wrangler.toml` and deploy again.
+
+See [Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/). If a hostname changes, update `API_BASE_URL`, `APP_BASE_URL` or `ADMIN_BASE_URL` in `apps/api/wrangler.toml`, redeploy the API, and rebuild the dashboard and admin app with the new `VITE_API_URL`.
+
+## Next steps
+
+1. [OAuth setup](/self-hosting/oauth/), if you have not created the OAuth app yet.
+2. [First admin user](/self-hosting/first-admin/).
+3. Create a product, a campaign and an API key in the dashboard, and add the banner to a page. In the script tag, use your own API hostname:
+
+   ```html
+   <script src="https://api.example.com/v1/banner/script.js?key=YOUR_PUBLIC_KEY" async></script>
+   ```
+
+   The campaign page in the dashboard shows this snippet with your key, product id and API hostname filled in. It takes the hostname from the `VITE_API_URL` the dashboard was built with. See [Banner installation](/banner/installation#self-hosting).
+
+   The JavaScript SDK and the React provider default to the hosted API. Pass your API URL as `apiBase`: `new GoPayLocal({ apiKey, apiBase: 'https://api.example.com' })`, or `<GoPayLocalProvider apiKey={...} apiBase="https://api.example.com">`. See [JS SDK](/js/installation#self-hosting) and [React provider](/react/provider#self-hosting).

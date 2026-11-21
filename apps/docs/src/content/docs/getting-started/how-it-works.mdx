@@ -1,0 +1,111 @@
+---
+title: How It Works
+description: Technical overview of GoPayLocal's architecture and request flow.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+GoPayLocal runs on Cloudflare's edge network, so the discount for a visitor is worked out close to them, and the script loads without blocking your page.
+
+## Request Flow
+
+When a visitor loads your page with the GoPayLocal script, here is what happens:
+
+<Steps>
+
+1. **Browser loads the script**
+
+   The `<script>` tag loads asynchronously and does not block page rendering. A loader of about 200 bytes adds the banner bundle (about 8.2 KB, 3.6 KB gzipped).
+
+2. **One request to the API**
+
+   The script requests the banner config from `api.gopaylocal.com` with your public key, the product and a random visitor ID.
+
+3. **Country from Cloudflare**
+
+   The API runs on Cloudflare Workers and takes the visitor's country from Cloudflare's own geolocation of the connection. No external geolocation service is called, and a `CF-IPCountry` header sent by the client is ignored.
+
+4. **VPN/proxy check**
+
+   The API checks the connection's network (ASN) against known datacenter networks, and its IP address against lists of Tor exits, VPN networks and datacenter ranges that are refreshed daily. A match gets no discount (`reason: "vpn_detected"`). See [VPN Detection](/guides/vpn-detection/).
+
+5. **Campaign and discount**
+
+   The API picks the product's campaign (or the visitor's A/B test arm) and the discount and coupon code for the country. It reads them from a document in Cloudflare KV that is rebuilt whenever you change something in the dashboard, and falls back to the database when the document is missing.
+
+6. **Response**
+
+   The API returns JSON with:
+   - whether to show a banner (`show`), and a `reason` when not;
+   - the country code and name;
+   - the discount percentage;
+   - the coupon code (`null` without a payment integration);
+   - the price after the discount and before it, converted into the visitor's currency and charm-rounded when an exchange rate is available, otherwise exact in your product's currency (see [Multi-Currency Display](/guides/multi-currency/));
+   - the currency codes and symbols of those prices and of your product, and the exchange rate used;
+   - the banner design (position, colors, message template);
+   - the campaign, and the A/B test and arm when one applies.
+
+   See [Banner API](/api/banner/) for the full contract.
+
+7. **Banner renders in Shadow DOM**
+
+   The script creates a Shadow DOM element and renders the banner inside it, so the banner's styles and your site's styles don't affect each other.
+
+</Steps>
+
+## Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    Visitor's Browser                │
+│                                                     │
+│  ┌──────────┐    ┌────────────────────────────────┐ │
+│  │ Your App │    │ GoPayLocal Banner (Shadow DOM) │ │
+│  └──────────┘    └────────────────────────────────┘ │
+│        │                       ▲                    │
+│        │                       │ Render             │
+│        ▼                       │                    │
+│  ┌─────────────────────────────────┐                │
+│  │ Banner Script (8.2KB / 3.6KB gz)│                │
+│  └──────────┬──────────────────────┘                │
+└─────────────┼───────────────────────────────────────┘
+              │ fetch (async)
+              ▼
+┌─────────────────────────────────────────────────────┐
+│              Cloudflare Edge (nearest PoP)          │
+│                                                     │
+│  ┌──────────────────┐    ┌────────────────────┐     │
+│  │  Hono API Worker │───▶│  Cloudflare KV     │     │
+│  │                  │    │  - Banner document │     │
+│  │  1. Read country │    │  - VPN IP lists    │     │
+│  │     (Cloudflare) │    └────────────────────┘     │
+│  │  2. Check VPN    │                               │
+│  │  3. Pick campaign│    ┌────────────────────┐     │
+│  │  4. Return config│───▶│  PostgreSQL        │     │
+│  │  5. Count events │    │  (via Hyperdrive)  │     │
+│  └──────────────────┘    └────────────────────┘     │
+└─────────────────────────────────────────────────────┘
+```
+
+## Caching
+
+| Layer | What's cached | How long |
+|---|---|---|
+| **Cloudflare KV** | Each workspace's banner document | Until the next change in the dashboard, which normally applies within seconds and reaches every location within about a minute (in the worst case, about 16 minutes) |
+| **Browser sessionStorage** | The config response, per key and product | 5 minutes (the banner script keeps every answer; the SDKs only answers with a discount) |
+| **Browser HTTP cache** | `script.js` / `bundle.js` | 1 hour / 1 day |
+
+Within those 5 minutes, page views in the same tab make no further API call.
+
+## Analytics Pipeline
+
+Banner events (impressions, clicks, copies) are sent with `navigator.sendBeacon()` to `POST /v1/events`, so they arrive even when the visitor navigates away. The API adds them to daily totals per campaign and country in PostgreSQL. Redemptions come only from your payment provider's webhooks. See [Analytics](/dashboard/analytics/).
+
+## Security
+
+- **Style isolation**: the banner renders in a closed Shadow DOM, so your CSS and the banner's CSS can't interfere with each other.
+- **XSS prevention**: values in the banner message (country, code and so on) are HTML-escaped before they are inserted.
+- **No spoofed countries**: the country comes from Cloudflare, not from anything the browser sends.
+- **VPN detection**: datacenter networks plus daily-refreshed Tor, VPN and datacenter IP lists.
+- **Public keys only in the browser**: a public key (`gpl_pk_`) can only fetch the banner config and send banner events. Managing products, campaigns and settings needs a signed-in dashboard session or a secret key (`gpl_sk_`), and the banner endpoints refuse a secret key.
+- **Domain allowlisting**: campaigns can be restricted to specific domains (through the API; the dashboard has no field for it).

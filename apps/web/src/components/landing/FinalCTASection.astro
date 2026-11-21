@@ -16,15 +16,12 @@ const { title, subtitle, dark = true } = Astro.props;
 ]}>
   <div class="max-w-7xl mx-auto px-6 md:px-20 text-center">
     <h2 class:list={[
-      "font-display text-3xl md:text-5xl font-bold tracking-tight whitespace-pre-line leading-[1.1] mx-auto max-w-2xl",
-      dark ? "text-white" : "text-text-primary"
+      "font-display text-3xl md:text-4xl font-bold tracking-tight whitespace-pre-line leading-[1.1] mx-auto max-w-2xl",
+      dark ? "text-text-inverted" : "text-text-primary"
     ]}>
       {title}
     </h2>
-    <p class:list={[
-      "mt-6 text-base mx-auto max-w-lg",
-      dark ? "text-text-secondary" : "text-text-secondary"
-    ]}>
+    <p class="mt-6 mx-auto max-w-lg text-base text-text-secondary leading-relaxed">
       {subtitle}
     </p>
     <div class="mt-8">

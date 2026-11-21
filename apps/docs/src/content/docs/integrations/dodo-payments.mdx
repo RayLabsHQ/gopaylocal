@@ -1,0 +1,86 @@
+---
+title: Dodo Payments
+description: Connect Dodo Payments so GoPayLocal creates PPP discount codes in your Dodo account and counts their redemptions.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+GoPayLocal creates percentage discount codes in your Dodo Payments account and counts the payments that use them. Dodo Payments is a Merchant of Record, so it handles sales tax and VAT on these sales.
+
+## Setup
+
+<Steps>
+
+1. **Get your Dodo API key**
+
+   In the [Dodo Payments dashboard](https://dashboard.dodopayments.com), create an API key. Test mode and live mode have separate keys.
+
+2. **Connect in GoPayLocal**
+
+   In the GoPayLocal dashboard, go to **Integrations**, set the environment switch to **Live** or **Test**, and click **Connect** on the **Dodo Payments** card. Paste the key for that mode.
+
+   GoPayLocal checks the key and sets up redemption tracking. **Test** on the card checks the key again later.
+
+3. **Import products (optional)**
+
+   Click **Import** on the card to bring your Dodo products into GoPayLocal.
+
+4. **Create a campaign**
+
+   Create a campaign and choose **Dodo Payments** as its payment integration. When the campaign becomes active, GoPayLocal creates its codes in your Dodo account.
+
+5. **Check the codes**
+
+   The codes appear under **Discounts** in your Dodo dashboard.
+
+</Steps>
+
+## How Discounts Work
+
+Each code is a percentage discount. GoPayLocal sends the percentage in basis points, as Dodo expects (30% is `3000`):
+
+```json
+{
+  "type": "percentage",
+  "amount": 3000,
+  "code": "PPP-IN30-K7QX",
+  "name": "PPP IN 30%"
+}
+```
+
+- Dodo stores codes in upper case. GoPayLocal keeps them at 16 characters or fewer, which is Dodo's limit.
+- Codes are not restricted to a product and have no expiry date or usage limit.
+
+## Applying the Code at Checkout
+
+Dodo applies a code to a **Checkout Session** created by your server: pass it in `discount_codes`.
+
+```json
+POST /checkouts
+{
+  "product_cart": [{ "product_id": "prod_xxx", "quantity": 1 }],
+  "discount_codes": ["PPP-IN30-K7QX"],
+  "return_url": "https://yoursite.com/success"
+}
+```
+
+Static payment links (`checkout.dodopayments.com/buy/...`) take no discount code; there the customer enters it.
+
+## Test Mode
+
+Connect a test-mode key while the dashboard is on **Test**. Test campaigns then create their codes in your Dodo test mode. A test key sent as a live key (or the other way round) is refused, and the card shows Dodo's error message.
+
+## Redemption Tracking
+
+When you connect a key, GoPayLocal creates a webhook in that Dodo mode for `payment.succeeded`, pointing back to GoPayLocal. Deliveries are checked with Dodo's signing secret.
+
+A redemption is counted when a new purchase uses a GoPayLocal code. Subscription renewals that keep the discount aren't counted again.
+
+<Aside type="note">
+This integration has not yet been run against a live Dodo account. It is built from Dodo's API documentation and covered by tests that stand in for Dodo's API.
+</Aside>
+
+## Limitations
+
+- Codes are at most 16 characters, so a long coupon prefix is shortened.
+- Static payment links can't pre-apply a code.

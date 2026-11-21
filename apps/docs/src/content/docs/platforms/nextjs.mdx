@@ -1,0 +1,160 @@
+---
+title: Next.js
+description: Integrate GoPayLocal with Next.js — App Router and Pages Router.
+---
+
+import { Tabs, TabItem, Aside, Steps } from '@astrojs/starlight/components';
+
+GoPayLocal works with both Next.js App Router and Pages Router. Use the React SDK for the deepest integration, or the banner script for a quick setup.
+
+## Option 1: React SDK (Recommended)
+
+<Steps>
+
+1. **Install the SDK**
+
+   ```bash
+   npm install @gopaylocal/react
+   ```
+
+2. **Create a provider**
+
+   <Tabs>
+     <TabItem label="App Router">
+     ```tsx
+     // app/layout.tsx (a Server Component)
+     import { GoPayLocalProvider } from '@gopaylocal/react';
+
+     export default function RootLayout({ children }: { children: React.ReactNode }) {
+       return (
+         <html lang="en">
+           <body>
+             <GoPayLocalProvider
+               apiKey={process.env.NEXT_PUBLIC_GOPAYLOCAL_KEY!}
+               productId="prod_abc123"
+             >
+               {children}
+             </GoPayLocalProvider>
+           </body>
+         </html>
+       );
+     }
+     ```
+
+     `@gopaylocal/react` is marked `'use client'`, so the layout can render the provider directly. To pass `onLoad` or `onError` (functions), render it from your own `'use client'` component instead.
+     </TabItem>
+
+     <TabItem label="Pages Router">
+     ```tsx
+     // pages/_app.tsx
+     import { GoPayLocalProvider } from '@gopaylocal/react';
+     import type { AppProps } from 'next/app';
+
+     export default function App({ Component, pageProps }: AppProps) {
+       return (
+         <GoPayLocalProvider
+           apiKey={process.env.NEXT_PUBLIC_GOPAYLOCAL_KEY!}
+           productId="prod_abc123"
+         >
+           <Component {...pageProps} />
+         </GoPayLocalProvider>
+       );
+     }
+     ```
+     </TabItem>
+   </Tabs>
+
+3. **Use in your pricing page**
+
+   ```tsx
+   // app/pricing/page.tsx (or pages/pricing.tsx)
+   'use client';
+
+   import { PPPPricingTable } from '@gopaylocal/react';
+
+   export default function PricingPage() {
+     return (
+       <PPPPricingTable
+         plans={[
+           { name: 'Free', price: 0, features: ['1 project', 'Community support'] },
+           { name: 'Starter', price: 19, features: ['5 projects', 'Email support'], highlighted: true },
+           { name: 'Team', price: 49, features: ['Unlimited projects', 'Priority support'] },
+         ]}
+         annualDiscount={20}
+       />
+     );
+   }
+   ```
+
+</Steps>
+
+<Aside type="note">
+In the App Router, files that call GoPayLocal hooks or render its components with function props (like `onPlanSelect`) need `'use client'`, like any component with hooks. Server-rendered HTML shows your base prices; the discount appears after hydration, so there is no hydration mismatch.
+</Aside>
+
+## Option 2: Banner Script
+
+For a simpler setup without the React SDK:
+
+<Tabs>
+  <TabItem label="App Router">
+  ```tsx
+  // app/layout.tsx
+  import Script from 'next/script';
+
+  export default function RootLayout({ children }: { children: React.ReactNode }) {
+    return (
+      <html lang="en">
+        <body>
+          {children}
+          <Script
+            src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            data-product="prod_abc123"
+            strategy="afterInteractive"
+          />
+        </body>
+      </html>
+    );
+  }
+  ```
+  </TabItem>
+
+  <TabItem label="Pages Router">
+  ```tsx
+  // pages/_app.tsx
+  import Script from 'next/script';
+
+  export default function App({ Component, pageProps }) {
+    return (
+      <>
+        <Component {...pageProps} />
+        <Script
+          src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          data-product="prod_abc123"
+          strategy="afterInteractive"
+        />
+      </>
+    );
+  }
+  ```
+  </TabItem>
+</Tabs>
+
+Use `strategy="afterInteractive"` to load the script after the page becomes interactive without blocking rendering. `next/script` passes `data-product` and the other [script attributes](/banner/installation#script-attributes) through to the tag.
+
+## Environment Variables
+
+Store your API key in environment variables:
+
+```bash
+# .env.local
+NEXT_PUBLIC_GOPAYLOCAL_KEY=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+```
+
+```tsx
+<GoPayLocalProvider apiKey={process.env.NEXT_PUBLIC_GOPAYLOCAL_KEY!}>
+```
+
+<Aside type="tip">
+Use the `NEXT_PUBLIC_` prefix so the variable is available in client-side code. Public API keys are safe to expose.
+</Aside>

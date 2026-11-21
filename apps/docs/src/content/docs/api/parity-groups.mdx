@@ -1,0 +1,179 @@
+---
+title: Parity Groups API
+description: API reference for listing, creating, editing and deleting parity groups and their countries.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+A parity group gives a set of countries one discount. **Group-based tiers** campaigns price each country from its group, and **Custom per-country** campaigns use the group for countries without their own percentage. While a workspace has no parity groups at all, Group-based tiers campaigns use GoPayLocal's five default tiers instead. As soon as it has any group of its own (even one with no countries), only its own groups are used, never a mix. See [Parity Groups](/dashboard/parity-groups/) for how the discounts are worked out.
+
+The dashboard has no screen for parity groups; these endpoints are the way to manage them.
+
+<Aside type="note">
+These endpoints sit under `/v1/teams/{orgId}/` and accept a [secret API key](/api/authentication/#secret-keys) (`Authorization: Bearer gpl_sk_...`) or the dashboard session. Everyone in the workspace can list parity groups. Creating, editing and deleting them needs a secret key, or the owner or admin role; members get `403`.
+</Aside>
+
+Every change below usually reaches the banner within about a minute ([Caching and changes](/api/banner/#caching-and-changes)).
+
+## The Parity Group Object
+
+```json
+{
+  "id": "01JD8R2T4V6X8Z0B2D4F6H8J0K",
+  "organizationId": "org_123",
+  "name": "Tier 2",
+  "discountPercent": 40,
+  "sortOrder": 2,
+  "createdAt": "2026-11-18T10:30:00.000Z",
+  "countries": ["IN", "BR"]
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | 1 to 100 characters |
+| `discountPercent` | `number` | 0 to 100. A campaign's max discount still caps it |
+| `sortOrder` | `integer` | 0 or more. When a country is in several groups, the group with the lowest `sortOrder` wins |
+| `countries` | `string[]` | Two-letter country codes (ISO 3166-1 alpha-2) |
+
+## List Parity Groups
+
+```
+GET /v1/teams/{orgId}/parity-groups
+```
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl https://api.gopaylocal.com/v1/teams/$ORG_ID/parity-groups \
+    -H "Authorization: Bearer $GOPAYLOCAL_SECRET_KEY"
+  ```
+  </TabItem>
+  <TabItem label="JavaScript (server)">
+  ```js
+  const res = await fetch(`https://api.gopaylocal.com/v1/teams/${orgId}/parity-groups`, {
+    headers: { Authorization: `Bearer ${process.env.GOPAYLOCAL_SECRET_KEY}` },
+  });
+  const { data: groups } = await res.json();
+  ```
+  </TabItem>
+</Tabs>
+
+**Response:** `{ "data": [ <parity group>, ... ] }`, ordered by `sortOrder`, each with its `countries`. A workspace without groups returns an empty list (the default tiers are not listed).
+
+There is no endpoint for a single group.
+
+## Create a Parity Group
+
+```
+POST /v1/teams/{orgId}/parity-groups
+```
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl -X POST https://api.gopaylocal.com/v1/teams/$ORG_ID/parity-groups \
+    -H "Authorization: Bearer $GOPAYLOCAL_SECRET_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{"name":"Tier 2","discountPercent":40,"sortOrder":2}'
+  ```
+  </TabItem>
+</Tabs>
+
+`name`, `discountPercent` and `sortOrder` are all required. The group starts with no countries; add them with [Set Countries](#set-countries).
+
+**Response:** `201` with `{ "data": <parity group> }` (`countries` is `[]`), or `400` with `{ "error": "Validation failed", "details": { ... } }`.
+
+<Aside type="caution">
+Creating the first group in a workspace switches its Group-based tiers campaigns from the default tiers to your own groups straight away, even while the new group has no countries. Every country then gets 0% until you add countries to your groups. To start from the default tiers instead, use [Seed Default Tiers](#seed-default-tiers).
+</Aside>
+
+## Update a Parity Group
+
+```
+PATCH /v1/teams/{orgId}/parity-groups/:id
+```
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl -X PATCH https://api.gopaylocal.com/v1/teams/$ORG_ID/parity-groups/$GROUP_ID \
+    -H "Authorization: Bearer $GOPAYLOCAL_SECRET_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{"discountPercent":45}'
+  ```
+  </TabItem>
+</Tabs>
+
+Send any of `name`, `discountPercent` and `sortOrder`; they are validated as on create.
+
+**Response:** `{ "data": <parity group> }` without the `countries` field, `400`, or `404`.
+
+## Set Countries
+
+Replaces the group's countries with the list you send.
+
+```
+PUT /v1/teams/{orgId}/parity-groups/:id/countries
+```
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl -X PUT https://api.gopaylocal.com/v1/teams/$ORG_ID/parity-groups/$GROUP_ID/countries \
+    -H "Authorization: Bearer $GOPAYLOCAL_SECRET_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{"countries":["IN","BR"]}'
+  ```
+  </TabItem>
+</Tabs>
+
+Each entry must be two characters. Codes are stored in upper case, each once. An empty list removes every country from the group. There are no endpoints to add or remove a single country: send the whole list.
+
+**Response:** `{ "data": <parity group> }` with the stored `countries`, `400`, or `404`.
+
+## Delete a Parity Group
+
+```
+DELETE /v1/teams/{orgId}/parity-groups/:id
+```
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl -X DELETE https://api.gopaylocal.com/v1/teams/$ORG_ID/parity-groups/$GROUP_ID \
+    -H "Authorization: Bearer $GOPAYLOCAL_SECRET_KEY"
+  ```
+  </TabItem>
+</Tabs>
+
+**Response:** `{ "success": true }`, or `404`.
+
+The group and its country list are deleted. Its countries are not moved to another group: a country that is in no other group gets no group discount. If it was the workspace's last group, Group-based tiers campaigns go back to the default tiers.
+
+## Seed Default Tiers
+
+Copies GoPayLocal's five default tiers into the workspace as its own groups, so you can edit them.
+
+```
+POST /v1/teams/{orgId}/parity-groups/seed-defaults
+```
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl -X POST https://api.gopaylocal.com/v1/teams/$ORG_ID/parity-groups/seed-defaults \
+    -H "Authorization: Bearer $GOPAYLOCAL_SECRET_KEY"
+  ```
+  </TabItem>
+</Tabs>
+
+**Response:** `201` with `{ "data": [ <parity group>, ... ] }`: the five tiers, "Tier 1 — Parity" (0%) to "Tier 5 — Maximum Discount" (65%), with their countries. The tiers are listed under [Default Tiers](/dashboard/parity-groups/#default-tiers).
+
+Seeding works only in a workspace without parity groups. Otherwise it changes nothing and answers `409`:
+
+```json
+{ "error": "Organization already has parity groups. Delete them first to re-seed." }
+```
+
+All five tiers are created, or none.

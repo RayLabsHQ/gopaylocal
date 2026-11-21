@@ -1,0 +1,20 @@
+# Response headers for Cloudflare Workers static assets.
+# https://developers.cloudflare.com/workers/static-assets/headers/
+# Headers here override the ones Cloudflare picks from the file extension.
+# Agent-facing Markdown and llms.txt files: explicit UTF-8, readable cross-origin.
+
+/*.md
+  Content-Type: text/markdown; charset=utf-8
+  Access-Control-Allow-Origin: *
+
+/llms.txt
+  Content-Type: text/plain; charset=utf-8
+  Access-Control-Allow-Origin: *
+
+/llms-full.txt
+  Content-Type: text/plain; charset=utf-8
+  Access-Control-Allow-Origin: *
+
+/llms-small.txt
+  Content-Type: text/plain; charset=utf-8
+  Access-Control-Allow-Origin: *

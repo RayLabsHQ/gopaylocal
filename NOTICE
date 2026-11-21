@@ -1,0 +1,134 @@
+GoPayLocal
+Copyright (c) 2026 RayLabs
+
+The applications under apps/ are licensed under the GNU Affero General Public
+License, version 3 only (see LICENSE). The packages under packages/ are licensed
+under the MIT License (see the LICENSE file in each package). LICENSING.md explains
+how the two apply.
+
+This file lists third-party material that GoPayLocal includes in this repository or
+in what it builds, or downloads and uses at runtime, with the attribution each one
+asks for. Dependencies installed through pnpm are covered by their own licenses,
+which ship with each package.
+
+
+DATA DOWNLOADED AND USED AT RUNTIME
+(no copy is stored in this repository)
+
+The API's daily VPN refresh (apps/api/src/services/vpn-refresh.service.ts) and the
+local script apps/api/scripts/build-vpn-dataset.ts download the lists below and
+combine them into the dataset kept in the VPN_DATA KV namespace.
+
+1. X4BNet lists_vpn
+   https://github.com/X4BNet/lists_vpn
+   VPN and datacenter IP ranges (output/vpn/ipv4.txt, output/datacenter/ipv4.txt,
+   output/vpn/ipv6.txt). The project states that its scripts, curated inputs and
+   generated lists are available under the MIT License.
+
+   The lists are built from the IPLocate.io IP-to-ASN database:
+
+     IP address data powered by IPLocate.io
+     https://www.iplocate.io
+     https://github.com/iplocate/ip-address-databases
+     Licensed under the Creative Commons Attribution-ShareAlike 4.0 International
+     License (CC BY-SA 4.0): https://creativecommons.org/licenses/by-sa/4.0/
+
+   If you publish a dataset built from these lists (for example the output of
+   build-vpn-dataset.ts), keep this attribution and license it under CC BY-SA 4.0.
+
+2. Tor Project bulk exit list
+   https://check.torproject.org/torbulkexitlist
+   IP addresses of Tor exit relays. The same exit-list data is published by Tor
+   Metrics under a CC0 no-copyright declaration: https://metrics.torproject.org/
+
+3. Apple iCloud Private Relay egress IP ranges
+   https://mask-api.icloud.com/egress-ip-ranges.csv
+   Published by Apple for network operators
+   (https://developer.apple.com/icloud/prepare-your-network-for-icloud-private-relay/).
+   Used only to remove Private Relay addresses from the VPN ranges; never stored.
+
+The API's exchange-rate refresh (apps/api/src/services/fx-refresh.service.ts)
+downloads USD exchange rates four times a day and keeps the latest validated set
+in the CACHE KV namespace. Self-hosters can replace both sources (FX_RATES_URL,
+FX_RATES_FALLBACK_URL).
+
+4. fawazahmed0/exchange-api
+   https://github.com/fawazahmed0/exchange-api
+   Daily currency exchange rates, served from
+   https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api and
+   https://currency-api.pages.dev. Released under CC0 1.0 Universal
+   (https://creativecommons.org/publicdomain/zero/1.0/); no attribution required.
+
+5. Frankfurter
+   https://frankfurter.dev
+   Exchange rates blended from central banks and official sources, used to
+   cross-check the rates above and as a fallback. Frankfurter's code is MIT
+   licensed (https://github.com/lineofflight/frankfurter); its blended rates are,
+   in its own words, "Frankfurter's own calculation and free to use".
+
+
+MATERIAL IN THIS REPOSITORY
+
+6. Unicode CLDR currency data
+   packages/shared/src/currency/country-currency.ts is generated from the Unicode
+   Common Locale Data Repository (CLDR), release 49
+   (https://github.com/unicode-org/cldr-json, cldr-core/supplemental/currencyData.json),
+   by packages/shared/scripts/generate-country-currency.ts. Used under the Unicode
+   License v3:
+
+   UNICODE LICENSE V3
+
+   COPYRIGHT AND PERMISSION NOTICE
+
+   Copyright © 2015-2024 Unicode, Inc.
+
+   NOTICE TO USER: Carefully read the following legal agreement. BY
+   DOWNLOADING, INSTALLING, COPYING OR OTHERWISE USING DATA FILES, AND/OR
+   SOFTWARE, YOU UNEQUIVOCALLY ACCEPT, AND AGREE TO BE BOUND BY, ALL OF THE
+   TERMS AND CONDITIONS OF THIS AGREEMENT. IF YOU DO NOT AGREE, DO NOT
+   DOWNLOAD, INSTALL, COPY, DISTRIBUTE OR USE THE DATA FILES OR SOFTWARE.
+
+   Permission is hereby granted, free of charge, to any person obtaining a
+   copy of data files and any associated documentation (the "Data Files") or
+   software and any associated documentation (the "Software") to deal in the
+   Data Files or Software without restriction, including without limitation
+   the rights to use, copy, modify, merge, publish, distribute, and/or sell
+   copies of the Data Files or Software, and to permit persons to whom the
+   Data Files or Software are furnished to do so, provided that either (a)
+   this copyright and permission notice appear with all copies of the Data
+   Files or Software, or (b) this copyright and permission notice appear in
+   associated Documentation.
+
+   THE DATA FILES AND SOFTWARE ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
+   KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF
+   THIRD PARTY RIGHTS.
+
+   IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED IN THIS NOTICE
+   BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSEQUENTIAL DAMAGES,
+   OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+   WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+   ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THE DATA
+   FILES OR SOFTWARE.
+
+   Except as contained in this notice, the name of a copyright holder shall
+   not be used in advertising or otherwise to promote the sale, use or other
+   dealings in these Data Files or Software without prior written
+   authorization of the copyright holder.
+
+   SPDX-License-Identifier: Unicode-3.0
+
+7. Logos and wordmarks
+   The files in apps/web/public/logos/ and apps/dashboard/public/logos/ are
+   trademarks of their owners: the payment providers, frameworks and site builders
+   that GoPayLocal works with. They are used only to identify those products. They
+   are not covered by GoPayLocal's licenses, and their use does not imply
+   endorsement.
+
+
+MATERIAL INCLUDED IN BUILT OUTPUT
+
+8. Geist Sans and Geist Mono fonts
+   The documentation site (apps/docs) bundles these fonts from the
+   @fontsource/geist-sans and @fontsource/geist-mono packages. They are licensed
+   under the SIL Open Font License, Version 1.1, which ships with those packages.

@@ -1,0 +1,18 @@
+{
+  "_source": "Verbatim 'Retrieve current currency' response example at https://developer.woocommerce.com/docs/apis/rest-api/v3/data#retrieve-current-currency.",
+  "code": "USD",
+  "name": "United States (US) dollar",
+  "symbol": "&#36;",
+  "_links": {
+    "self": [
+      {
+        "href": "https://example.com/wp-json/wc/v3/data/currencies/USD"
+      }
+    ],
+    "collection": [
+      {
+        "href": "https://example.com/wp-json/wc/v3/data/currencies"
+      }
+    ]
+  }
+}

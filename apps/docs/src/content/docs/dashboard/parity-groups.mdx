@@ -1,0 +1,61 @@
+---
+title: Parity Groups
+description: How parity tiers group countries, what the default tiers are, and the PPP factors behind PPP Factor pricing.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Parity groups (also called tiers) group countries by purchasing power and give each group one discount. They belong to the workspace and are shared by all its campaigns.
+
+<Aside type="caution">
+The dashboard has no parity-groups screen yet, and a new workspace starts with no parity groups. While it has none, **Group-based tiers** campaigns use the [default tiers](#default-tiers), and **Custom per-country** campaigns give 0% to countries without their own percentage. **PPP Factor** campaigns don't use parity groups.
+</Aside>
+
+## What Parity Groups Are Used For
+
+- **Group-based tiers** pricing: a country gets its group's discount, capped by the campaign's max discount. While the workspace has no parity groups at all, the [default tiers](#default-tiers) are used instead. As soon as it has any group of its own (even one with no countries), only its own groups are used, never a mix.
+- **Custom per-country** pricing: a country without its own percentage gets its group's discount, or 0% while the workspace has no groups. The default tiers are never used for Custom.
+- **Coupon codes**: when a campaign with a payment integration becomes active, GoPayLocal creates the codes for every country in your parity groups. Other countries' codes, including every code while the default tiers are in use, are created the first time a visitor from that country loads the banner.
+
+If a country is in more than one group, the group with the lowest sort order wins.
+
+Any change to a parity group updates what the banner serves, usually within about a minute.
+
+## Default Tiers
+
+GoPayLocal ships a default 5-tier setup. **Group-based tiers** campaigns use it while your workspace has no parity groups of its own; creating any group of your own replaces it entirely. The tiers are not stored in your workspace. Through the [Parity Groups API](/api/parity-groups/#seed-default-tiers), `POST /v1/teams/:orgId/parity-groups/seed-defaults` copies them in as your own groups, so you can edit them; it is refused (`409`) when the workspace already has groups.
+
+| Tier | Discount | Countries |
+|---|---|---|
+| **Tier 1 — Parity** | 0% | US, CH, NO, DK, AU, SE, IE, NL, AT, FI, DE, CA, BE, GB, FR, NZ, SG, IL, QA, AE, KW, HK, JP, KR, IT, ES, TW |
+| **Tier 2 — Mild Discount** | 20% | PT, CZ, SA, PL, CL, HU, CR, PA, RO, UY, BH, TR, MY, MX, TH |
+| **Tier 3 — Medium Discount** | 35% | AR, BR, CO, ZA, PE, CN, DO, JO, EC, GT, TN, MA, LB |
+| **Tier 4 — Strong Discount** | 50% | PH, ID, VN, UA, EG, LK, GH, KH, NG |
+| **Tier 5 — Maximum Discount** | 65% | IN, PK, BD, NP, KE, TZ, UG, ET, MM, LA, VE |
+
+The five tiers cover 75 countries. A country that is in no group gets no group discount.
+
+<Aside type="note">
+The New Campaign page's preview uses the same calculation as the served banner: your workspace's own groups when it has any, and these default tiers (Group-based tiers only) when it has none.
+</Aside>
+
+## Who Can Change Them
+
+Everyone in the workspace can view parity groups. Creating, editing and deleting them, through the [Parity Groups API](/api/parity-groups/), is limited to the owner, admins and secret API keys. See [Team](/dashboard/team/).
+
+## PPP Factor Reference
+
+**PPP Factor** pricing doesn't use parity groups. It takes each country's PPP factor (local purchasing power relative to the US) and calculates the discount as `(1 − factor) × 100`, rounded and capped by the campaign's max discount. The factors are a fixed table in GoPayLocal's code covering 75 countries, compiled from several public sources, including World Bank purchasing-power data and the Big Mac Index. Countries not in it get no discount.
+
+| Country | PPP Factor | Implied Discount |
+|---|---|---|
+| United States | 1.00 | 0% |
+| Japan | 0.82 | 18% |
+| United Kingdom | 0.89 | 11% |
+| Brazil | 0.44 | 56% |
+| Nigeria | 0.21 | 79% |
+| India | 0.20 | 80% |
+
+<Aside type="note">
+The max discount caps the calculated discount. The New Campaign form allows up to 90%; the highest implied discount in the table is Venezuela's 90%.
+</Aside>

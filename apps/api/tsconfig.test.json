@@ -1,0 +1,16 @@
+{
+  // Typechecks what tsconfig.json leaves out: the unit and integration tests
+  // and the local-only scripts. Used by `pnpm typecheck` only; the Worker is
+  // bundled by wrangler from src/index.ts and never sees these files.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    // Scripts run on Node's type stripping, which needs `.ts` in import paths.
+    "allowImportingTsExtensions": true,
+    // Tests and scripts run on Node (vitest, node --experimental-transform-types).
+    "types": ["@cloudflare/workers-types", "node"]
+  },
+  "include": ["src/**/*.ts", "scripts/**/*.ts"],
+  "exclude": []
+}

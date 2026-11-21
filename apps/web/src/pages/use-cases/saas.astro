@@ -1,0 +1,12 @@
+---
+import SwissLayout from '../../layouts/SwissLayout.astro';
+import UseCasePage from '../../components/landing/UseCasePage.astro';
+import { useCases } from '@/lib/use-case-data';
+import { PPP_COUNTRY_COUNT } from '@/lib/landing-data';
+
+const data = useCases.saas;
+---
+
+<SwissLayout title="GoPayLocal for SaaS — PPP Pricing for Subscription Businesses" description={`Automatically adjust subscription prices by country. Convert more trials and reduce price-driven churn with PPP pricing for ${PPP_COUNTRY_COUNT} countries.`}>
+  <UseCasePage data={data} />
+</SwissLayout>

@@ -1,0 +1,72 @@
+---
+title: Webhooks
+description: How GoPayLocal receives and verifies payment provider webhooks to count redemptions.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+GoPayLocal counts a redemption when your payment provider tells it that an order used one of the PPP discount codes it created. That information arrives as a webhook from the provider. You don't call these endpoints yourself; this page explains how they work.
+
+## Webhook URLs
+
+Every integration gets its own webhook URL per environment:
+
+```
+https://api.gopaylocal.com/v1/webhooks/:provider/:integrationId        (live)
+https://api.gopaylocal.com/v1/webhooks/:provider/:integrationId/test   (test mode)
+```
+
+`:provider` is the provider id (for example `stripe`, `paddle`, `chargebee`) and `:integrationId` is the integration's id from the [Integrations API](/api/integrations/). Live and test mode are separate endpoints at the provider, each with its own signing secret, so test orders never count as live redemptions. A delivery to an environment the integration has no credentials for is answered with `404`.
+
+## Automatic Setup
+
+When you connect a provider (or add credentials for the other environment), GoPayLocal registers the webhook URL at the provider through its API and stores the signing secret encrypted. You don't copy URLs or secrets by hand. The integration's `webhooks` field shows the state per environment, and **Re-create** in the dashboard (or [`POST .../webhook`](/api/integrations/#re-create-webhook)) replaces an endpoint, for example after fixing the API key's permissions.
+
+If registration fails, the integration still connects; the error is shown on the integration card and in its `health`, and no redemptions are counted in that environment until the webhook exists. Which events each provider sends, and the API key permissions registration needs, are on each provider's page under **Integrations**.
+
+When you disconnect an integration, GoPayLocal removes its webhooks at the provider in both environments.
+
+## Signature Verification
+
+Every delivery is verified against the integration's stored secret before anything is recorded. A delivery that fails verification is answered with `401`, and the integration shows a `webhook_delivery` health issue.
+
+| Provider | How deliveries are verified |
+|---|---|
+| Stripe | `Stripe-Signature` header (Stripe's signed timestamp + HMAC-SHA256) |
+| Paddle | `Paddle-Signature: ts=...;h1=...`, HMAC-SHA256 over `ts:body`. During a secret rotation the header carries several `h1` values; any one matching is accepted. |
+| Dodo Payments, Whop, Polar | [Standard Webhooks](https://www.standardwebhooks.com): `webhook-id`, `webhook-timestamp` and `webhook-signature` headers. Only `v1,` signatures are accepted. |
+| Chargebee | HTTP Basic credentials that GoPayLocal generates and registers with the endpoint |
+| Creem | `creem-signature` header: hex HMAC-SHA256 of the body, keyed with the endpoint's secret. Creem signs no timestamp, so a replayed delivery is stopped by counting each order only once. |
+| WooCommerce | `X-WC-Webhook-Signature` header: base64 HMAC-SHA256 of the body, keyed with the webhook's secret. WooCommerce signs no timestamp; each order is counted only once. The unsigned ping a store sends when the webhook is created (body `webhook_id=<id>`) is answered with `200` and nothing is recorded. |
+| Gumroad | Gumroad pings are unsigned. The URL is unique per integration, and GoPayLocal reads every sale back from the Gumroad API with your key before counting it. Pings are rate limited per integration. |
+
+For Stripe, Paddle and the Standard Webhooks providers, a delivery whose signed timestamp is more than 5 minutes off is rejected, so a captured delivery can't be replayed later.
+
+## What Gets Recorded
+
+For a verified delivery that is a paid order using a GoPayLocal code of that integration, GoPayLocal records one redemption (each provider event is processed once, however often it is delivered) and adds it to analytics:
+
+- **Redemptions** per campaign and country.
+- **Revenue saved**, from pre-tax amounts: the provider's own pre-tax discount amount when it reports one, otherwise calculated from the pre-tax amount paid and the code's discount percent. Tax is never counted as savings; when a provider doesn't say how much tax an order carried, the redemption is counted but adds nothing to revenue saved.
+- Revenue saved is kept **per currency**. Amounts in different currencies are never added together; the [Analytics API](/api/analytics/) returns one total per currency.
+
+Deliveries that aren't redemptions (other event types, orders without a GoPayLocal code) are acknowledged and ignored.
+
+## Responses and Retries
+
+| Status | Meaning |
+|---|---|
+| `200` | Recorded, a duplicate of an event already processed, deliberately ignored, or a provider's setup ping |
+| `401` | Signature verification failed |
+| `404` | Unknown integration, provider mismatch, or no credentials for that environment |
+| `500` (`503` for Gumroad) | Temporary failure; the provider should retry |
+
+A verified delivery that can't be processed right away (for example the database or a provider read-back is briefly unavailable) is stored and retried by GoPayLocal itself every 10 minutes or so, backing off up to 6 hours, for 72 hours, independently of the provider's own retries. If it still can't be processed after 72 hours, the integration shows a `webhook_delivery` health issue.
+
+<Aside type="note">
+`https://api.gopaylocal.com/v1/webhooks/dodo` (no integration id) is GoPayLocal's own billing webhook for the hosted plans. It is not used by integrations and is disabled in self-hosted mode.
+</Aside>
+
+## Testing
+
+Connect the provider with test-mode credentials (dashboard environment switch set to **Test**). GoPayLocal registers the `/test` endpoint, and test orders that use a GoPayLocal code are recorded as test-mode redemptions. The dashboard's Overview doesn't separate test from live numbers yet. Gumroad and WooCommerce have no test mode, so they are connected in Live only. Most providers also have a "send test event" button in their webhook settings; a test event that isn't a real order with a GoPayLocal code is acknowledged and ignored.

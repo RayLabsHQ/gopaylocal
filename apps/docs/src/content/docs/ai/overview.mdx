@@ -1,0 +1,61 @@
+---
+title: Use GoPayLocal with AI agents
+description: Point Claude Code, Cursor, Codex or another coding agent at these docs — llms.txt, per-page Markdown — and know what the agent needs from you to finish a GoPayLocal integration.
+---
+
+You can ask a coding agent to "add GoPayLocal to this project" and let it do the work. These docs are published in forms an agent can read cheaply, and two pages are written specifically for agents.
+
+## Fastest path
+
+1. Get your public API key from the dashboard (API keys; it starts with `gpl_pk_`).
+2. Copy the [integration prompt](/ai/integration-prompt/) into your agent, or just tell it:
+
+   ```text
+   Add GoPayLocal to this project. Fetch https://docs.gopaylocal.com/ai/integration-prompt.md and follow the prompt in it.
+   ```
+
+3. Answer its questions, then finish the dashboard setup it lists at the end.
+
+## Where agents should read
+
+| URL | What it is |
+|---|---|
+| `https://docs.gopaylocal.com/llms.txt` | Index of every page with a one-line description, following the [llms.txt](https://llmstxt.org) convention. Start here. |
+| `https://docs.gopaylocal.com/ai/reference-card.md` | Dense facts for agents: endpoints, SDK entry points, template tokens, common mistakes. Checked against the source code. |
+| `https://docs.gopaylocal.com/llms-small.txt` | The integration essentials in one file: reference card, integration prompt, banner script, React and JavaScript SDKs. |
+| `https://docs.gopaylocal.com/llms-full.txt` | Every page in one Markdown file. Large; use it when the agent should know everything. |
+| Any page path + `.md` | The Markdown version of that page, for example `https://docs.gopaylocal.com/banner/installation.md`. |
+
+Each HTML page also advertises its Markdown version with a `<link rel="alternate" type="text/markdown">` tag, and the page menu at the top of every page can copy the page as Markdown or open it in Claude or ChatGPT.
+
+## Make it stick in your project
+
+If an agent works in your repository regularly, add a line to the instructions file it reads (`CLAUDE.md`, `AGENTS.md`, Cursor rules or similar):
+
+```text
+GoPayLocal (PPP discounts): before changing anything related to GoPayLocal, read https://docs.gopaylocal.com/ai/reference-card.md. The full docs index is https://docs.gopaylocal.com/llms.txt; any docs page is available as Markdown by appending .md to its path.
+```
+
+## What the agent needs from you
+
+An agent can install the script or SDK, wire the key, and check the network traffic. It cannot do the parts that live in your GoPayLocal account:
+
+- **Your public API key.** Public keys are safe to put in client code. Never give an agent a secret key (`gpl_sk_…`); integrations don't use it.
+- **Which payment provider you sell through.** GoPayLocal creates the coupon codes there: Stripe, Paddle, Gumroad, Chargebee, Dodo Payments, Polar, Whop, Creem or WooCommerce. You connect it in the dashboard.
+- **Dashboard setup.** A product, the connected provider and an active campaign. Discount levels are set in the dashboard, not in code. The campaign's banner design is yours to change, not the agent's: open the campaign and use **Setup > Banner** (new campaigns start with the default design). In code, a different look means SDK banner options or a custom banner.
+- **Allowed domains.** If your campaign restricts domains, add your development host (for example `localhost`) while testing.
+- **A product id, if you have several products.** Without one, the API answers for the product of your newest active campaign.
+- **Your API URL, if you self-host GoPayLocal.** It replaces `https://api.gopaylocal.com` in the script tag, the SDK settings and the Content-Security-Policy. See [Self-hosting](/self-hosting/).
+- **A/B tests, if you want one.** You start it in the dashboard (A/B Tests) between two campaigns of the same product. The agent doesn't write any split logic: the API assigns each visitor to a campaign, and the clients already send what the test needs. On a site with several products, the product id above is required for the test to apply.
+- **A way to see a discount.** Discounts depend on the visitor's country, and VPNs and cloud machines are excluded, so a developer machine usually sees no banner. To confirm the banner visually, temporarily give your own country a discount in the campaign, then remove it.
+- **Product decisions.** Which pages show the banner or discounted prices, and whether existing hard-coded prices should be replaced.
+
+## Choosing a path
+
+The agent picks one of three clients; the [reference card](/ai/reference-card/#choose-one-client) has the full comparison.
+
+- **Banner script**: one script tag, works on any site, and reports banner impressions, code copies and dismissals by itself.
+- **React SDK** (`@gopaylocal/react`): for React and Next.js apps that should show discounted prices in their own components. Its `<PPPBanner />` reports the same banner events.
+- **JavaScript SDK** (`@gopaylocal/js`): for other frameworks, with data attributes for prices.
+
+All three run in the visitor's browser. There is no server-side pricing API, because the discount depends on the country of the device making the request.

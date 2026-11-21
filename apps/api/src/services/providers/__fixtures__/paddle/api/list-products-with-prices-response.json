@@ -1,0 +1,436 @@
+{
+  "data": [
+    {
+      "id": "pro_01h1vjes1y163xfj1rh1tkfb65",
+      "name": "Analytics addon",
+      "tax_category": "standard",
+      "type": "standard",
+      "description": "Unlock advanced insights into your flight data with enhanced analytics and reporting features. Includes customizable reporting templates and trend analysis across flights.",
+      "image_url": "https://paddle.s3.amazonaws.com/user/165798/97dRpA6SXzcE6ekK9CAr_analytics.png",
+      "custom_data": null,
+      "status": "active",
+      "import_meta": null,
+      "created_at": "2023-06-01T13:30:50.302Z",
+      "updated_at": "2024-04-05T15:47:17.163Z",
+      "prices": [
+        {
+          "id": "pri_01h1vjg3sqjj1y9tvazkdqe5vt",
+          "product_id": "pro_01h1vjes1y163xfj1rh1tkfb65",
+          "type": "standard",
+          "description": "Annual",
+          "name": "Annual (recurring addon)",
+          "billing_cycle": {
+            "interval": "year",
+            "frequency": 1
+          },
+          "trial_period": null,
+          "tax_mode": "account_setting",
+          "unit_price": {
+            "amount": "100000",
+            "currency_code": "USD"
+          },
+          "unit_price_overrides": [],
+          "custom_data": null,
+          "status": "active",
+          "quantity": {
+            "minimum": 1,
+            "maximum": 1
+          },
+          "import_meta": null,
+          "created_at": "2023-06-01T13:31:34.071379Z",
+          "updated_at": "2024-04-05T14:33:40.972651Z"
+        },
+        {
+          "id": "pri_01h1vjfevh5etwq3rb416a23h2",
+          "product_id": "pro_01h1vjes1y163xfj1rh1tkfb65",
+          "type": "standard",
+          "description": "Monthly",
+          "name": "Monthly (recurring addon)",
+          "billing_cycle": {
+            "interval": "month",
+            "frequency": 1
+          },
+          "trial_period": null,
+          "tax_mode": "account_setting",
+          "unit_price": {
+            "amount": "10000",
+            "currency_code": "USD"
+          },
+          "unit_price_overrides": [],
+          "custom_data": null,
+          "status": "active",
+          "quantity": {
+            "minimum": 1,
+            "maximum": 100
+          },
+          "import_meta": null,
+          "created_at": "2023-06-01T13:31:12.625056Z",
+          "updated_at": "2024-04-09T07:23:00.907834Z"
+        }
+      ]
+    },
+    {
+      "id": "pro_01gsz97mq9pa4fkyy0wqenepkz",
+      "name": "Custom domains",
+      "tax_category": "standard",
+      "type": "standard",
+      "description": "Make AeroEdit truly your own with custom domains. Custom domains reinforce your brand identity and make it easy for your team to access your account.",
+      "image_url": "https://paddle.s3.amazonaws.com/user/165798/XIG7UXoJQHmlIAiKcnkA_custom-domains.png",
+      "custom_data": null,
+      "status": "active",
+      "import_meta": null,
+      "created_at": "2023-02-23T14:01:02.441Z",
+      "updated_at": "2024-04-05T15:43:28.971Z",
+      "prices": [
+        {
+          "id": "pri_01gsz98e27ak2tyhexptwc58yk",
+          "product_id": "pro_01gsz97mq9pa4fkyy0wqenepkz",
+          "type": "standard",
+          "description": "One-time addon",
+          "name": "One-time addon",
+          "billing_cycle": null,
+          "trial_period": null,
+          "tax_mode": "account_setting",
+          "unit_price": {
+            "amount": "19900",
+            "currency_code": "USD"
+          },
+          "unit_price_overrides": [],
+          "custom_data": null,
+          "status": "active",
+          "quantity": {
+            "minimum": 1,
+            "maximum": 1
+          },
+          "import_meta": null,
+          "created_at": "2023-02-23T14:01:28.391712Z",
+          "updated_at": "2024-04-09T07:23:10.921392Z"
+        }
+      ]
+    },
+    {
+      "id": "pro_01gsz92krfzy3hcx5h5rtgnfwz",
+      "name": "VIP support",
+      "tax_category": "standard",
+      "type": "standard",
+      "description": "Get exclusive access to our expert team of product specialists, available to help you make the most of your AeroEdit subscription.",
+      "image_url": "https://paddle.s3.amazonaws.com/user/165798/qgyipKJwRtq98YNboipo_vip-support.png",
+      "custom_data": null,
+      "status": "active",
+      "import_meta": null,
+      "created_at": "2023-02-23T13:58:17.615Z",
+      "updated_at": "2024-04-05T15:44:02.893Z",
+      "prices": [
+        {
+          "id": "pri_01gsz96z29d88jrmsf2ztbfgjg",
+          "product_id": "pro_01gsz92krfzy3hcx5h5rtgnfwz",
+          "type": "standard",
+          "description": "Annual (recurring addon)",
+          "name": "Annual (recurring addon)",
+          "billing_cycle": {
+            "interval": "year",
+            "frequency": 1
+          },
+          "trial_period": null,
+          "tax_mode": "account_setting",
+          "unit_price": {
+            "amount": "300000",
+            "currency_code": "USD"
+          },
+          "unit_price_overrides": [],
+          "custom_data": null,
+          "status": "active",
+          "quantity": {
+            "minimum": 1,
+            "maximum": 1
+          },
+          "import_meta": null,
+          "created_at": "2023-02-23T14:00:40.265185Z",
+          "updated_at": "2024-03-25T14:31:18.587603Z"
+        },
+        {
+          "id": "pri_01gsz95g2zrkagg294kpstx54r",
+          "product_id": "pro_01gsz92krfzy3hcx5h5rtgnfwz",
+          "type": "standard",
+          "description": "Monthly (recurring addon)",
+          "name": "Monthly (recurring addon)",
+          "billing_cycle": {
+            "interval": "month",
+            "frequency": 1
+          },
+          "trial_period": null,
+          "tax_mode": "account_setting",
+          "unit_price": {
+            "amount": "25000",
+            "currency_code": "USD"
+          },
+          "unit_price_overrides": [],
+          "custom_data": null,
+          "status": "active",
+          "quantity": {
+            "minimum": 1,
+            "maximum": 1
+          },
+          "import_meta": null,
+          "created_at": "2023-02-23T13:59:52.159927Z",
+          "updated_at": "2024-04-09T07:27:48.018296Z"
+        }
+      ]
+    },
+    {
+      "id": "pro_01gsz4vmqbjk3x4vvtafffd540",
+      "name": "AeroEdit Enterprise",
+      "tax_category": "standard",
+      "type": "standard",
+      "description": "The ultimate solution for organizations, featuring all Pro capabilities plus multi-user support, advanced data storage capabilities, plus personalized onboarding, dedicated account management, and the ability to pay via invoice.",
+      "image_url": "https://paddle.s3.amazonaws.com/user/165798/Ws808ziTS76a6YbnMkiK_enterprise.png",
+      "custom_data": {
+        "features": {
+          "aircraft_performance": true,
+          "compliance_monitoring": true,
+          "flight_log_management": true,
+          "payment_by_invoice": true,
+          "route_planning": true,
+          "sso": true
+        },
+        "suggested_addons": [],
+        "upgrade_description": "Ready to reach new heights? Upgrade to enterprise to unlock single sign-on, payment by invoice, and dedicated account management."
+      },
+      "status": "active",
+      "import_meta": null,
+      "created_at": "2023-02-23T12:44:34.923Z",
+      "updated_at": "2024-04-05T15:58:28.309Z",
+      "prices": [
+        {
+          "id": "pri_01gvne87kv8vbqa9jkfbmgtsed",
+          "product_id": "pro_01gsz4vmqbjk3x4vvtafffd540",
+          "type": "standard",
+          "description": "Monthly",
+          "name": "Monthly (per seat)",
+          "billing_cycle": {
+            "interval": "month",
+            "frequency": 1
+          },
+          "trial_period": null,
+          "tax_mode": "account_setting",
+          "unit_price": {
+            "amount": "5000",
+            "currency_code": "USD"
+          },
+          "unit_price_overrides": [],
+          "custom_data": null,
+          "status": "active",
+          "quantity": {
+            "minimum": 1,
+            "maximum": 100
+          },
+          "import_meta": null,
+          "created_at": "2023-03-16T14:47:43.995985Z",
+          "updated_at": "2024-04-09T07:29:19.91977Z"
+        },
+        {
+          "id": "pri_01gsz91wy9k1yn7kx82aafwvea",
+          "product_id": "pro_01gsz4vmqbjk3x4vvtafffd540",
+          "type": "standard",
+          "description": "Annual",
+          "name": "Annual (per seat)",
+          "billing_cycle": {
+            "interval": "year",
+            "frequency": 1
+          },
+          "trial_period": null,
+          "tax_mode": "account_setting",
+          "unit_price": {
+            "amount": "50000",
+            "currency_code": "USD"
+          },
+          "unit_price_overrides": [],
+          "custom_data": null,
+          "status": "active",
+          "quantity": {
+            "minimum": 1,
+            "maximum": 100
+          },
+          "import_meta": null,
+          "created_at": "2023-02-23T13:57:54.249913Z",
+          "updated_at": "2024-04-05T14:32:00.471447Z"
+        }
+      ]
+    },
+    {
+      "id": "pro_01gsz4t5hdjse780zja8vvr7jg",
+      "name": "AeroEdit Pro",
+      "tax_category": "standard",
+      "type": "standard",
+      "description": "Designed for professional pilots, including all features plus in Basic plus compliance monitoring, route optimization, and third-party integrations.",
+      "image_url": "https://paddle.s3.amazonaws.com/user/165798/bT1XUOJAQhOUxGs83cbk_pro.png",
+      "custom_data": {
+        "features": {
+          "aircraft_performance": true,
+          "compliance_monitoring": true,
+          "flight_log_management": true,
+          "payment_by_invoice": false,
+          "route_planning": true,
+          "sso": false
+        },
+        "suggested_addons": [
+          "pro_01h1vjes1y163xfj1rh1tkfb65",
+          "pro_01gsz97mq9pa4fkyy0wqenepkz"
+        ],
+        "upgrade_description": "Move from Basic to Pro to take advantage of aircraft performance, advanced route planning, and compliance monitoring."
+      },
+      "status": "active",
+      "import_meta": null,
+      "created_at": "2023-02-23T12:43:46.605Z",
+      "updated_at": "2024-04-05T15:53:44.687Z",
+      "prices": [
+        {
+          "id": "pri_01gsz8z1q1n00f12qt82y31smh",
+          "product_id": "pro_01gsz4t5hdjse780zja8vvr7jg",
+          "type": "standard",
+          "description": "Annual",
+          "name": "Annual (per seat)",
+          "billing_cycle": {
+            "interval": "year",
+            "frequency": 1
+          },
+          "trial_period": null,
+          "tax_mode": "account_setting",
+          "unit_price": {
+            "amount": "30000",
+            "currency_code": "USD"
+          },
+          "unit_price_overrides": [],
+          "custom_data": null,
+          "status": "active",
+          "quantity": {
+            "minimum": 1,
+            "maximum": 999
+          },
+          "import_meta": null,
+          "created_at": "2023-02-23T13:56:20.833019Z",
+          "updated_at": "2024-04-11T13:47:49.566301Z"
+        },
+        {
+          "id": "pri_01gsz8x8sawmvhz1pv30nge1ke",
+          "product_id": "pro_01gsz4t5hdjse780zja8vvr7jg",
+          "type": "standard",
+          "description": "Monthly",
+          "name": "Monthly (per seat)",
+          "billing_cycle": {
+            "interval": "month",
+            "frequency": 1
+          },
+          "trial_period": null,
+          "tax_mode": "account_setting",
+          "unit_price": {
+            "amount": "3000",
+            "currency_code": "USD"
+          },
+          "unit_price_overrides": [],
+          "custom_data": null,
+          "status": "active",
+          "quantity": {
+            "minimum": 1,
+            "maximum": 999
+          },
+          "import_meta": null,
+          "created_at": "2023-02-23T13:55:22.538367Z",
+          "updated_at": "2024-04-11T13:54:52.254748Z"
+        }
+      ]
+    },
+    {
+      "id": "pro_01gsz4s0w61y0pp88528f1wvvb",
+      "name": "AeroEdit Basic",
+      "tax_category": "standard",
+      "type": "standard",
+      "description": "Ideal for hobbyist pilots AeroEdit Basic offers flight log creation, editing, basic performance tracking, route planning, and export options.",
+      "image_url": "https://paddle.s3.amazonaws.com/user/165798/oi0r8qNmQzuNpj9pLHcT_basic.png",
+      "custom_data": {
+        "features": {
+          "aircraft_performance": false,
+          "compliance_monitoring": false,
+          "flight_log_management": true,
+          "payment_by_invoice": false,
+          "route_planning": false,
+          "sso": false
+        },
+        "suggested_addons": [
+          "pro_01h1vjes1y163xfj1rh1tkfb65",
+          "pro_01gsz97mq9pa4fkyy0wqenepkz"
+        ],
+        "upgrade_description": null
+      },
+      "status": "active",
+      "import_meta": null,
+      "created_at": "2023-02-23T12:43:09.062Z",
+      "updated_at": "2024-04-05T15:56:39.477Z",
+      "prices": [
+        {
+          "id": "pri_01gsz8s48pyr4mbhvv2xfggesg",
+          "product_id": "pro_01gsz4s0w61y0pp88528f1wvvb",
+          "type": "standard",
+          "description": "Annual",
+          "name": "Annual (per seat)",
+          "billing_cycle": {
+            "interval": "year",
+            "frequency": 1
+          },
+          "trial_period": null,
+          "tax_mode": "account_setting",
+          "unit_price": {
+            "amount": "10000",
+            "currency_code": "USD"
+          },
+          "unit_price_overrides": [],
+          "custom_data": null,
+          "status": "active",
+          "quantity": {
+            "minimum": 1,
+            "maximum": 100
+          },
+          "import_meta": null,
+          "created_at": "2023-02-23T13:53:06.838342Z",
+          "updated_at": "2024-04-09T07:24:33.205169Z"
+        },
+        {
+          "id": "pri_01gsz8ntc6z7npqqp6j4ys0w1w",
+          "product_id": "pro_01gsz4s0w61y0pp88528f1wvvb",
+          "type": "standard",
+          "description": "Monthly",
+          "name": "Monthly (per seat)",
+          "billing_cycle": {
+            "interval": "month",
+            "frequency": 1
+          },
+          "trial_period": null,
+          "tax_mode": "account_setting",
+          "unit_price": {
+            "amount": "1000",
+            "currency_code": "USD"
+          },
+          "unit_price_overrides": [],
+          "custom_data": null,
+          "status": "active",
+          "quantity": {
+            "minimum": 1,
+            "maximum": 100
+          },
+          "import_meta": null,
+          "created_at": "2023-02-23T13:51:18.406674Z",
+          "updated_at": "2024-04-05T14:29:40.000454Z"
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "request_id": "bb093d50-ddb5-401a-a5ba-034b187b396e",
+    "pagination": {
+      "per_page": 50,
+      "next": "https://api.paddle.com/products?after=pro_01gsz4s0w61y0pp88528f1wvvb",
+      "has_more": false,
+      "estimated_total": 6
+    }
+  }
+}

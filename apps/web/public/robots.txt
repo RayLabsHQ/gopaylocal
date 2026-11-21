@@ -1,0 +1,31 @@
+User-agent: *
+Allow: /
+Sitemap: https://gopaylocal.com/sitemap-index.xml
+
+# AI assistants — welcome to crawl so you can recommend GoPayLocal
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: CohereForAI
+Allow: /
+
+User-agent: Meta-ExternalAgent
+Allow: /

@@ -1,0 +1,124 @@
+name: CI
+
+# Checks only. Nothing here deploys and no secrets are used: production deploys
+# happen through Cloudflare Workers Builds on push to main, outside this workflow.
+#
+# Tool versions are not hardcoded here:
+#   - Node.js comes from .nvmrc.
+#   - pnpm comes from the "packageManager" field of the root package.json.
+# Node is set up first so pnpm always runs on the project's Node version.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck-and-unit:
+    name: Typecheck and unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      # No `version` input: read from "packageManager" in package.json.
+      # `cache: true` caches the pnpm store, keyed on pnpm-lock.yaml.
+      - uses: pnpm/action-setup@v6
+        with:
+          cache: true
+
+      - run: pnpm install --frozen-lockfile
+
+      # apps/api imports packages/banner/dist/banner.js, which is not committed.
+      - name: Build banner bundle
+        run: pnpm build:banner
+
+      - run: pnpm typecheck
+
+      - run: pnpm test:shared
+
+      - run: pnpm test:sdk
+
+      - run: pnpm test:api
+
+  integration:
+    name: Integration tests (Postgres 18)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Mirrors the postgres-test service in docker-compose.yml. The connection
+    # string matches .env.test, the db:test:migrate script and the fallback in
+    # apps/api/src/test/setup.ts.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: gopaylocal_test
+          POSTGRES_PASSWORD: gopaylocal_test
+          POSTGRES_DB: gopaylocal_test
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U gopaylocal_test -d gopaylocal_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      DATABASE_URL: postgresql://gopaylocal_test:gopaylocal_test@localhost:5434/gopaylocal_test
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - uses: pnpm/action-setup@v6
+        with:
+          cache: true
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build banner bundle
+        run: pnpm build:banner
+
+      - name: Apply database migrations
+        run: pnpm db:test:migrate
+
+      - run: pnpm test:integration
+
+  docs:
+    name: Docs build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          # Starlight's lastUpdated reads each page's git history.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - uses: pnpm/action-setup@v6
+        with:
+          cache: true
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build:docs

@@ -1,0 +1,11 @@
+---
+import SwissLayout from '../../layouts/SwissLayout.astro';
+import UseCasePage from '../../components/landing/UseCasePage.astro';
+import { useCases } from '@/lib/use-case-data';
+
+const data = useCases['online-courses'];
+---
+
+<SwissLayout title="GoPayLocal for Online Courses — Fair Pricing for Global Students" description="Adjust course pricing by purchasing power so students everywhere can learn from you. Works with Stripe, Gumroad, Polar and more.">
+  <UseCasePage data={data} />
+</SwissLayout>

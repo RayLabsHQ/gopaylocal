@@ -1,0 +1,11 @@
+---
+import SwissLayout from '../../layouts/SwissLayout.astro';
+import LandingPage from '../../components/landing/LandingPage.astro';
+import { getLandingData, PPP_COUNTRY_COUNT } from '@/lib/landing-data';
+
+const data = getLandingData('revenue');
+---
+
+<SwissLayout title="GoPayLocal — Capture the Revenue US Pricing Leaves Behind" description={`Visitors from emerging markets bounce at US pricing. Show fair local prices based on purchasing power and capture revenue from ${PPP_COUNTRY_COUNT} countries.`}>
+  <LandingPage data={data} />
+</SwissLayout>

@@ -1,96 +1,85 @@
 ---
-const codeFrameworks = [
-  { name: "React", slug: "react", badge: "SDK", href: "/docs/react" },
+// `badge` is the install method (SDK / Script / Plugin). It is surfaced as the
+// link's title attribute — the visible label under each icon is the platform
+// name, so the grid stays scannable.
+type Platform = { name: string; slug: string; badge: string; href: string; invert?: boolean };
+
+const codeFrameworks: Platform[] = [
+  { name: "React", slug: "react", badge: "SDK", href: "https://docs.gopaylocal.com/react/installation" },
   {
     name: "Next.js",
     slug: "nextjs",
     badge: "SDK",
-    href: "/docs/platforms/nextjs",
+    href: "https://docs.gopaylocal.com/platforms/nextjs",
     invert: true,
   },
   {
     name: "Astro",
     slug: "astro",
     badge: "Script",
-    href: "/docs/platforms/astro",
+    href: "https://docs.gopaylocal.com/platforms/astro",
   },
   {
     name: "Remix",
     slug: "remix",
     badge: "Script",
-    href: "/docs/platforms/remix",
+    href: "https://docs.gopaylocal.com/platforms/remix",
     invert: true,
   },
-  { name: "Vue", slug: "vue", badge: "Script", href: "/docs/js" },
-  { name: "Svelte", slug: "svelte", badge: "Script", href: "/docs/js" },
-  { name: "HTML", slug: "html", badge: "Script", href: "/docs/js" },
+  { name: "Vue", slug: "vue", badge: "Script", href: "https://docs.gopaylocal.com/js/installation" },
+  { name: "Svelte", slug: "svelte", badge: "Script", href: "https://docs.gopaylocal.com/js/installation" },
+  { name: "HTML", slug: "html", badge: "Script", href: "https://docs.gopaylocal.com/js/installation" },
 ];
 
-const nocodeTools = [
+const nocodeTools: Platform[] = [
   {
     name: "Shopify",
     slug: "shopify",
     badge: "Script",
-    href: "/docs/platforms/shopify",
+    href: "https://docs.gopaylocal.com/platforms/shopify",
   },
   {
     name: "WordPress",
     slug: "wordpress",
-    badge: "Plugin",
-    href: "/docs/platforms/wordpress",
+    badge: "Script",
+    href: "https://docs.gopaylocal.com/platforms/wordpress",
   },
   {
     name: "Webflow",
     slug: "webflow",
     badge: "Script",
-    href: "/docs/platforms/webflow",
+    href: "https://docs.gopaylocal.com/platforms/webflow",
   },
   {
     name: "Framer",
     slug: "framer",
     badge: "Script",
-    href: "/docs/platforms/framer",
+    href: "https://docs.gopaylocal.com/platforms/framer",
   },
   {
     name: "Carrd",
     slug: "carrd",
     badge: "Script",
-    href: "/docs/platforms/carrd",
+    href: "https://docs.gopaylocal.com/platforms/carrd",
   },
-  { name: "Notion", slug: "notion", badge: "Script", href: "/docs/js", invert: true },
 ];
-
-function badgeClasses(badge: string) {
-  if (badge === "SDK") return "bg-sky-500/15 text-sky-400 rounded-md";
-  if (badge === "Plugin") return "bg-purple-500/15 text-purple-400 rounded-md";
-  return "bg-white/10 text-text-muted rounded-md";
-}
 ---
 
-<section class="border-t border-border relative overflow-clip">
-  <!-- Background radial glow -->
-  <div
-    class="pointer-events-none absolute w-full h-full bg-linear-75 from-red-500/40 via-transparent via-5% md:via-10% -z-10"
-  >
-  </div>
-  <div
-    class="pointer-events-none absolute w-full h-full bg-linear-285 from-red-500/40 via-transparent via-5% md:via-10% -z-10"
-  >
-  </div>
+<section class="border-t border-border">
   <div class="max-w-7xl mx-auto px-6 py-16 md:py-24 md:px-20">
     <h2
-      class="font-display text-3xl md:text-4xl font-semibold tracking-tight text-text-primary"
+      class="font-display text-3xl md:text-4xl font-semibold tracking-tight leading-tight text-text-primary"
     >
       Works everywhere.
     </h2>
-    <p class="mt-3 text-base text-text-secondary max-w-lg leading-relaxed">
-      One script tag works on any website. SDKs for React and Node.js. Native
-      support for every major platform.
+    <p class="mt-4 text-base text-text-secondary max-w-prose leading-relaxed">
+      One script tag works on any website. SDKs for React and plain JavaScript,
+      plus setup guides for popular site builders.
     </p>
 
     <div class="mt-10 md:mt-12 grid grid-cols-1 md:grid-cols-2 gap-4">
       <!-- Frameworks & SDKs -->
-      <div class="relative flex flex-col">
+      <div class="flex flex-col">
         <!-- Chart label -->
         <div class="flex items-end ml-6 mb-1">
           <svg
@@ -110,30 +99,26 @@ function badgeClasses(badge: string) {
           </svg>
           <span
             class="text-[11px] font-semibold uppercase tracking-wider text-text-muted ml-1 -translate-y-[8px]"
-            >Frameworks & SDKs</span
+            >Frameworks &amp; SDKs</span
           >
         </div>
         <!-- Card -->
-        <div class="border border-border rounded-2xl p-6 md:p-8 flex-1">
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-y-6 gap-x-4">
+        <div class="border border-border p-6 md:p-8 flex-1">
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {
               codeFrameworks.map((f) => (
                 <a
                   href={f.href}
-                  class="group flex flex-col items-center gap-2 no-underline rounded-xl p-3 transition-colors duration-200 hover:bg-white/5"
+                  title={`${f.name} — ${f.badge}`}
+                  class="group flex flex-col items-center gap-3 border border-transparent p-4 no-underline transition-colors duration-200 hover:border-accent-500 hover:bg-bg-surface"
                 >
                   <img
                     src={`/logos/${f.slug}.svg`}
-                    alt={f.name}
+                    alt=""
                     class:list={["h-8 w-8 shrink-0 object-contain", f.invert && "brightness-0 invert"]}
                   />
-                  <span
-                    class:list={[
-                      "text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5",
-                      badgeClasses(f.badge),
-                    ]}
-                  >
-                    {f.badge}
+                  <span class="text-sm font-medium text-text-secondary text-center transition-colors duration-200 group-hover:text-text-primary">
+                    {f.name}
                   </span>
                 </a>
               ))
@@ -143,7 +128,7 @@ function badgeClasses(badge: string) {
       </div>
 
       <!-- No-code & Low-code -->
-      <div class="relative flex flex-col">
+      <div class="flex flex-col">
         <!-- Chart label -->
         <div class="flex items-end ml-6 mb-1">
           <svg
@@ -153,40 +138,36 @@ function badgeClasses(badge: string) {
             viewBox="0 0 50 20"
             fill="none"
           >
-            <circle cx="0" cy="20" r="4" fill="#a855f7"></circle>
+            <circle cx="0" cy="20" r="4" fill="var(--accent)"></circle>
             <polyline
               points="0,20 16,4 50,4"
-              stroke="#a855f7"
+              stroke="var(--accent)"
               stroke-width="1"
               stroke-opacity="0.4"
               fill="none"></polyline>
           </svg>
           <span
             class="text-[11px] font-semibold uppercase tracking-wider text-text-muted ml-1 -translate-y-[8px]"
-            >No-code & Low-code</span
+            >No-code &amp; Low-code</span
           >
         </div>
         <!-- Card -->
-        <div class="border border-border rounded-2xl p-6 md:p-8 flex-1">
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-y-6 gap-x-4">
+        <div class="border border-border p-6 md:p-8 flex-1">
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {
               nocodeTools.map((f) => (
                 <a
                   href={f.href}
-                  class="group flex flex-col items-center gap-2 no-underline rounded-xl p-3 transition-colors duration-200 hover:bg-white/5"
+                  title={`${f.name} — ${f.badge}`}
+                  class="group flex flex-col items-center gap-3 border border-transparent p-4 no-underline transition-colors duration-200 hover:border-accent-500 hover:bg-bg-surface"
                 >
                   <img
                     src={`/logos/${f.slug}.svg`}
-                    alt={f.name}
+                    alt=""
                     class:list={["h-8 w-8 shrink-0 object-contain", f.invert && "brightness-0 invert"]}
                   />
-                  <span
-                    class:list={[
-                      "text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5",
-                      badgeClasses(f.badge),
-                    ]}
-                  >
-                    {f.badge}
+                  <span class="text-sm font-medium text-text-secondary text-center transition-colors duration-200 group-hover:text-text-primary">
+                    {f.name}
                   </span>
                 </a>
               ))

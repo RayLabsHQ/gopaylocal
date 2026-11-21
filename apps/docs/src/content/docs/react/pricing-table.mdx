@@ -1,0 +1,255 @@
+---
+title: Pricing Table Component
+description: Drop-in PPP-aware pricing table that applies each visitor's discount to every plan.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The `PPPPricingTable` is a drop-in pricing table component that applies the visitor's PPP discount to every plan price. No manual price calculation needed. When the API converted your product's price for this visitor, plan prices are converted to their currency and rounded with the campaign's [charm pricing](/guides/charm-pricing/), like [`usePrice()`](/react/hooks#useprice). Converted prices are estimates: your payment provider charges the exact discounted price in your currency.
+
+## Quick Example
+
+```tsx
+import { GoPayLocalProvider, PPPPricingTable } from '@gopaylocal/react';
+
+function PricingPage() {
+  return (
+    <GoPayLocalProvider apiKey="gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef">
+      <PPPPricingTable
+        plans={[
+          {
+            name: 'Free',
+            price: 0,
+            features: ['1 project', 'Community support'],
+          },
+          {
+            name: 'Starter',
+            price: 19,
+            features: ['5 projects', 'Email support', 'Custom domain'],
+            highlighted: true,
+            description: 'Most popular',
+          },
+          {
+            name: 'Team',
+            price: 49,
+            features: ['Unlimited projects', 'Priority support', 'Team workspace'],
+          },
+        ]}
+        annualDiscount={20}
+        ctaText="Get Started"
+        onPlanSelect={(plan) => {
+          console.log('Selected:', plan.name, plan.planId);
+          // Redirect to checkout
+        }}
+      />
+    </GoPayLocalProvider>
+  );
+}
+```
+
+With monthly billing, the Starter plan shows "$19/mo" without a discount, "₹719/mo" to a visitor from India with 60% off (rates of 18 November 2026), and "$7.60/mo" to a visitor from the United States with 60% off. A whole amount shows no decimals. Plans with a price of `0` always show "Free".
+
+## Props
+
+### PPPPricingTableProps
+
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `plans` | `PPPPricingPlan[]` | **(required)** | Array of plan configurations |
+| `billingPeriod` | `'monthly' \| 'annual'` | `'monthly'` | Initial billing period (the toggle changes it afterwards) |
+| `annualDiscount` | `number` | `0` | Percentage discount for annual billing |
+| `ctaText` | `string` | `'Get Started'` | Default CTA button text |
+| `onPlanSelect` | `(plan) => void` | — | Callback when a plan's CTA is clicked |
+| `showBillingToggle` | `boolean` | `true` if `annualDiscount > 0` | Whether to show the monthly/annual toggle |
+| `showCountryBanner` | `boolean` | `true` | Show the "Prices adjusted for [Country]" banner |
+| `className` | `string` | — | CSS class for the container |
+| `noStyles` | `boolean` | `false` | Render without default styles |
+| `header` | `ReactNode` | — | Custom content above the plans |
+
+### PPPPricingPlan
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `name` | `string` | **(required)** | Plan name (e.g., "Pro") |
+| `price` | `number` | **(required)** | Monthly price in base currency. Use `0` for free plans. |
+| `features` | `string[]` | **(required)** | List of included features |
+| `highlighted` | `boolean` | `false` | Visually highlight this plan (recommended plan) |
+| `description` | `string` | — | Short description below the plan name |
+| `ctaText` | `string` | — | Override the default CTA text for this plan |
+| `planId` | `string` | — | Identifier passed to `onPlanSelect` |
+
+## onPlanSelect Callback
+
+When a user clicks a plan's CTA button, `onPlanSelect` is called with the plan data plus computed values:
+
+```tsx
+onPlanSelect={(plan) => {
+  // The Starter plan, monthly, for a visitor from India with 60% off
+  console.log(plan.name);          // "Starter"
+  console.log(plan.price);         // 19 (original, in your base currency)
+  console.log(plan.finalPrice);    // 7.6 (after the discounts, in your base currency, exact)
+  console.log(plan.localPrice);    // 719 (the price the table shows)
+  console.log(plan.currencyCode);  // "INR" (the currency of localPrice)
+  console.log(plan.billingPeriod); // "monthly" | "annual"
+  console.log(plan.planId);        // Custom plan ID, if set
+}}
+```
+
+`finalPrice` is never converted, so it is safe to compare with your own prices: it is the amount your payment provider charges, to the currency's minor unit (such as PKR 1838.14). `localPrice` is the price the visitor saw: the same number when prices are not converted, the converted estimate when they are. The callback's type is exported as `PPPSelectedPlan`.
+
+## Billing Toggle
+
+When `annualDiscount` is greater than 0, a monthly/annual toggle appears automatically. The annual price is calculated as:
+
+```
+annual price = monthly price × (1 - annualDiscount/100)
+```
+
+Then the PPP discount is applied on top, and the result is converted and rounded like any other price. Prices always show per month (`/mo`), so annual billing shows the discounted monthly equivalent.
+
+```tsx
+<PPPPricingTable
+  plans={plans}
+  annualDiscount={20} // 20% off for annual billing
+/>
+```
+
+The toggle shows "Monthly" and "Annual (-20%)" buttons. You can control the initial state with `billingPeriod`:
+
+```tsx
+<PPPPricingTable
+  plans={plans}
+  annualDiscount={20}
+  billingPeriod="annual" // Start with annual selected
+/>
+```
+
+## Country Banner
+
+When a PPP discount is active, a banner appears above the pricing table showing:
+
+```
+🇮🇳 Prices adjusted for India  60% off
+```
+
+Disable it with `showCountryBanner={false}`.
+
+## Default Styles
+
+The component ships with clean, minimal default styles:
+
+- **Responsive grid** — `grid-template-columns: repeat(auto-fit, minmax(280px, 1fr))`
+- **Highlighted plan** — Blue border
+- **Feature checkmarks** — Green check marks next to each feature
+- **Toggle** — Pill-style toggle with active state
+- **Country banner** — Green card with flag emoji
+
+## Unstyled Mode
+
+For full control over styling, use `noStyles`:
+
+```tsx
+<PPPPricingTable
+  plans={plans}
+  noStyles
+  className="my-pricing"
+/>
+```
+
+The unstyled version renders with data attributes for CSS targeting:
+
+| Attribute | Element |
+|---|---|
+| `data-gopaylocal-pricing-table` | Root container |
+| `data-gopaylocal-pricing-country-banner` | Country adjustment banner |
+| `data-gopaylocal-pricing-toggle` | Billing toggle container |
+| `data-gopaylocal-pricing-plans` | Plans grid |
+| `data-gopaylocal-pricing-plan` | Individual plan card |
+| `data-highlighted` | Set on the highlighted plan |
+| `data-gopaylocal-pricing-plan-name` | Plan name |
+| `data-gopaylocal-pricing-plan-description` | Plan description |
+| `data-gopaylocal-pricing-plan-price` | Price container |
+| `data-gopaylocal-pricing-plan-amount` | Price amount text |
+| `data-gopaylocal-pricing-plan-period` | Price period ("/mo") |
+| `data-gopaylocal-pricing-plan-features` | Feature list |
+| `data-gopaylocal-pricing-plan-cta` | CTA button |
+
+**Example CSS:**
+
+```css
+[data-gopaylocal-pricing-plan] {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 32px 24px;
+}
+
+[data-gopaylocal-pricing-plan][data-highlighted] {
+  border-color: #e94560;
+  box-shadow: 0 4px 14px rgba(233, 69, 96, 0.15);
+}
+
+[data-gopaylocal-pricing-plan-cta] {
+  background: #e94560;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-weight: 600;
+  cursor: pointer;
+}
+```
+
+## Full Example with Custom Header
+
+```tsx
+<PPPPricingTable
+  header={
+    <div style={{ textAlign: 'center', marginBottom: 32 }}>
+      <h2>Simple, transparent pricing</h2>
+      <p>All features included. Upgrade when you need scale.</p>
+    </div>
+  }
+  plans={[
+    {
+      name: 'Free',
+      price: 0,
+      features: ['1 project', 'Community support'],
+      ctaText: 'Start Free',
+      planId: 'free',
+    },
+    {
+      name: 'Starter',
+      price: 19,
+      features: ['5 projects', 'Email support'],
+      highlighted: true,
+      description: 'Best for growing businesses',
+      planId: 'starter',
+    },
+    {
+      name: 'Team',
+      price: 49,
+      features: ['Unlimited projects', 'Priority support'],
+      planId: 'team',
+    },
+    {
+      name: 'Enterprise',
+      price: 0,
+      features: ['Custom contract', 'Dedicated support'],
+      ctaText: 'Contact Sales',
+      planId: 'enterprise',
+    },
+  ]}
+  annualDiscount={20}
+  onPlanSelect={(plan) => {
+    if (plan.planId === 'enterprise') {
+      window.location.href = '/contact';
+    } else {
+      window.location.href = `/checkout?plan=${plan.planId}`;
+    }
+  }}
+/>
+```
+
+<Aside type="tip">
+Instead of calculating and displaying discounted prices yourself, pass your plan data and the component handles discount calculation, formatting and the billing period toggle. Combine it with [`productId`](/react/provider#props) on the provider to use one product's campaign.
+</Aside>

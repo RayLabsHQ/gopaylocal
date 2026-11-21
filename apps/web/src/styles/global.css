@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+/* ── Light / Dark tokens ─────────────────────────────────────── */
+
+:root {
+  --bg: #FFFFFF;
+  --surface: #FAFAFA;
+  --border-color: #E8E8E8;
+  --text-1: #0D0D0D;
+  --text-2: #7A7A7A;
+  --text-3: #B0B0B0;
+  --accent: #E42313;
+  --accent-hover: #cc1f10;
+  --accent-light: #FEF2F2;
+  --inverted-bg: #0D0D0D;
+  --inverted-text: #FFFFFF;
+  --success-color: #22C55E;
+  color-scheme: light;
+}
+
+/* Neutral greys, not blue-tinted slate — the backgrounds are pure neutral and a
+   cool cast reads as a colour error against them. Every text token clears WCAG AA
+   (4.5:1) against BOTH --bg (#0A0A0A) and the lighter --surface (#161616), since
+   body copy sits on either. Ratios below are measured against surface, the
+   binding constraint. */
+.dark {
+  --bg: #0A0A0A;
+  --surface: #161616;
+  --border-color: #2A2A2A;
+  --text-1: #F5F5F5; /* 16.6:1 */
+  --text-2: #B8B8B8; /* 9.1:1  */
+  --text-3: #8E8E8E; /* 5.5:1  */
+  --accent: #E42313;
+  --accent-hover: #ff3b2e;
+  --accent-light: #2D1215;
+  --inverted-bg: #0D0D0D;
+  --inverted-text: #F5F5F5;
+  --success-color: #22C55E;
+  color-scheme: dark;
+}
+
+@theme {
+  --color-brand-50: #eef5ff;
+  --color-brand-100: #d9e8ff;
+  --color-brand-200: #bcd8ff;
+  --color-brand-300: #8ec1ff;
+  --color-brand-400: #599fff;
+  --color-brand-500: #337cfc;
+  --color-brand-600: #1d5cf1;
+  --color-brand-700: #1548de;
+  --color-brand-800: #183ab4;
+  --color-brand-900: #19358e;
+  --color-brand-950: #142256;
+
+  --color-surface-50: #f8fafc;
+  --color-surface-100: #f1f5f9;
+  --color-surface-200: #e2e8f0;
+  --color-surface-300: #cbd5e1;
+  --color-surface-400: #94a3b8;
+  --color-surface-500: #64748b;
+  --color-surface-600: #475569;
+  --color-surface-700: #334155;
+  --color-surface-800: #1e293b;
+  --color-surface-900: #0f172a;
+  --color-surface-950: #020617;
+
+  /* Swiss Clean accent (red) */
+  --color-accent-500: var(--accent);
+  --color-accent-600: var(--accent-hover);
+  --color-accent-700: #b31a0e;
+  /* Brand red for SMALL text: #E42313 is ~4.3:1 on dark (fails AA <18px), the
+     hover red clears 4.5:1 on every surface. Fills/graphics keep accent-500. */
+  --color-accent-text: var(--accent-hover);
+
+  /* Semantic tokens */
+  --color-bg: var(--bg);
+  --color-bg-surface: var(--surface);
+  --color-bg-inverted: var(--inverted-bg);
+  --color-border: var(--border-color);
+  --color-text-primary: var(--text-1);
+  --color-text-secondary: var(--text-2);
+  --color-text-muted: var(--text-3);
+  --color-text-inverted: var(--inverted-text);
+  --color-accent-light: var(--accent-light);
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Tailwind v4's preflight resets buttons to `cursor: default`, which strips the
+   hover affordance from every control. Put it back. (Mirrors the dashboard.) */
+@layer base {
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
+}

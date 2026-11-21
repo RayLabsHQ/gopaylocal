@@ -1,0 +1,202 @@
+name = "gopaylocal-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+# global_fetch_strictly_public: fetch() to a hostname in this Worker's own zone is
+# routed like any public request instead of straight to the zone's origin. The
+# WooCommerce integration fetches merchant-supplied store URLs, so this closes the
+# same-zone bypass. Nothing in the API fetches its own zone.
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+
+# Import the pre-built banner bundle (packages/banner/dist/) as a text module
+[[rules]]
+type = "Text"
+globs = ["**/banner/dist/*.js"]
+fallthrough = false
+
+[observability]
+enabled = true
+
+# All three crons hit the same scheduled() handler in src/index.ts, routed by expression:
+# - "*/10 * * * *": recompute per-org monthly API-hit usage snapshots
+#   (services/usage.service.ts). Drives the soft quota cap on the banner endpoint;
+#   ~10-min enforcement lag.
+# - "30 9 * * *": daily VPN/datacenter/Tor IP dataset refresh into VPN_DATA
+#   (services/vpn-refresh.service.ts). Must equal VPN_REFRESH_CRON there (a unit test
+#   checks it). Needs Workers Paid: the free plan's 10 ms cron CPU limit is too small,
+#   so on free, seed with scripts/build-vpn-dataset.ts instead.
+# - "40 */6 * * *": exchange rates for local prices into CACHE `fx:rates`
+#   (services/fx-refresh.service.ts). Must equal FX_REFRESH_CRON there (a unit test
+#   checks it). About 0.5 ms of CPU per run in Node (first run in a fresh process:
+#   24 ms); a run that fails or is stopped writes nothing and the previous rates stay.
+[triggers]
+crons = ["*/10 * * * *", "30 9 * * *", "40 */6 * * *"]
+
+# Run the Worker near the Postgres database (Azure, Central India) for
+# low-latency DB queries. A cloud region, not the database's hostname: this
+# file is public. Banner endpoint uses KV only (edge-fast regardless of placement).
+[placement]
+region = "azure:centralindia"
+
+# Hyperdrive for Postgres connection pooling
+# Replace with the Hyperdrive config ID from: wrangler hyperdrive list
+# Create one with: wrangler hyperdrive create gopaylocal-db --connection-string="postgres://..."
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "b92c14738950408cbf67c5936f668811"
+localConnectionString = "postgresql://gopaylocal:gopaylocal@localhost:5433/gopaylocal"
+
+# KV namespaces
+# Replace each ID with the KV namespace ID from: wrangler kv namespace list
+# Create with: wrangler kv namespace create <NAME>
+
+# PLACEHOLDER_CACHE_KV_ID — General-purpose response cache (banner configs, parity data)
+[[kv_namespaces]]
+binding = "CACHE"
+id = "1bdf3837c6df414b8e436dd15d9daef9"
+
+# PLACEHOLDER_VPN_KV_ID — VPN/proxy ASN and IP range data for detection
+[[kv_namespaces]]
+binding = "VPN_DATA"
+id = "03a01a023d4a42dba4006161d51cdc77"
+
+# ── Native Workers Rate Limiting (per-colo accuracy; no KV/DO) ───────────────
+# https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
+# GA stanza shape: [[ratelimits]] with name + namespace_id + [ratelimits.simple]
+# { limit, period }. `period` MUST be 10 or 60 (seconds) — the only values the
+# platform supports. namespace_id is an arbitrary per-account integer that scopes
+# the counter; each limiter needs a DISTINCT id. Bindings are typed OPTIONAL in
+# src/bindings.ts so local/test (no binding) fail open in lib/rate-limit.ts.
+
+# Banner hot path per IP: GET /v1/banner/config/:publicKey + script.js/bundle.js.
+# Called on EVERY visitor pageview of EVERY customer site, so it must be generous.
+# 300/min/IP ≈ 5 req/s sustained — far above any real human's pageview rate, but
+# low enough to blunt a single-IP scraper hammering the endpoint. Cheap KV reads.
+[[ratelimits]]
+name = "RL_BANNER_IP"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 300
+  period = 60
+
+# Banner DB-fallback per IP, consumed ONLY when both KV caches miss (unknown key),
+# BEFORE the Postgres lookup. A flood of DISTINCT invalid keys defeats the 60s
+# apikey-miss negative cache (each distinct key is a fresh miss), so this caps how
+# many cold DB lookups one IP can force. Valid cached traffic never touches it.
+# 20/min/IP: a legit site has ~1 key, so it never trips; an attacker rotating keys
+# is throttled to 20 DB hits/min/IP.
+[[ratelimits]]
+name = "RL_BANNER_MISS_IP"
+namespace_id = "1002"
+
+  [ratelimits.simple]
+  limit = 20
+  period = 60
+
+# POST /v1/events per API KEY (per colo). The banner sends one beacon per event, so a
+# site's whole visitor traffic shares this bucket. Sizing: a Pro site at the 20M
+# calls/month fair-use line averages ~460 config calls/min; at ~1.5 events per shown
+# banner, a 4x peak, and up to half of a regional site's traffic in one colo, that is
+# ~1,400 events/min in one colo. 3000 leaves 2x headroom. (It was 120, which silently
+# dropped real events from any busy site.) It no longer guards the plan quota, which
+# is metered server-side on /v1/banner/config; it bounds analytics inflation and
+# rollup writes per key. RL_EVENTS_IP still caps any single IP at 120/min.
+[[ratelimits]]
+name = "RL_EVENTS_KEY"
+namespace_id = "1003"
+
+  [ratelimits.simple]
+  limit = 3000
+  period = 60
+
+# POST /v1/events per IP backstop (used when the key is missing/invalid, and always
+# as a second gate). 120/min/IP mirrors the per-key limit for a single busy visitor.
+[[ratelimits]]
+name = "RL_EVENTS_IP"
+namespace_id = "1004"
+
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
+# Auth POST per IP: sign-in / sign-up / credential endpoints. Tight to stop
+# credential stuffing & signup abuse. 10/min/IP is ample for a human login flow.
+[[ratelimits]]
+name = "RL_AUTH_POST_IP"
+namespace_id = "1005"
+
+  [ratelimits.simple]
+  limit = 10
+  period = 60
+
+# Auth GET per IP: the dashboard polls GET /api/auth/get-session (cookieCache 300s
+# but still frequent) and OAuth callbacks bounce through GET. Loose so we never
+# throttle legitimate session checks. 120/min/IP.
+[[ratelimits]]
+name = "RL_AUTH_GET_IP"
+namespace_id = "1006"
+
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
+# Gumroad sale pings, per integration. Pings are unsigned and each one costs a
+# sale read-back with the merchant's token, so forged pings must not burn their
+# API quota. 120/min per integration per colo is far above a real seller's sale
+# rate; over it the route answers 503 and Gumroad retries.
+[[ratelimits]]
+name = "RL_GUMROAD_PING"
+namespace_id = "1007"
+
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
+# Management API requests made with a secret API key (gpl_sk_), per key, after
+# the key is found. 300/min per key per colo (5 req/s sustained) lets a sync job
+# import hundreds of products a minute, while bounding what one leaked or looping
+# key costs: each request is a handful of Postgres queries through Hyperdrive.
+# Over it: 429 rate_limited with Retry-After.
+[[ratelimits]]
+name = "RL_API_KEY"
+namespace_id = "1008"
+
+  [ratelimits.simple]
+  limit = 300
+  period = 60
+
+# Secret-key lookups that found no key (unknown or revoked), per IPv4 address or
+# IPv6 /64. Counted only on failure, so working keys never spend it; once it
+# refuses, further failed attempts get 429 instead of 401 and valid keys from the
+# same address are unaffected (middleware/api-key.ts). Each distinct unknown key
+# still costs one indexed lookup, like an unknown session cookie.
+[[ratelimits]]
+name = "RL_API_KEY_FAIL_IP"
+namespace_id = "1009"
+
+  [ratelimits.simple]
+  limit = 10
+  period = 60
+
+# Environment variables
+[vars]
+API_BASE_URL = "https://api.gopaylocal.com"
+APP_BASE_URL = "https://app.gopaylocal.com"
+ADMIN_BASE_URL = "https://admin.gopaylocal.com"
+DODO_ENVIRONMENT = "test_mode"
+# Dodo products for Pro ($19/month, $180/year). Must point at products priced
+# to match the pricing page.
+DODO_PRICE_ID_PRO_MONTHLY = "pdt_0NbW5BSRZW6DVA451GDSV"
+DODO_PRICE_ID_PRO_ANNUAL = "pdt_0NbW5UzwzxwYTuVkl96c8"
+# Set to "true" when self-hosting: every organization is unlimited, the
+# "Powered by GoPayLocal" banner link is off, and billing is disabled.
+SELF_HOSTED = "false"
+
+# Secrets (set via wrangler secret put)
+# BETTER_AUTH_SECRET
+# GOOGLE_CLIENT_ID
+# GOOGLE_CLIENT_SECRET
+# GITHUB_CLIENT_ID
+# GITHUB_CLIENT_SECRET
+# DODO_API_KEY
+# DODO_WEBHOOK_SECRET

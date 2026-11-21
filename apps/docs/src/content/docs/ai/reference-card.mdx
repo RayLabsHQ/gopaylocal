@@ -1,0 +1,393 @@
+---
+title: "For agents: reference card"
+description: Dense, source-checked facts for coding agents integrating GoPayLocal — the public endpoints, SDK entry points, banner script URL, template tokens, A/B tests and common mistakes.
+---
+
+Written for coding agents. Every fact on this page was checked against the GoPayLocal source code ([github.com/RayLabsHQ/gopaylocal](https://github.com/RayLabsHQ/gopaylocal); file paths in square brackets). If another docs page disagrees with this card, trust this card.
+
+## Mental model
+
+- A merchant's site runs one client in the visitor's browser: the banner script, `@gopaylocal/react`, or `@gopaylocal/js`. Every client makes the same public call, `GET https://api.gopaylocal.com/v1/banner/config/{publicKey}`, optionally with `?product=` and `&vid=`. The three clients build that request with the same shared code. [apps/api/src/routes/banner-script.ts, packages/js-sdk/src/core.ts]
+- The API reads the visitor's country from Cloudflare's `request.cf.country` only. It never trusts a header (such as `CF-IPCountry`) or a query parameter, so the country cannot be overridden from code.
+- The API answers with one campaign's discount percentage and coupon code for that country. Which campaign [apps/api/src/services/banner-selection.ts]:
+  - A campaign can be served when its status is `active` and it has a banner config. Every new campaign gets one with the default design.
+  - With `product`, only that product's campaigns count. An unknown product, or one with nothing servable, gives `no_active_campaign`; it never falls back to another product.
+  - Without `product`, the API uses the product of the newest servable campaign in the account.
+  - Campaigns are `live` or `test`. For a product, a servable `live` campaign wins over any `test` one. Requests answered by a `test` campaign don't count against the plan.
+  - Within a product and environment, a running [A/B test](#ab-tests) comes first. When both of its campaigns are servable, each visitor is assigned to one of them. When only one is, that campaign answers every visitor and the response carries no `experimentId`. When neither is, the test is ignored. Without a running test, the newest servable campaign answers.
+- A public key belongs to an account, not to a product. Pass the product id to pin a page to one product.
+- GoPayLocal creates the coupon codes in the merchant's payment provider for campaigns linked to a connected integration. The visitor types the code at the merchant's normal checkout, so the checkout must accept discount codes. [apps/api/src/routes/campaigns.ts, apps/api/src/services/parity.service.ts]
+  - Stripe Checkout Session created in the merchant's code: `allow_promotion_codes: true`, or pass the promotion code in `discounts` ([Stripe integration](/integrations/stripe/#auto-apply)).
+  - WooCommerce: the customer types the code in the cart or checkout coupon field. On WooCommerce 10.0 or later a checkout link can apply it: `https://<store>/checkout-link/?products=<productId>:1&coupon=<code>` ([WooCommerce integration](/integrations/woocommerce/#applying-the-code)).
+  - Use `code` exactly as the API returns it. Codes can contain hyphens (WooCommerce codes look like `PPP-IN40-K7QX`), so URL-encode it rather than reformatting it.
+- Products, campaigns, discount levels, integrations and A/B tests are set up by the human in GoPayLocal at `https://app.gopaylocal.com`, not in site code. That includes each campaign's banner design: position, message, button text, colors, flag and close button, edited on the campaign page under **Setup > Banner**. New campaigns start with the default design shown under Config endpoint. It also includes each campaign's allowed domains, which have no dashboard field. An agent cannot change any of these (see the note under [What to get from the human](#what-to-get-from-the-human)). [apps/dashboard/src/components/banner-editor.tsx]
+
+## What to get from the human
+
+| Need | Details |
+|---|---|
+| Public API key | `gpl_pk_` followed by 64 hex characters [apps/api/src/routes/api-keys.ts]. Created in the dashboard under API keys. Public by design: it ends up in page source, so it is safe in client bundles and HTML. |
+| Payment provider | One of Stripe, Paddle, Gumroad, Chargebee, Dodo Payments, Polar, Whop, Creem or WooCommerce [packages/shared/src/types/index.ts `IntegrationProvider`]. Connected in the dashboard, not in code. Creem, WooCommerce, and Stripe's Managed Payments mode (which the merchant turns on in Stripe; GoPayLocal has no setting for it) are implemented but not yet verified against a live account. WooCommerce has no test mode: its coupons are always real coupons in the store. Live-verification status per provider: `apps/api/PROVIDER_VERIFICATION.md`. |
+| Dashboard setup | A product and an active campaign linked to the provider integration. Without a servable campaign the API answers `show: false` with `no_active_campaign`. |
+| Product id | Only when the account has several products and a page belongs to one of them: pass it as `data-product` (banner script) or `productId` (SDKs). |
+| Allowed domains | Only if the campaign has them. Then the request's `Origin` (or `Referer`) hostname must equal a listed domain or be a subdomain of one, otherwise `reason: "domain_not_allowed"`. Local testing needs `localhost` (or the dev host) in the list. |
+| API origin | Only for a [self-hosted](/self-hosting/) GoPayLocal deployment: the URL of its API. It replaces `https://api.gopaylocal.com` everywhere on this card: the script host, the SDKs' `apiBase` and the CSP entries. |
+
+Never use a secret key (`gpl_sk_…`) in an integration. The banner script answers `400`, and the config and events endpoints answer `401` with `"code": "secret_key_not_allowed"` [apps/api/src/lib/public-key.ts]. A secret key is for the human's own server, calling the management API under `/v1/teams/{orgId}/` [apps/api/src/middleware/api-key.ts]; a banner or SDK integration never needs it. Don't change account settings (campaigns, discounts, banner designs, allowed domains, A/B tests) from integration code; ask the human to make the change in the dashboard.
+
+## Choose one client
+
+| Client | Install | Renders a banner | Banner design | Analytics events |
+|---|---|---|---|---|
+| Banner script | `<script src="https://api.gopaylocal.com/v1/banner/script.js?key=KEY" async></script>` | Yes, automatically | The campaign's | `impression`, `copy`, `dismiss`, sent automatically |
+| React SDK | `npm install @gopaylocal/react` | Only if you render `<PPPBanner />` | The campaign's; props override it | `<PPPBanner />` sends `impression`, `copy`, `dismiss`; for your own UI call `usePPP().track(event)` |
+| JS SDK | `npm install @gopaylocal/js` | Only if you call `gpl.showBanner()` | The campaign's; options override it | `showBanner()` sends `impression`, `copy`, `dismiss`; for your own UI call `gpl.track(event)` |
+
+- Pick one banner. The banner script plus `<PPPBanner />` shows two banners.
+- All three banners add a "Powered by GoPayLocal" link when the response has `showBranding: true`. The server decides this; it is not configurable from code.
+- Events are only sent when a discount applies (they need the response's `campaignId`). `track()` accepts `impression`, `click`, `copy` and `dismiss`.
+- There is no server-side pricing API. The config endpoint uses the country of whoever makes the request, so calling it from a server, edge function, build step or CI gives the server's country and usually `vpn_detected`. Fetch from the browser.
+
+## Banner script
+
+```html
+<script src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_REPLACE_ME" async></script>
+```
+
+Optional attributes on the same tag [packages/banner/src/setup.ts]:
+
+- `data-product="<productId>"`: only that product's campaign.
+- `data-visitor-id="<id>"`: your own visitor id for experiment assignment. It must be 16 to 64 characters of `A-Z a-z 0-9 _ -`; anything else is ignored. No personal data.
+- `data-no-storage`: store nothing in the browser (no `sessionStorage` cache or dismissal, no `localStorage` visitor id).
+
+How the script works:
+
+- **Key.** The key goes in the `key` query parameter of the script URL. There is no `data-key` attribute. [apps/api/src/routes/banner-script.ts reads `?key=`]
+- **How settings are read.** The bundle looks at its own script tag first, then every script whose `src` contains `/v1/banner/` or `gopaylocal`, in document order. It takes:
+  - the key from the first of those tags with a `key` parameter
+  - the API base from that tag's `src` (everything before `/v1/`), so a self-hosted API works by changing the script host
+  - each data attribute from the first tag that has it
+
+  So attributes on the `script.js` tag apply even though `bundle.js` is what runs.
+- **Errors.** `script.js` without `key` returns HTTP 400 with the body `// Missing API key`. A key with characters outside `A-Z a-z 0-9 _ -` returns 400 `// Invalid API key`.
+- **Loader.** `script.js` is a small loader: it appends `bundle.js?key=KEY` from the same host, and the bundle does the work.
+- **Runtime** [packages/banner/src/index.ts]:
+  - 5-second fetch timeout.
+  - The config response is cached for 5 minutes in `sessionStorage` key `gpl_c_<key>_<productId>`. The product part is empty without `data-product`.
+  - Clicking close sets `gpl_d_<key>_<productId>` = `"1"`, which hides the banner for the rest of the session in that tab.
+  - It renders into a closed Shadow DOM with `position: fixed` and the maximum `z-index`.
+  - The copy button appears only when `code` is not null.
+  - It sends `impression` on render, `copy` when the code is copied and `dismiss` on close. Events go to `POST /v1/events` with `navigator.sendBeacon`, falling back to a keepalive `fetch`.
+- **Page event.** After each config response, including cached ones and `show: false`, the script dispatches a `gopaylocal:config` `CustomEvent` on `document`. Its `detail` is `{ show, country, discount, code, campaignId, experimentId, variant }`, so page code can read the result and the experiment arm. It does not fire when the banner was dismissed earlier in the session or the request failed.
+- **Positions.** `top` and `bottom` render a full-width bar. `bottom-left` and `bottom-right` render a card that also shows the country name.
+- **Content Security Policy.** Allow `https://api.gopaylocal.com` in `script-src` and `connect-src`. The banner's styles are a constructed stylesheet, which a `style-src` without `'unsafe-inline'` does not block. Browsers without constructable stylesheets get a `<style>` element instead. [packages/js-sdk/src/core.ts `adoptStyles`]
+
+## A/B tests
+
+[apps/api/src/services/experiment.service.ts, apps/api/src/services/banner-selection.ts; the API calls them experiments]
+
+What exists:
+
+- A test links exactly two campaigns of the same product and the same environment: A, the control, and B, the variant. A product has at most one running test per environment (`live`, `test`).
+- The human starts, changes and ends tests in the dashboard: **A/B Tests**, or a campaign's **Settings > A/B Testing**. Both campaigns must be active when the test starts.
+- The traffic split is the percentage of visitors sent to B, from 1 to 99 (default 50).
+- Arms are sticky. The API hashes the test id with the visitor key (the `vid`, or IP address plus user agent when there is none) and compares the result with the split. A visitor stays in their arm while the test and its split are unchanged. Changing the split moves only the visitors between the old and the new value.
+- The assigned arm always answers. If its campaign gives the visitor's country no discount, or the domain is not allowed, the answer is `show: false` with `experimentId` and `variant`. The visitor is not moved to the other arm.
+- Results, in the dashboard, are raw counts and rates per arm: impressions, clicks, copies, redemptions, revenue saved per currency, click, copy and conversion rates, and redemptions per copy. They come from daily rollups (whole UTC days) and only reach back as far as the account's analytics history.
+- **End Test**: the human picks the winner. The winner stays active and the other campaign is paused. After that the product is served the normal way, by its newest servable campaign.
+- While a test runs, its campaigns cannot be paused, set back to draft, moved to another product or environment, or deleted (`409`).
+
+What does not exist: per-country tests or per-country results (a test splits every visitor of the product, even though the two campaigns can set different per-country discounts), a significance or lift figure, and a no-discount control arm (a campaign with 0% for a country serves nothing there, so it collects no data).
+
+What an integration needs for a test:
+
+- Usually nothing extra. All three clients send `vid` and report events with the assigned arm's `campaignId`, which is how each arm gets its own numbers.
+- On a site with several products, pass the product id (`data-product` or `productId`). Otherwise the request can be answered for another product and the test never applies.
+- Don't set `data-no-storage` or `persistVisitorId: false` unless the human asks for it. Assignment then falls back to IP address plus user agent, and a visitor whose IP changes can switch arms.
+- To keep a signed-in user in one arm across devices, pass a stable id that is not personal data as `data-visitor-id` or `visitorId` (16 to 64 characters of `A-Z a-z 0-9 _ -`, so an email address is rejected).
+- A custom banner must report events with `track()` (or `POST /v1/events`) using the response's `campaignId`, or its arm records no impressions, clicks or copies.
+- To record the arm in the site's own analytics, read `experimentId` and `variant` from the `gopaylocal:config` event, `gpl.getExperiment()` or `usePPP()`. They are set even when the arm shows no banner.
+
+## Visitor id (A/B test assignment)
+
+[packages/js-sdk/src/core.ts]
+
+- All three clients share one `localStorage` key, `gpl_vid`. It holds a random 32-hex-character id from Web Crypto and is sent only to the GoPayLocal API, as `vid`. It keeps a visitor in the same arm across page loads and across clients on the same origin. The API uses it only for the assignment and does not store it.
+- A valid id from `data-visitor-id` or the SDKs' `visitorId` is used as is and never stored.
+- With `data-no-storage` or `persistVisitorId: false`, no id is sent. The API then assigns the arm from a hash of IP address and user agent.
+
+## Config endpoint
+
+`GET /v1/banner/config/{publicKey}?product={productId}&vid={visitorId}` — public, no auth header, both query parameters optional. Call it from the visitor's browser. [apps/api/src/routes/banner-script.ts]
+
+- `product` must match `[A-Za-z0-9_-]{1,64}`. Any other value means nothing is served (`no_active_campaign`).
+- `vid` must be 16 to 64 characters of `A-Z a-z 0-9 _ -`. Anything else is ignored.
+
+Discount available (HTTP 200). Shape, with placeholder values:
+
+```json
+{
+  "show": true,
+  "country": "IN",
+  "countryName": "India",
+  "discount": 30,
+  "code": "<coupon code, or null>",
+  "baseCurrencyCode": "USD",
+  "baseCurrencySymbol": "$",
+  "currencyCode": "INR",
+  "currencySymbol": "₹",
+  "fxRate": 93.32614706,
+  "fxAsOf": "2026-11-18",
+  "localPrice": 1249,
+  "localOriginalPrice": 1769,
+  "charmPricingStrategy": "round_x9",
+  "campaignId": "<campaign id>",
+  "experimentId": "<only when an experiment applied>",
+  "variant": "a",
+  "showBranding": false,
+  "banner": {
+    "position": "bottom",
+    "messageTemplate": "It looks like you're visiting from {{country}}! Use code {{code}} for {{discount}}% off.",
+    "ctaText": "Copy Code",
+    "backgroundColor": "#1a1a2e",
+    "textColor": "#ffffff",
+    "ctaColor": "#e94560",
+    "ctaTextColor": "#ffffff",
+    "showFlag": true,
+    "showCloseBtn": true
+  }
+}
+```
+
+The `banner` values above are the defaults every new campaign gets.
+
+| Field | Meaning |
+|---|---|
+| `show` | `true` only when a discount applies. |
+| `country` | ISO 3166-1 alpha-2 code from Cloudflare. |
+| `countryName` | English country name. |
+| `discount` | Percentage as a number, e.g. `40` means 40% off. No `%` sign. |
+| `code` | Coupon code for this country, or `null` if no coupon exists for it in the provider. |
+| `baseCurrencyCode`, `baseCurrencySymbol` | The product's currency (ISO 4217) and its symbol. |
+| `currencyCode`, `currencySymbol` | The currency of `localPrice` and `localOriginalPrice`: the visitor's when the prices were converted, otherwise the product's. |
+| `fxRate` | Units of `currencyCode` per 1 unit of `baseCurrencyCode` (10 significant digits); `1` when not converted. |
+| `fxAsOf` | Date of the exchange rates, `YYYY-MM-DD`. Present only when the prices were converted. |
+| `localPrice` | Number. The product's price after the discount, in `currencyCode`. Converted: rounded **up** by the charm strategy. |
+| `localOriginalPrice` | Number. The product's price before the discount, in `currencyCode`. Converted: rounded **down**. |
+| `charmPricingStrategy` | The campaign's rounding: `none`, `dot99`, `round_x9`, `nearest_5` or `region_aware`. |
+| `campaignId` | The campaign that answered (the assigned one during an experiment). Sent with analytics events. |
+| `experimentId`, `variant` | Present only when a running experiment applied; `variant` is `"a"` or `"b"`. Also present on `no_discount` and `domain_not_allowed` answers. |
+| `showBranding` | Server-decided; see Choose one client. |
+| `banner` | The campaign's banner design. |
+
+Local prices [packages/shared/src/currency/local-price.ts]:
+- **Converted** (`fxAsOf` present): the visitor's country uses another currency and the exchange rates are less than 96 hours old. `localPrice` = `basePrice × (1 − discount/100) × fxRate`, charm-rounded up (never below that amount, at most 8% above it). `localOriginalPrice` = `basePrice × fxRate`, charm-rounded down. The example above is a $19 product at 30% off with `round_x9`, for a visitor in India on the rates of 2026-11-18: ₹1,249, was ₹1,769. The two are chosen together so that the discount they imply is never above the real one and, except for prices of a few cents, neither more than 2 points below it nor under four fifths of it [packages/shared/src/currency/pair.ts].
+- **Exact** (no `fxAsOf`): the visitor pays in the product's currency, the rates are stale or missing, the visitor's currency has no rate, or no converted pair is possible (the paid price would not be below the original, or the converted price rounds to zero). `currencyCode` equals `baseCurrencyCode`, `fxRate` is `1`, and the prices are exact, with no charm rounding. A US visitor at 60% off a $19 product gets `localPrice` 7.6 and `localOriginalPrice` 19.
+
+Local prices are estimates. They convert your price at the day's mid-market rate and round up to a charm price, at most 8% above the converted amount and never below it (an amount under 13 of the currency's smallest unit can round up by more than 8%, to the next one). Your payment provider charges the exact discounted price in your currency; the amount on the customer's statement depends on their bank's exchange rate.
+
+No discount (still HTTP 200): `{ "show": false, "reason": "<reason>" }`, plus `experimentId` and `variant` where noted above. The checks run in this order:
+
+| `reason` | Meaning |
+|---|---|
+| `unknown_country` | Cloudflare reported no country, `XX`, or `T1` (Tor). |
+| `vpn_detected` | The request comes from a known VPN, a Tor exit, or a datacenter or cloud network. Servers, CI machines and some corporate networks get this. [apps/api/src/services/vpn-detect.service.ts] |
+| `quota_exceeded` | The account's monthly API quota is used up. Only hosted accounts whose plan has a quota; never on self-hosted deployments. |
+| `no_active_campaign` | Nothing servable: no active campaign with a banner config for the requested (or default) product, or an invalid `product` value. |
+| `domain_not_allowed` | The campaign has allowed domains and the request's `Origin`/`Referer` host is missing or not listed. |
+| `no_discount` | The campaign gives this country no discount (or 0%). |
+
+The key is checked between `unknown_country` and `vpn_detected`.
+
+Errors:
+- `401 {"error":"Invalid API key"}`: an unknown or revoked key.
+- `401` with `"code": "secret_key_not_allowed"`: a secret key (`gpl_sk_`). It is refused before any lookup and never echoed.
+- `429 {"error":"rate_limited"}`, with a `Retry-After` header.
+- `500 {"show":false,"reason":"internal_error"}`.
+
+**What counts as an API call.** The server counts one call for each config request with a valid key that reaches campaign selection, whatever the answer: a banner, `no_active_campaign`, `domain_not_allowed` or `no_discount`. [apps/api/src/routes/banner-script.ts `meterApiCall`]
+- Not counted: `unknown_country`, `vpn_detected`, `quota_exceeded`, `401`, `429`, `script.js`, `bundle.js` and `/v1/events`.
+- Calls answered by a `test` campaign are recorded separately and don't count against the plan.
+- Client caching saves calls. The banner script caches every config response for 5 minutes in the tab, unless `data-no-storage` is set. The SDKs cache only responses with a discount.
+
+## React SDK: `@gopaylocal/react`
+
+[packages/react-sdk/src]
+
+**Install**
+- `npm install @gopaylocal/react`. Peer dependency: `react` `^18 || ^19`. ESM and CommonJS builds.
+
+**Next.js App Router**
+- The bundle starts with `'use client'`, so `app/layout.tsx` (a Server Component) can render `<GoPayLocalProvider apiKey={...}>` directly.
+- Function props (`onLoad`, `onError`, `<PPPPricingTable onPlanSelect>`) cannot be passed from a Server Component. When you need them, put the provider or table in your own file that starts with `'use client'`.
+- Components that call the hooks must be client components.
+
+**Provider**
+- `<GoPayLocalProvider apiKey>` wraps everything that uses the hooks or components. Props:
+  - `apiBase` (default `https://api.gopaylocal.com`)
+  - `productId`
+  - `visitorId`
+  - `persistVisitorId` (default `true`)
+  - `baseCurrencyCode`: the currency of the prices you pass in. Defaults to the product's currency from the API (`USD` before the API answers or when no discount applies).
+  - `baseCurrencySymbol`: defaults to the product's symbol from the API, or the symbol of `baseCurrencyCode` in the visitor's locale.
+  - `onLoad(data)`: called only when a discount applies
+  - `onError(error)`: also called for the 8-second timeout
+- There is no `environment` prop and no sandbox host.
+- Leave `baseCurrencyCode` unset when your prices are in the product's currency. Prices are converted to the visitor's currency only when the response was converted (`fxAsOf` set) and `baseCurrencyCode` equals the product's currency. Set to another currency, prices stay unconverted and the provider logs one console warning. [packages/react-sdk/src/provider.tsx `priceContext`]
+
+**Hooks**
+- `usePPP()` returns `{ data, isLoading, error, country, discount, code, baseCurrencyCode, baseCurrencySymbol, currencyCode, currencySymbol, fxRate, fxAsOf, charmPricingStrategy, localPrice(basePrice), localOriginalPrice(basePrice), formatPrice(price, intlOptions?), flag, campaignId, experimentId, variant, track(event) }`.
+  - `currencyCode` and `currencySymbol` are the currency prices are shown in: the visitor's when converted, otherwise `baseCurrencyCode`. `fxAsOf` is `null` unless prices are converted.
+  - `localPrice(basePrice)` is the discounted price in `currencyCode`, charm-rounded up when converted, otherwise exact. `localOriginalPrice(basePrice)` is the price before the discount, charm-rounded down when converted. Same rule as the API [packages/js-sdk/src/price.ts `localPrices`].
+  - It throws outside the provider.
+  - `discount` is `0` when no discount applies.
+  - `experimentId` and `variant` are also set when the visitor's arm has no discount (`data` is `null`).
+  - `isLoading` is `true` on the server and on the first client render.
+- `usePrice({ price, localize?, showDecimal?, minimumDecimalDigits?, maximumDecimalDigits? })` returns `{ originalPrice, discountedPrice, localPrice, localOriginalPrice, converted, formatted, formattedOriginal, discount, integer, decimal, currencySymbol, currencyCode, hasDiscount }`.
+  - `discountedPrice` is in the base currency, unrounded. `localPrice`, `formatted` and `formattedOriginal` are in `currencyCode`; `formattedOriginal` is the visitor's currency too when `converted`.
+  - By default whole amounts format without decimals (`₹719`, `$19`) and other amounts keep the currency's digits (`$7.60`). `showDecimal: true` always shows decimals; `showDecimal: false` never does.
+
+**Components**
+- `<PPPBanner />`
+  - Props: `position`, `backgroundColor`, `fontColor`, `borderRadius`, `fontSize`, `className`, `onClose`, `showCloseIcon`, `noStyles`.
+  - Uses the campaign's design (position, colors, message, CTA text, flag, close button), and props override it. `showCloseIcon` falls back to the design's `showCloseBtn`.
+  - Renders nothing when `discount` is 0.
+  - Sends `impression`, `copy` and `dismiss`.
+  - The message is plain text (`**` is not interpreted).
+  - Dismissal is component state only and is not remembered across page loads.
+- `<PPPPrice price={29} />`: also `className`, `localize`, `showDecimal`, `currencyDisplay` (`'symbol' | 'code' | 'name'`). Renders the base price when there is no discount.
+- `<PPPPriceFormatted price isOriginalDisplay? />` (`isOriginalDisplay` shows the price before the discount), `<PPPPriceInteger price />`, `<PPPPriceDecimal price />`, `<PPPCurrencySymbol />`, `<PPPCurrencyCode />`. The last two follow the shown currency.
+- `<PPPPricingTable plans={[{ name, price, features, highlighted?, description?, ctaText?, planId? }]} />`: also `billingPeriod`, `annualDiscount`, `ctaText`, `onPlanSelect`, `showBillingToggle`, `className`, `noStyles`, `header`, `showCountryBanner`.
+  - `onPlanSelect(plan)` receives the plan plus `finalPrice` (the monthly price after the annual and PPP discounts, exact, in the base currency, never converted), `localPrice` (the price the table shows), `currencyCode` (the currency of `localPrice`) and `billingPeriod`; the type is exported as `PPPSelectedPlan`. Charge or look up the plan with `finalPrice` or `planId`, never with `localPrice`. [packages/react-sdk/src/components/pricing-table.tsx `PPPSelectedPlan`]
+
+**Utilities:** `countryToFlag(code)`, `formatCurrency(amount, currencyCode, intlOptions?)`, `splitPrice(formatted)`, `DEFAULT_API_BASE`, `VISITOR_ID_STORAGE_KEY`.
+
+**Caching:** `sessionStorage` key `gpl_react_<key>_<productId>` for 5 minutes, written only when `show` is true.
+
+**Server rendering:** the provider has no PPP data on the server, so server HTML shows base prices. Discounted prices appear after the client fetch, or immediately from the session cache.
+
+## JS SDK: `@gopaylocal/js`
+
+[packages/js-sdk/src]
+
+**Install:** `npm install @gopaylocal/js`. ESM and CommonJS builds.
+
+**Create the client:** `const gpl = new GoPayLocal({ apiKey })`. Optional settings:
+- `baseCurrencyCode`: the currency of the prices you pass to `getPrice()`. Defaults to the product's currency from the API (`USD` before the API answers or when no discount applies). Set to another currency, prices are not converted and the client logs one console warning.
+- `baseCurrencySymbol`: defaults to the product's symbol from the API, or the symbol of `baseCurrencyCode` in the visitor's locale.
+- `apiBase` (default `https://api.gopaylocal.com`)
+- `productId`
+- `visitorId`
+- `persistVisitorId` (default `true`)
+- `cacheTtl` in ms (default 300000; `0` always asks the API)
+- `onLoad(data)`: only when a discount applies
+- `onError(error)`: also called for the timeout, with the message "GoPayLocal API did not respond within 8 seconds"
+
+There is no `environment` option; passing it is a TypeScript error.
+
+**`await gpl.init()`** returns `PPPData` or `null`: `null` when no discount applies, on error, or after the 8-second timeout. `PPPData` is `{ show, country, countryName, discount, code, baseCurrencyCode, baseCurrencySymbol, currencyCode, currencySymbol, fxRate, fxAsOf, localPrice, localOriginalPrice, charmPricingStrategy, flag, campaignId, experimentId, variant, banner, showBranding }`. The price fields are the product's own prices as the API computed them (`fxAsOf` is `null` and `currencyCode` is `baseCurrencyCode` when they are not converted).
+
+**Methods:**
+- `getData()`, `isLoading()`, `getError()`, `getCode()`
+- `getExperiment()`: `{ experimentId, variant }` or null; set even when `init()` resolved `null`
+- `getCountry()`: `{ code, name, flag }` or null
+- `getPrice(basePrice, { localize?, showDecimal? })` returns `{ originalPrice, discountedPrice, localPrice, localOriginalPrice, converted, formatted, formattedOriginal, integer, decimal, currencySymbol, currencyCode, hasDiscount, discount }`, with the same conversion, rounding and formatting rules as React's `usePrice()`
+- `formatPrice(amount, currencyCode?)`: formats `amount` without converting it, by default in the currency `getPrice()` shows prices in
+- `subscribe(listener)`: returns an unsubscribe function
+- `bindPriceElements()`
+- `showBanner(options?)`: returns `{ remove }`
+- `track(event)`
+
+**Data attributes** are filled only when you call `gpl.bindPriceElements()` after `init()` returned data. With no discount, elements keep their original text, so put the base price there.
+- `data-gopaylocal-price="29"`: discounted price, formatted (`getPrice().formatted`)
+- `data-gopaylocal-price-original="29"`: original price, formatted, in the visitor's currency when converted
+- `data-gopaylocal-currency-symbol`, `data-gopaylocal-currency-code`: the currency the prices are shown in
+- `data-gopaylocal-country` (country name), `data-gopaylocal-country-flag`
+- `data-gopaylocal-discount`: rendered **with** a percent sign, e.g. `40%`
+- `data-gopaylocal-coupon`
+
+**`showBanner(options)`**
+- Layers settings as SDK defaults, then the campaign's design from the API, then `options`. Options: `position`, colors, `ctaText`, `messageTemplate`, `showFlag`, `showCloseBtn`, `onClose`.
+- Sends `impression`, `copy` and `dismiss`.
+- Does not remember dismissal.
+
+**Exports:** `GoPayLocal`, `formatCurrency`, `countryToFlag`, `splitPrice`, `DEFAULT_API_BASE`, `VISITOR_ID_STORAGE_KEY`, and the types `GoPayLocalConfig`, `PPPData`, `PricingResult`, `BannerOptions`, `BannerDesign`, `TrackableEvent` and `CharmStrategy`.
+
+**Caching:** `sessionStorage` key `gpl_js2_<key>_<productId>` for `cacheTtl`, only for responses with a discount.
+
+## Template tokens
+
+Tokens in the banner design's `messageTemplate`, or in the JS SDK's `showBanner({ messageTemplate })`. New campaigns use the default template below. Unknown tokens become an empty string everywhere.
+
+The banner script, React `<PPPBanner>` and the JS SDK's `showBanner()` fill the same tokens with the same values [packages/js-sdk/src/core.ts `templateValues`]:
+
+| Token | Value |
+|---|---|
+| `{{discount}}` | Number only, e.g. `40`. Write `{{discount}}%`. |
+| `{{code}}` | Coupon code; empty if none |
+| `{{country}}` | ISO code, e.g. `IN` (not the name) |
+| `{{countryName}}` | e.g. `India` |
+| `{{flag}}` | Flag emoji |
+| `{{localPrice}}` | The product's price after the discount, formatted in the visitor's locale, e.g. `₹1,249` (converted) or `$7.60` (not converted). Whole amounts show no decimals |
+| `{{localOriginalPrice}}` | The product's price before the discount, formatted the same way, e.g. `₹1,769` |
+| `{{currencySymbol}}` | Symbol of the currency those prices are in: the visitor's when converted, otherwise the product's |
+| `{{currencyCode}}` | Code of that currency, e.g. `INR` |
+
+These are the product's own prices from the response, whatever `baseCurrencyCode` is set to. Local prices are estimates; don't present them as the amount charged.
+
+- Banner script: HTML in the template is escaped and shown as text, and `**bold**` is not interpreted (the asterisks show). The `discount` and `code` values are bolded.
+- JS SDK: `**text**` renders bold. React: plain text.
+- Default template for new campaigns [packages/shared/src/constants/index.ts `DEFAULT_BANNER_MESSAGE`]: `It looks like you're visiting from {{country}}! Use code {{code}} for {{discount}}% off.` It shows the ISO code, not the country name.
+
+## Events endpoint
+
+Only needed for a banner you build yourself, and the SDKs' `track(event)` already does it. `POST /v1/events`, with a JSON body that may be sent as `text/plain`. [apps/api/src/routes/analytics-ingest.ts]
+
+- Single event: `{ "key", "event", "campaignId", "countryCode", "url"?, "code"? }`, where `event` is `impression`, `click`, `copy` or `dismiss`.
+- Batch: `{ "key", "events": [{ "eventType", "campaignId", "countryCode", "couponId"?, "pageUrl"?, "discountPercent"? }] }`, 1 to 50 events.
+- Take `campaignId` and `country` from the config response.
+- Responses:
+  - `204` for any payload that matches one of the two shapes.
+  - `400` when the body matches neither shape.
+  - `401` for an unknown key.
+  - `429` when rate limited.
+- What gets dropped silently, still with `204`:
+  - events without `campaignId` and `countryCode`
+  - events whose campaign belongs to another account
+  - `dismiss`, which is accepted but not counted
+  - `redemption`, which is accepted but never stored, because redemptions are recorded only from payment-provider webhooks. Don't send it.
+
+## Common mistakes
+
+1. Putting the key in a `data-key` attribute. It must be the `?key=` query parameter of the script URL.
+2. Writing `{{discount}} off` and expecting a percent sign. `{{discount}}` is the number only; write `{{discount}}% off`.
+3. Using `**bold**` in a template shown by the banner script; the asterisks appear literally.
+4. Using `{{country}}` and expecting the country name; use `{{countryName}}`.
+5. Calling the config endpoint from server code to render prices. There is no server-side pricing API.
+6. Concluding the integration is broken because no banner shows on a developer machine. High-income countries, VPNs, corporate proxies and cloud machines get no discount. Check that the config request returns HTTP 200 JSON: `show: false` with a `reason` means the wiring works. To see the banner, the human can temporarily give their own country a discount in the dashboard campaign.
+7. Allowed domains set on the campaign without the development host, which gives `domain_not_allowed` locally.
+8. Adding both the banner script and `<PPPBanner />`, which shows two banners.
+9. Passing `onLoad`, `onError` or `onPlanSelect` from a Next.js Server Component. Rendering the provider there is fine; callbacks need your own `'use client'` file.
+10. Presenting `localPrice` as the amount charged. It is an estimate; the payment provider charges the exact discounted price in the product's currency.
+11. Setting `baseCurrencyCode` to a currency other than the product's. Leave it unset when your prices are in the product's currency; another value turns conversion off and logs a console warning.
+12. Forgetting `bindPriceElements()` after `init()` in the JS SDK.
+13. Retesting right after a dashboard change in the same tab. The API usually serves a change everywhere within about a minute (in the worst case, about 16 minutes), clients cache the config in `sessionStorage` for 5 minutes, and a dismissed script banner stays hidden for the session. Clear the `gpl_c_*`, `gpl_d_*`, `gpl_react_*` and `gpl_js2_*` keys, or use a new private window.
+14. Using a secret key (`gpl_sk_…`) or inventing a key. The banner endpoints refuse a secret key (`secret_key_not_allowed`). Ask the human for the public key.
+15. Trying to fake the country with a query parameter or header. Not supported; the country comes from Cloudflare only.
+16. Several products and no product id: the API answers for the product of the newest servable campaign. Pass `data-product` or `productId` on pages that belong to a specific product.
+17. Trying to change the campaign's banner text or colors yourself, through GoPayLocal's API or by editing the response. The campaign's design is the human's to change, on the campaign page under **Setup > Banner**. To change the look from site code, use `<PPPBanner />` props or `showBanner()` options, or build a custom banner and report events with `track()`.
+18. Passing `environment` to an SDK, or using a sandbox API host. Neither exists.
+19. Building an A/B split in page code, for example random discounts, two keys or alternating campaigns. The human starts the test in the dashboard and the API assigns the arm.
+20. Promising per-country A/B tests or results, a significance or lift figure, or a no-discount control arm. None exists; results are raw counts and rates per arm.
+
+## Source map
+
+- Config endpoint, `script.js`, `bundle.js`: `apps/api/src/routes/banner-script.ts`
+- Campaign and experiment selection, arm assignment: `apps/api/src/services/banner-selection.ts`
+- A/B test rules and results: `apps/api/src/services/experiment.service.ts`
+- Events endpoint: `apps/api/src/routes/analytics-ingest.ts`
+- Banner bundle: `packages/banner/src/index.ts`, `packages/banner/src/setup.ts`
+- Request, visitor id and event helpers shared by all three clients: `packages/js-sdk/src/core.ts`
+- JS SDK: `packages/js-sdk/src` (`client.ts`, `banner.ts`, `types.ts`)
+- React SDK: `packages/react-sdk/src` (`provider.tsx`, `types.ts`, `hooks/`, `components/`)
+- Shared types and defaults: `packages/shared/src/types/index.ts`, `packages/shared/src/constants/index.ts`

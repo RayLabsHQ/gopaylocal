@@ -1,0 +1,67 @@
+---
+title: Carrd
+description: Add GoPayLocal PPP discounts to your Carrd site.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Add GoPayLocal to any Carrd site using Carrd's built-in **Embed** element.
+
+## Installation
+
+<Steps>
+
+1. **Get your API key** from the [GoPayLocal dashboard](https://app.gopaylocal.com)
+
+2. **Add an Embed element to your site**
+
+   In the Carrd editor, click **+** to add a new element and choose **Embed**.
+
+   Set the type to **Code**, then paste the following into the code field:
+
+   ```html
+   <script
+     src="https://api.gopaylocal.com/v1/banner/script.js?key=gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+     data-product="prod_abc123"
+     async
+   ></script>
+   ```
+
+   Replace `gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef` with your actual API key.
+
+   `data-product` is the id of the product this site sells; the campaign page in the dashboard shows the snippet with your key and product filled in. You can leave it out if you have only one product. See [all script attributes](/banner/installation#script-attributes).
+
+3. **Position the Embed element**
+
+   Place the Embed element anywhere on the page — the banner will render in a fixed position over your site. You can hide the element in the layout if you don't want a visible placeholder.
+
+4. **Configure discounts** in the GoPayLocal dashboard
+
+5. **Publish your site**
+
+</Steps>
+
+That's it. Visitors from countries with lower purchasing power will see a discount banner.
+
+<Aside type="tip">
+Carrd's **Pro Standard** plan (and above) is required to use Embed elements with external scripts. If you're on the free plan, you'll need to upgrade.
+</Aside>
+
+## Data Attributes
+
+The banner script does not change prices on the page. To show discounted prices, use the [JavaScript SDK's data attributes](/js/data-attributes): add an Embed element with your price markup and the SDK, for example:
+
+```html
+<p>Pro: <span data-gopaylocal-price="9.99">$9.99</span>/mo</p>
+
+<script type="module">
+  import { GoPayLocal } from 'https://esm.sh/@gopaylocal/js';
+  const gpl = new GoPayLocal({ apiKey: 'gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef', productId: 'prod_abc123' });
+  await gpl.init();
+  gpl.bindPriceElements();
+</script>
+```
+
+<Aside type="note">
+Carrd's own text elements don't take custom attributes, so the prices to update have to live in the Embed element's HTML.
+</Aside>

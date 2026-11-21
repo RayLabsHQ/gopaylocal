@@ -1,0 +1,27 @@
+# GoPayLocal marketing site: example configuration.
+# NOT needed for self-hosting. This is the gopaylocal.com landing site (its links point
+# at the hosted service); a self-hosted install works without it. It is here so the
+# repository builds and deploys as a whole.
+# Copy over wrangler.toml if you want to change anything below:
+#   cp apps/web/wrangler.example.toml apps/web/wrangler.toml
+# This Worker only serves static files (no code, no bindings, no secrets, no build-time
+# variables). The canonical site URL is `site` in apps/web/astro.config.mjs.
+# Build and deploy:
+#   pnpm --filter @gopaylocal/web build
+#   pnpm --filter @gopaylocal/web run deploy:worker
+
+# Any name works; it becomes part of the workers.dev hostname.
+name = "gopaylocal-web"
+compatibility_date = "2025-01-01"
+
+# Optional. Serve on your own hostname (the zone must be active on Cloudflare).
+# Without it the Worker is reachable on its workers.dev hostname only. Top-level
+# key: keep it above the [assets] table.
+# routes = [
+#   { pattern = "<YOUR_DOMAIN>", custom_domain = true },
+# ]
+
+# Required. The Astro build output; unknown paths get the site's 404 page.
+[assets]
+directory = "dist"
+not_found_handling = "404-page"

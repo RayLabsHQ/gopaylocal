@@ -1,0 +1,27 @@
+# GoPayLocal documentation site: example configuration.
+# Optional for self-hosting: the public docs at https://docs.gopaylocal.com cover the
+# same code. Deploy your own copy if you change the code or want docs on your domain.
+# Copy over wrangler.toml if you want to change anything below:
+#   cp apps/docs/wrangler.example.toml apps/docs/wrangler.toml
+# This Worker only serves static files (no code, no bindings, no secrets, no build-time
+# variables). The canonical site URL is `site` in apps/docs/astro.config.mjs; change it
+# to your hostname so canonical links, llms.txt and the sitemap point at your copy.
+# Build and deploy:
+#   pnpm --filter @gopaylocal/docs build
+#   pnpm --filter @gopaylocal/docs run deploy:worker
+
+# Any name works; it becomes part of the workers.dev hostname.
+name = "gopaylocal-docs"
+compatibility_date = "2025-01-01"
+
+# Optional. Serve on your own hostname (the zone must be active on Cloudflare).
+# Without it the Worker is reachable on its workers.dev hostname only. Top-level
+# key: keep it above the [assets] table.
+# routes = [
+#   { pattern = "docs.<YOUR_DOMAIN>", custom_domain = true },
+# ]
+
+# Required. The Starlight build output; unknown paths get the site's 404 page.
+[assets]
+directory = "dist"
+not_found_handling = "404-page"

@@ -1,0 +1,57 @@
+---
+title: Differences from hosted
+description: What changes when GoPayLocal runs in self-hosted mode compared with the hosted service at gopaylocal.com - limits, branding, billing, email and operations.
+---
+
+Self-hosted and hosted GoPayLocal run the same code. Every feature is available in both: VPN detection, A/B testing, multi-currency, charm pricing and every payment integration. The differences come from one setting, `SELF_HOSTED="true"`, and from who operates the service.
+
+## Limits, branding and billing
+
+| | Hosted Free | Hosted Pro | Self-hosted |
+|---|---|---|---|
+| Price | $0 | $19 per month or $180 per year | Your Cloudflare and database costs |
+| Products | 1 | Unlimited | Unlimited |
+| API calls per month | 10,000 | Unlimited (fair use) | Unlimited |
+| Team members | 1 | Unlimited | Unlimited |
+| Analytics history | 7 days | 365 days | Everything in your database |
+| "Powered by GoPayLocal" link on the banner | Shown | Removed | Removed |
+| Billing | None needed | Dodo Payments | Disabled |
+
+These values come from `PLAN_LIMITS` and `SELF_HOSTED_LIMITS` in `packages/shared/src/constants/index.ts`.
+
+What self-hosted mode changes in practice:
+
+- **No API-call quota.** On hosted Free, the banner endpoint answers `quota_exceeded` once an organization passes 10,000 calls in a month. A self-hosted API never does.
+- **No seat cap.** Invitations are never refused for team size.
+- **Billing endpoints are off.** Checkout and the billing portal answer `404` with `{"code": "billing_disabled"}`. The dashboard hides the Billing tab and its upgrade prompts, and no Dodo Payments settings are needed.
+- **No plan alerts.** The admin app raises no limit or fair-use alerts, and an organization's details show "Self-hosted (unlimited)". On hosted Pro, an admin alert fires when an organization passes 20 million API calls in a month; nothing is blocked.
+
+## Operations
+
+| | Hosted | Self-hosted |
+|---|---|---|
+| Who runs it | GoPayLocal | You: Cloudflare account, database, backups, upgrades, monitoring |
+| Where data lives | GoPayLocal's Cloudflare account and database | Your Cloudflare account and your database |
+| Updates | Deployed by GoPayLocal | You pull and deploy them ([Upgrading](/self-hosting/upgrading/)) |
+| Old analytics | Deleted once they are 24 months old | Kept until you delete them yourself |
+| VPN data refresh | Automatic | Automatic on Workers Paid; by hand on Workers Free ([VPN detection](/guides/vpn-detection/#self-hosting-loading-the-data)) |
+| Sign-in | Google and GitHub | The OAuth apps you create ([OAuth setup](/self-hosting/oauth/)) |
+| Team invitation emails | Sent | Only with your own Azure Communication Services resource (`ACS_CONNECTION_STRING`, `EMAIL_FROM` and `APP_BASE_URL`); see [Invitation emails](/self-hosting/configuration/#invitation-emails). Invitation links can always be copied from the dashboard. |
+
+## Outbound connections
+
+A self-hosted API contacts GoPayLocal's servers for nothing. It connects to:
+
+- the payment providers your users connect (Stripe, Paddle and the others), using their own API keys;
+- Google and GitHub during sign-in;
+- the public VPN and Tor lists during the daily VPN refresh: `raw.githubusercontent.com` (the X4BNet lists), `check.torproject.org` and `mask-api.icloud.com`;
+- exchange-rate feeds for local prices, four times a day: by default `cdn.jsdelivr.net`, `currency-api.pages.dev` and `api.frankfurter.dev`. Set `FX_RATES_URL` and `FX_RATES_FALLBACK_URL` to your own feeds, or `FX_RATES_URL` to `off` ([Variables](/self-hosting/configuration/#variables));
+- Azure Communication Services, only if you set `ACS_CONNECTION_STRING`.
+
+The [JavaScript SDK](/js/installation#self-hosting) and the [React provider](/react/provider#self-hosting) call `https://api.gopaylocal.com` unless you pass `apiBase`. The [banner script tag](/banner/installation#self-hosting) calls whichever API served it.
+
+In the browser, the dashboard and the admin app load their fonts from Google Fonts (`fonts.googleapis.com`).
+
+## License
+
+The server is licensed AGPL-3.0-only. Before you modify it and let other people use it, read [If you run your own copy of the service](https://github.com/RayLabsHQ/gopaylocal/blob/main/LICENSING.md#if-you-run-your-own-copy-of-the-service) in `LICENSING.md`.

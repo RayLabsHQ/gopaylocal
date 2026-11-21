@@ -1,0 +1,67 @@
+---
+title: Analytics
+description: What the GoPayLocal dashboard's Overview page shows, where the numbers come from and how far back they go.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+GoPayLocal counts four things per day, campaign and country: banner **impressions**, **clicks**, **copies** of a coupon code, and **redemptions**. The dashboard's **Overview** page shows the totals.
+
+## Where the Numbers Come From
+
+| Metric | Recorded when |
+|---|---|
+| **Impressions** | The banner script or an SDK shows the banner |
+| **Clicks** | A visitor clicks the banner's button |
+| **Copies** | A visitor copies the coupon code |
+| **Redemptions** | Your payment provider reports, through its webhook, an order that used one of the campaign's codes |
+
+Redemptions come only from payment-provider webhooks. A browser can't report a redemption, so redemption counts can't be inflated by someone holding your public key. Dismissals are not counted.
+
+Events are counted as they arrive, and a redemption appears once the provider's webhook reaches GoPayLocal.
+
+## Overview Page
+
+Choose the range at the top: **Last 7 days**, **Last 30 days**, **Last 90 days** or **Last 365 days**.
+
+| Card | What it shows |
+|---|---|
+| **API Calls** | The number of banner impressions in the range, with the number of redemptions under it. This is not the metered API-call count; see [Billing](/dashboard/billing/) for that. |
+| **Active Products** | The number of products in the selected environment (Live or Test), with your plan |
+| **Revenue Impact** | The discount given on redeemed orders, per currency (amounts in different currencies are never added together), with the number of discounts applied |
+| **Countries Reached** | The number of countries with events in the range |
+
+Below the cards, **Top Countries** lists each country code with its impressions (**Hits**), most first.
+
+The Overview totals cover all of the workspace's campaigns. Apart from **Active Products**, they don't change with the Live/Test switch.
+
+An [A/B test](/guides/ab-testing/) shows its two campaigns' numbers side by side on its own page.
+
+## Export
+
+**Export** downloads the country breakdown for the selected range as a CSV file with the columns Country, Impressions, Clicks, Copies, Redemptions and Revenue Saved (by currency). It is available on every plan.
+
+## How Far Back You Can See
+
+| Plan | History |
+|---|---|
+| Free | 7 days |
+| Pro | 365 days |
+| Self-hosted | No limit |
+
+A longer range than your plan allows shows only your plan's window. See [Billing](/dashboard/billing/).
+
+The hosted service deletes analytics and API-call counts once they are 24 months old. A self-hosted deployment never deletes them.
+
+## Who Sees What
+
+The owner and admins see the whole workspace. A member sees the numbers for the products they have access to. See [Team](/dashboard/team/).
+
+## Privacy
+
+<Aside type="note">
+Analytics hold counts per day, campaign and country. They don't contain IP addresses, visitor IDs or page URLs.
+</Aside>
+
+- Country-level only: no city or region.
+- The banner script sets no cookies. It keeps a random visitor ID in `localStorage` (used to keep a visitor in the same A/B test arm) and the latest banner response and a dismissal in `sessionStorage`. `data-no-storage` turns all of that off; see [Banner installation](/banner/installation/).

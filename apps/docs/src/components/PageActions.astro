@@ -1,0 +1,290 @@
+---
+/**
+ * Page actions: copy the page as Markdown, view the Markdown twin, or open the
+ * page in Claude / ChatGPT with a prompt that points at the Markdown URL.
+ *
+ * Without JavaScript the copy button stays hidden and the menu is a native
+ * <details> disclosure holding plain links, so everything except copying works.
+ */
+import { markdownPath, markdownUrl } from '../pages/_llms/urls';
+
+const { id, entry } = Astro.locals.starlightRoute;
+const site = Astro.site ?? new URL(Astro.url.origin);
+const mdPath = markdownPath(id);
+const mdUrl = markdownUrl(id, site);
+const prompt = `Read ${mdUrl} (the GoPayLocal docs page "${entry.data.title}") so I can ask questions about it.`;
+const claudeHref = `https://claude.ai/new?q=${encodeURIComponent(prompt)}`;
+const chatgptHref = `https://chatgpt.com/?q=${encodeURIComponent(prompt)}`;
+---
+
+<page-actions class="gpl-actions" data-md-url={mdPath}>
+  <button type="button" class="gpl-actions__copy" data-copy hidden>
+    <svg class="gpl-actions__icon gpl-actions__icon--copy" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
+    <svg class="gpl-actions__icon gpl-actions__icon--done" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+    <span data-label>Copy page</span>
+  </button>
+  <details class="gpl-actions__menu">
+    <summary class="gpl-actions__toggle">
+      <span class="gpl-actions__toggle-text">Page actions</span>
+      <svg class="gpl-actions__icon gpl-actions__chevron" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+    </summary>
+    <ul class="gpl-actions__list">
+      <li>
+        <a href={mdPath} type="text/markdown">
+          <svg class="gpl-actions__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>
+          View as Markdown
+        </a>
+      </li>
+      <li>
+        <a href={claudeHref} target="_blank" rel="noopener noreferrer">
+          <svg class="gpl-actions__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>
+          Open in Claude<span class="sr-only"> (opens in a new tab)</span>
+        </a>
+      </li>
+      <li>
+        <a href={chatgptHref} target="_blank" rel="noopener noreferrer">
+          <svg class="gpl-actions__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>
+          Open in ChatGPT<span class="sr-only"> (opens in a new tab)</span>
+        </a>
+      </li>
+    </ul>
+  </details>
+  <span class="sr-only" role="status" aria-live="polite" data-status></span>
+</page-actions>
+
+<script>
+  class PageActions extends HTMLElement {
+    #text: Promise<string> | null = null;
+
+    connectedCallback() {
+      const url = this.dataset.mdUrl;
+      const copy = this.querySelector<HTMLButtonElement>('[data-copy]');
+      const label = copy?.querySelector<HTMLElement>('[data-label]');
+      const status = this.querySelector<HTMLElement>('[data-status]');
+      const menu = this.querySelector<HTMLDetailsElement>('details');
+      const toggle = menu?.querySelector<HTMLElement>('summary');
+      if (!url || !copy || !label || !status || !menu || !toggle) return;
+
+      // Fetch the Markdown once; forget a failed request so a retry can succeed.
+      const load = () =>
+        (this.#text ??= fetch(url, { headers: { Accept: 'text/markdown, text/plain' } }).then((res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.text();
+        })).catch((err) => {
+          this.#text = null;
+          throw err;
+        });
+      const prefetch = () => load().catch(() => {});
+
+      let resetTimer: number | undefined;
+      const flash = (text: string, announcement: string, state: 'done' | 'error') => {
+        label.textContent = text;
+        copy.dataset.state = state;
+        status.textContent = announcement;
+        window.clearTimeout(resetTimer);
+        resetTimer = window.setTimeout(() => {
+          label.textContent = 'Copy page';
+          delete copy.dataset.state;
+          status.textContent = '';
+        }, 2000);
+      };
+
+      copy.hidden = false;
+      this.dataset.enhanced = '';
+      copy.addEventListener('pointerenter', prefetch, { once: true });
+      copy.addEventListener('focus', prefetch, { once: true });
+      copy.addEventListener('click', async () => {
+        try {
+          // Passing a promise to ClipboardItem keeps the write inside the click's
+          // user activation in Safari even though the text may still be loading.
+          if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+            const blob = load().then((text) => new Blob([text], { type: 'text/plain' }));
+            await navigator.clipboard.write([new ClipboardItem({ 'text/plain': blob })]);
+          } else {
+            await navigator.clipboard.writeText(await load());
+          }
+          flash('Copied', 'Page copied as Markdown', 'done');
+        } catch {
+          try {
+            await navigator.clipboard.writeText(await load());
+            flash('Copied', 'Page copied as Markdown', 'done');
+          } catch {
+            flash('Copy failed', 'Could not copy the page. Use View as Markdown instead.', 'error');
+          }
+        }
+      });
+
+      // Menu: close on Escape (focus back on the toggle), outside click, focus leaving, or after choosing a link.
+      const close = (refocus: boolean) => {
+        if (!menu.open) return;
+        menu.open = false;
+        if (refocus) toggle.focus();
+      };
+      menu.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          close(true);
+        }
+      });
+      menu.addEventListener('focusout', (event) => {
+        const next = event.relatedTarget as Node | null;
+        if (next && !menu.contains(next)) close(false);
+      });
+      menu.addEventListener('click', (event) => {
+        if ((event.target as Element).closest('a')) close(false);
+      });
+      document.addEventListener('click', (event) => {
+        if (!menu.contains(event.target as Node)) close(false);
+      });
+    }
+  }
+
+  if (!customElements.get('page-actions')) customElements.define('page-actions', PageActions);
+</script>
+
+<style>
+  .gpl-actions {
+    --gpl-actions-border: oklch(1 0 0 / 22%);
+    --gpl-actions-hover: var(--secondary);
+    position: relative;
+    display: inline-flex;
+    align-items: stretch;
+    flex: none;
+    font-size: 0.8125rem;
+    line-height: 1;
+  }
+
+  .gpl-actions__copy,
+  .gpl-actions__toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 2rem;
+    padding: 0 0.7rem;
+    color: var(--foreground);
+    background: var(--background);
+    border: 1px solid var(--gpl-actions-border);
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.15s;
+  }
+
+  .gpl-actions__copy[hidden] {
+    display: none;
+  }
+
+  .gpl-actions__copy {
+    border-radius: calc(var(--radius) - 2px) 0 0 calc(var(--radius) - 2px);
+    border-inline-end-width: 0;
+  }
+
+  .gpl-actions__copy:hover,
+  .gpl-actions__toggle:hover,
+  .gpl-actions__menu[open] > .gpl-actions__toggle {
+    background: var(--gpl-actions-hover);
+  }
+
+  .gpl-actions__copy[data-state='error'] {
+    color: var(--destructive);
+  }
+
+  .gpl-actions__icon {
+    width: 0.875rem;
+    height: 0.875rem;
+    flex: none;
+  }
+
+  .gpl-actions__icon--done,
+  .gpl-actions__copy[data-state='done'] .gpl-actions__icon--copy {
+    display: none;
+  }
+
+  .gpl-actions__copy[data-state='done'] .gpl-actions__icon--done {
+    display: block;
+  }
+
+  /* Static so the dropdown positions against the whole control, not just the toggle. */
+  .gpl-actions__menu {
+    position: static;
+    display: flex;
+  }
+
+  .gpl-actions__toggle {
+    list-style: none;
+    border-radius: calc(var(--radius) - 2px);
+    user-select: none;
+  }
+
+  .gpl-actions__toggle::-webkit-details-marker {
+    display: none;
+  }
+
+  /* Enhanced (JS on): the toggle becomes the right half of a split button, icon only. */
+  .gpl-actions[data-enhanced] .gpl-actions__toggle {
+    padding: 0 0.5rem;
+    border-radius: 0 calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0;
+  }
+
+  .gpl-actions[data-enhanced] .gpl-actions__toggle-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .gpl-actions__chevron {
+    transition: transform 0.15s;
+  }
+
+  .gpl-actions__menu[open] .gpl-actions__chevron {
+    transform: rotate(180deg);
+  }
+
+  .gpl-actions__copy:focus-visible,
+  .gpl-actions__toggle:focus-visible,
+  .gpl-actions__list a:focus-visible {
+    outline: 2px solid var(--foreground);
+    outline-offset: 2px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .gpl-actions__list {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    inset-inline-start: 0;
+    z-index: 20;
+    min-width: 12.5rem;
+    margin: 0;
+    padding: 0.25rem;
+    list-style: none;
+    background: var(--background);
+    border: 1px solid var(--gpl-actions-border);
+    border-radius: calc(var(--radius) - 2px);
+  }
+
+  .gpl-actions__list li {
+    margin: 0;
+  }
+
+  .gpl-actions__list a {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.6rem;
+    color: var(--foreground);
+    text-decoration: none;
+    border-radius: calc(var(--radius) - 4px);
+    white-space: nowrap;
+  }
+
+  .gpl-actions__list a:hover {
+    background: var(--gpl-actions-hover);
+  }
+</style>

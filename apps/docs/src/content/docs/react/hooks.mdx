@@ -1,0 +1,269 @@
+---
+title: React Hooks
+description: API reference for usePPP() and usePrice() hooks in the GoPayLocal React SDK.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The React SDK provides two hooks for accessing PPP data and computing discounted prices.
+
+<Aside type="note">
+In Next.js App Router, call hooks from files marked `'use client'`. On the server and during the first client render, `isLoading` is `true` and prices are your base prices; the discount appears after hydration.
+</Aside>
+
+## usePPP
+
+The primary hook for accessing all PPP data. Returns the full context value from the nearest `GoPayLocalProvider`.
+
+```tsx
+import { usePPP } from '@gopaylocal/react';
+
+function PricingBanner() {
+  const {
+    discount,
+    country,
+    flag,
+    code,
+    currencyCode,
+    localPrice,
+    formatPrice,
+    isLoading,
+    error,
+    data,
+    experimentId,
+    variant,
+    track,
+  } = usePPP();
+
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return null; // Fail silently
+
+  if (discount > 0) {
+    return (
+      <div>
+        {flag} {discount}% off for {data?.countryName}!
+        <br />
+        Use code <strong>{code}</strong> at checkout.
+        <br />
+        Pro plan: <span>{formatPrice(localPrice(19))}</span>/mo ({currencyCode})
+      </div>
+    );
+  }
+
+  return null;
+}
+```
+
+### Return Value
+
+| Property | Type | Description |
+|---|---|---|
+| `data` | `PPPResponse \| null` | The response when a discount applies; `null` while loading, on error, or with no discount |
+| `isLoading` | `boolean` | Whether the API request is in flight |
+| `error` | `Error \| null` | Error from the API request (including the 8-second timeout) |
+| `country` | `string \| null` | ISO country code (e.g., `'IN'`) when a discount applies |
+| `discount` | `number` | Discount percentage (0-100); `0` without a discount |
+| `code` | `string \| null` | Coupon code |
+| `baseCurrencyCode` | `string` | The currency the prices you pass in are written in: the provider's `baseCurrencyCode`, else your product's currency from the API, else `'USD'` |
+| `baseCurrencySymbol` | `string` | The symbol of `baseCurrencyCode` |
+| `currencyCode` | `string` | The currency prices are shown in: the visitor's when they are converted (`fxAsOf` is set), else `baseCurrencyCode` |
+| `currencySymbol` | `string` | The symbol of `currencyCode` |
+| `fxRate` | `number` | The exchange rate prices are converted with; `1` when they are not converted |
+| `fxAsOf` | `string \| null` | The date of the rates (`YYYY-MM-DD`) when prices are converted estimates; `null` when they stay in `baseCurrencyCode` |
+| `charmPricingStrategy` | `'none' \| 'dot99' \| 'round_x9' \| 'nearest_5' \| 'region_aware'` | The campaign's [charm pricing](/guides/charm-pricing/), used to round converted prices |
+| `localPrice` | `(basePrice: number) => number` | A base price after the discount, in `currencyCode` |
+| `localOriginalPrice` | `(basePrice: number) => number` | A base price before the discount, in `currencyCode` |
+| `formatPrice` | `(price: number, options?: Intl.NumberFormatOptions) => string` | Format a number in `currencyCode` |
+| `flag` | `string` | Country flag emoji |
+| `campaignId` | `string \| null` | The campaign that produced the discount (the assigned arm during an experiment) |
+| `experimentId` | `string \| null` | The running [A/B experiment](/react/provider#ab-experiments)'s id, or `null`. Also set when the visitor's arm has no discount. |
+| `variant` | `'a' \| 'b' \| null` | The visitor's arm: `'a'` (control), `'b'` (variant), or `null` |
+| `track` | `(event: 'impression' \| 'click' \| 'copy' \| 'dismiss') => void` | Report a banner interaction to your GoPayLocal analytics |
+
+### Helper Functions
+
+**`localPrice(basePrice)`** and **`localOriginalPrice(basePrice)`** — A base price after and before the discount, in `currencyCode`. When `fxAsOf` is set they are converted with `fxRate` and rounded with the campaign's charm pricing, using the same code as the API: the discounted price up, the original down. Otherwise both are exact, rounded to the currency's minor unit (the cent for USD, the whole yen for JPY).
+
+```tsx
+const { localPrice, localOriginalPrice } = usePPP();
+
+// A visitor from India with 60% off (rates of 18 November 2026)
+localPrice(19);         // → 719
+localOriginalPrice(19); // → 1769
+
+// A visitor from the United States with 60% off
+localPrice(19);         // → 7.6
+localOriginalPrice(19); // → 19
+```
+
+Prices are converted only when `baseCurrencyCode` is your product's currency, which it is unless you set the provider's `baseCurrencyCode` to another one. In that case the provider logs one console warning when it skips a conversion. Converted prices are estimates; see [usePrice](#useprice).
+
+**`formatPrice(amount, options?)`** — Formats a number using `Intl.NumberFormat` in `currencyCode`, as given, with no discount or conversion, in the currency's usual decimal digits unless `options` say otherwise: 2 for USD, 3 for KWD, none for JPY or PKR (an amount with finer decimals keeps them, up to the currency's minor unit, so PKR `1838.14` stays `PKR 1,838.14`). [`usePrice()`](#useprice) also drops the decimals of a whole amount.
+
+```tsx
+const { formatPrice } = usePPP();
+
+// A visitor from the United States
+formatPrice(7.6); // → "$7.60"
+formatPrice(19);  // → "$19.00"
+formatPrice(19, { minimumFractionDigits: 0, maximumFractionDigits: 0 }); // → "$19"
+```
+
+Output follows the browser's locale, so a visitor may see for example `US$7.60`.
+
+**`track(event)`** — Use it when you build your own banner instead of [`<PPPBanner>`](/react/components#pppbanner), which reports its own events. The event is attributed to the current campaign and the visitor's country; it does nothing without a discount.
+
+```tsx
+import { useEffect } from 'react';
+import { usePPP } from '@gopaylocal/react';
+
+function CouponNotice() {
+  const { code, track } = usePPP();
+
+  useEffect(() => {
+    if (code) track('impression');
+  }, [code, track]);
+
+  if (!code) return null;
+  return (
+    <button onClick={() => { navigator.clipboard.writeText(code); track('copy'); }}>
+      Copy {code}
+    </button>
+  );
+}
+```
+
+### Error Handling
+
+`usePPP()` throws if called outside a `GoPayLocalProvider`:
+
+```
+Error: usePPP() must be used inside a <GoPayLocalProvider>.
+Wrap your component tree with <GoPayLocalProvider apiKey="...">.
+```
+
+<Aside type="tip">
+Wrap only the part of your app that needs PPP data. You don't have to wrap the entire app if only your pricing page uses PPP.
+</Aside>
+
+---
+
+## usePrice
+
+A convenience hook that computes a fully formatted discounted price from a base price. Built on top of `usePPP()`.
+
+When the API converted your product's price for this visitor, `usePrice()` converts your price with the same rate and rounds it with the campaign's [charm pricing](/guides/charm-pricing/), exactly as the API rounds your product's price, so `<PPPBanner>` and your price components show the same numbers. Otherwise the price stays in your base currency, exact.
+
+<Aside type="caution" title="Local prices are estimates">
+Local prices are estimates. They convert your price at the day's mid-market rate and round up to a charm price, at most 8% above the converted amount and never below it (an amount under 13 of the currency's smallest unit can round up by more than 8%, to the next one). Your payment provider charges the exact discounted price in your currency; the amount on the customer's statement depends on their bank's exchange rate.
+
+Visitors who pay in your currency see the exact price. See [Multi-currency display](/guides/multi-currency/).
+</Aside>
+
+```tsx
+import { usePrice } from '@gopaylocal/react';
+
+function PriceDisplay() {
+  const {
+    formatted,
+    formattedOriginal,
+    hasDiscount,
+    discount,
+    integer,
+    decimal,
+    currencySymbol,
+    currencyCode,
+  } = usePrice({ price: 19 });
+
+  return (
+    <div>
+      {hasDiscount && (
+        <>
+          <s>{formattedOriginal}</s>
+          <span> {discount}% off</span>
+        </>
+      )}
+      <strong>{formatted}</strong>
+    </div>
+  );
+}
+```
+
+### Options
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `price` | `number` | **(required)** | Base price in your base currency |
+| `localize` | `boolean` | `true` | Convert to the visitor's currency when possible. `false` keeps the price in your base currency, exact. |
+| `showDecimal` | `boolean` | — | `true` always shows the currency's decimal digits (in currencies written in whole units, such as JPY, PKR or IDR, only an amount that has decimals shows them), `false` never does. Unset, a whole amount shows none (`₹719`, `$19`) and any other keeps them (`$7.60`). |
+| `minimumDecimalDigits` | `number` | — | Minimum decimal digits for formatting |
+| `maximumDecimalDigits` | `number` | — | Maximum decimal digits for formatting |
+
+### Return Value
+
+The examples are for `price: 19` and a visitor from India with 60% off (rates of 18 November 2026).
+
+| Property | Type | Description |
+|---|---|---|
+| `originalPrice` | `number` | The base price you passed (`19`) |
+| `discountedPrice` | `number` | The price after the discount, in your base currency, unrounded (about `7.6`) |
+| `localPrice` | `number` | The price after the discount in `currencyCode`: converted and charm-rounded up when `converted`, otherwise exact (`719`) |
+| `localOriginalPrice` | `number` | The price before the discount in `currencyCode`, charm-rounded down when `converted` (`1769`) |
+| `converted` | `boolean` | Whether the prices were converted to the visitor's currency, and are therefore estimates (`true`) |
+| `formatted` | `string` | Formatted `localPrice` (`"₹719"`) |
+| `formattedOriginal` | `string` | Formatted `localOriginalPrice` (`"₹1,769"`) |
+| `discount` | `number` | Discount percentage, 0-100 (`60`) |
+| `integer` | `string` | Integer part of `formatted`, with its group separators (`"719"`) |
+| `decimal` | `string` | Decimal digits of `formatted`; empty when it shows none (`""`) |
+| `currencySymbol` | `string` | Currency symbol of `formatted` (`"₹"`) |
+| `currencyCode` | `string` | Currency code of `formatted` (`"INR"`) |
+| `hasDiscount` | `boolean` | Whether a discount is active (`true`) |
+
+### Examples
+
+**Simple price display:**
+
+```tsx
+const { formatted } = usePrice({ price: 19 });
+// → "₹719"  (a visitor from India with 60% off)
+// → "$7.60" (a visitor from the United States with 60% off)
+// → "$19"   (no discount)
+```
+
+**Strikethrough pricing:**
+
+```tsx
+function StrikethroughPrice({ price }: { price: number }) {
+  const { formatted, formattedOriginal, hasDiscount } = usePrice({ price });
+
+  return (
+    <span>
+      {hasDiscount && <s style={{ opacity: 0.5 }}>{formattedOriginal}</s>}{' '}
+      <strong>{formatted}</strong>
+    </span>
+  );
+}
+```
+
+**Custom price layout with separate integer/decimal:**
+
+```tsx
+function FancyPrice({ price }: { price: number }) {
+  const { integer, decimal, currencySymbol } = usePrice({ price });
+
+  return (
+    <span style={{ fontSize: '2rem' }}>
+      <span style={{ fontSize: '1rem' }}>{currencySymbol}</span>
+      {integer}
+      {decimal && <sup style={{ fontSize: '0.8rem' }}>.{decimal}</sup>}
+    </span>
+  );
+}
+```
+
+**No decimals:**
+
+```tsx
+const { formatted } = usePrice({ price: 19, showDecimal: false });
+// → "$8" (a visitor from the United States with 60% off: $7.60 rounded to a whole number)
+```

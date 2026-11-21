@@ -1,0 +1,142 @@
+---
+title: Auto-Apply Discounts
+description: Apply the visitor's PPP code in your own checkout, so they don't have to copy and paste it.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+With auto-apply, your checkout puts the visitor's PPP code on the order for them instead of asking them to copy it from the banner. GoPayLocal gives your page the code; your checkout passes it to the payment provider.
+
+<Aside type="note">
+GoPayLocal serves the same code whichever **Discount Delivery** a campaign uses, and the banner still shows it. **Auto-apply at checkout** tells GoPayLocal that your checkout applies the code: such a campaign needs a payment integration before it can be active, and it is paused if that integration is disconnected. Applying the code is up to your checkout code, as described below.
+</Aside>
+
+## Auto-Apply vs. Coupon Codes
+
+| | Coupon code | Auto-apply |
+|---|---|---|
+| **Visitor** | Copies the code from the banner and enters it at checkout | Gets the discount without entering anything |
+| **Setup** | None beyond the banner | Your checkout code passes the code to the provider |
+| **Providers** | All nine | Those whose checkout can take a code (see below) |
+| **Code** | The same code for both: one per country and discount | |
+
+## How It Works
+
+1. The visitor loads your pricing page.
+2. The banner script or SDK fetches the visitor's discount and code from GoPayLocal.
+3. When the visitor clicks **Buy**, your page sends the code to your server with the order.
+4. Your server creates the provider's checkout with the code applied.
+
+## Step 1: Get the Code on Your Page
+
+With the JavaScript SDK:
+
+```js
+import { GoPayLocal } from '@gopaylocal/js';
+
+const gpl = new GoPayLocal({ apiKey: 'gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' });
+await gpl.init();
+
+const discountCode = gpl.getCode(); // "PPP-IN30-K7QX", or null
+```
+
+With the script tag, listen for the `gopaylocal:config` event, which carries the same `code` (see [Reading the discount](/banner/installation/#reading-the-discount-and-experiment-arm)). With React, use the hooks described in [React hooks](/react/hooks/).
+
+## Step 2: Send It to Your Server
+
+```js
+async function handleCheckout() {
+  const res = await fetch('/api/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ planId: 'pro_monthly', discountCode: gpl.getCode() }),
+  });
+  const { checkoutUrl } = await res.json();
+  window.location.href = checkoutUrl;
+}
+```
+
+## Step 3: Apply It in the Provider's Checkout
+
+### Stripe
+
+A Checkout Session takes the promotion code's ID, so look it up by the code first. Stripe codes from GoPayLocal have no hyphens (`PPPIN30K7QX`).
+
+```js
+app.post('/api/checkout', async (req, res) => {
+  const { planId, discountCode } = req.body;
+
+  let discounts;
+  if (discountCode) {
+    const { data } = await stripe.promotionCodes.list({ code: discountCode, active: true, limit: 1 });
+    if (data[0]) discounts = [{ promotion_code: data[0].id }];
+  }
+
+  const session = await stripe.checkout.sessions.create({
+    line_items: [{ price: getPriceId(planId), quantity: 1 }],
+    mode: 'subscription',
+    ...(discounts ? { discounts } : { allow_promotion_codes: true }),
+    success_url: 'https://yoursite.com/success',
+    cancel_url: 'https://yoursite.com/cancel',
+  });
+
+  res.json({ checkoutUrl: session.url });
+});
+```
+
+Without a code, `allow_promotion_codes: true` still lets the customer type one. See [Stripe](/integrations/stripe/).
+
+### Paddle
+
+```js
+Paddle.Checkout.open({
+  items: [{ priceId: 'pri_xxx', quantity: 1 }],
+  discountCode: 'PPPIN30K7QX',
+});
+```
+
+See [Paddle](/integrations/paddle/).
+
+### Dodo Payments
+
+Create a Checkout Session on your server with the code in `discount_codes`. Static payment links take no code.
+
+```json
+POST /checkouts
+{
+  "product_cart": [{ "product_id": "prod_xxx", "quantity": 1 }],
+  "discount_codes": ["PPP-IN30-K7QX"],
+  "return_url": "https://yoursite.com/success"
+}
+```
+
+### Gumroad
+
+Add the code to the product link: `https://yourname.gumroad.com/l/product/PPP-IN30-K7QX`.
+
+### Chargebee
+
+Pass the code in `coupon_ids` when you create the hosted checkout page (`POST /hosted_pages/checkout_new_for_items`). See [Chargebee](/integrations/chargebee/).
+
+### Creem
+
+Pass the code in `discount_code` when you create the checkout. See [Creem](/integrations/creem/).
+
+### WooCommerce
+
+On WooCommerce 10.0 or later, send the visitor to a checkout link that applies the code: `https://<store>/checkout-link/?products=<productId>:1&coupon=<code>`. See [WooCommerce](/integrations/woocommerce/).
+
+## Providers Without Auto-Apply
+
+| Provider | Why |
+|---|---|
+| Polar | Polar's checkout API applies a discount by its ID, not by its code |
+| Whop | Whop's checkout API has no promo-code field |
+
+For these, the visitor copies the code from the banner and enters it at checkout.
+
+## Best Practices
+
+1. **Let the provider check the code.** The provider rejects a code that doesn't exist or has been deleted, so don't add a price change of your own on top.
+2. **Fall back gracefully.** If the code can't be applied, keep the coupon field available at checkout.
+3. **Show the discount.** Even with auto-apply, tell the visitor they're getting a regional price (e.g., "Prices adjusted for India").

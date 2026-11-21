@@ -1,0 +1,256 @@
+---
+title: Campaigns API
+description: API reference for creating and managing campaigns.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+A campaign ties a product to discount rules (how the discount per country is worked out, how it reaches the buyer) and, optionally, to a payment provider integration that creates the discount codes. These are the endpoints the dashboard uses.
+
+<Aside type="note">
+These endpoints sit under `/v1/teams/:orgId/` and accept a [secret API key](/api/authentication/#secret-keys) (`Authorization: Bearer gpl_sk_...`) or the dashboard session (see [Authentication](/api/authentication/#dashboard-session)). A secret key works on every campaign of its workspace. With a session, owners and admins work on every campaign; members only on campaigns of the products they have access to.
+</Aside>
+
+## The Campaign Object
+
+```json
+{
+  "id": "01JD8PZY3Q2W1E0R9T8Y7U6I5O",
+  "organizationId": "org_123",
+  "productId": "01JD8PZK2M1N0B9V8C7X6Z5A4S",
+  "integrationId": "01JD8Q0Z6N3V4C2X1B0A9S8D7F",
+  "name": "Pro Plan PPP",
+  "environment": "live",
+  "status": "active",
+  "pricingMode": "group",
+  "discountDelivery": "banner_coupon",
+  "charmPricingStrategy": "none",
+  "maxDiscountPercent": 60,
+  "discountOverrides": null,
+  "couponPrefix": "PPP",
+  "allowedDomains": ["yourapp.com", "www.yourapp.com"],
+  "createdAt": "2026-11-10T15:30:00.000Z",
+  "updatedAt": "2026-11-10T15:30:00.000Z"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `productId` | `string` | The product this campaign discounts (a product of the same workspace) |
+| `integrationId` | `string \| null` | The payment provider integration that creates the discount codes. `null` when none is linked, or after that integration was disconnected. |
+| `name` | `string` | 1-200 characters |
+| `environment` | `string` | `"live"` or `"test"` |
+| `status` | `string` | `"draft"`, `"active"` or `"paused"` |
+| `pricingMode` | `string` | `"group"` (the country's parity group discount), `"ppp_factor"` (calculated from purchasing power) or `"custom"` (per-country `discountOverrides`, falling back to the group discount). See [Pricing modes](/guides/pricing-modes/). |
+| `discountDelivery` | `string` | `"banner_coupon"` (the banner shows a code to copy) or `"auto_apply"` (the discount is applied at checkout; needs an integration). See [Auto-apply](/guides/auto-apply/). |
+| `charmPricingStrategy` | `string` | `"none"`, `"dot99"`, `"round_x9"`, `"nearest_5"` or `"region_aware"`. See [Charm pricing](/guides/charm-pricing/). |
+| `maxDiscountPercent` | `number` | Upper bound for any country's discount, 0-100 |
+| `discountOverrides` | `object \| null` | Country code to percent, e.g. `{ "IN": 50 }`, used by `custom` mode (still capped by `maxDiscountPercent`). At most 300 entries, each keyed by a two-letter country code |
+| `couponPrefix` | `string \| null` | Start of generated codes: letters and digits only, at most 8 (default `PPP`). Every code also gets a random suffix, so one country's code can't be guessed from another's. |
+| `allowedDomains` | `string[] \| null` | Domains where the banner may appear. At most 100, each at most 253 characters |
+
+## List Campaigns
+
+```
+GET /v1/teams/:orgId/campaigns?environment=live
+```
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl "https://api.gopaylocal.com/v1/teams/org_123/campaigns?environment=live" \
+    -H "Cookie: <session cookie>"
+  ```
+  </TabItem>
+  <TabItem label="JavaScript">
+  ```js
+  const res = await fetch(`https://api.gopaylocal.com/v1/teams/${orgId}/campaigns?environment=live`, {
+    credentials: 'include',
+  });
+  const { data } = await res.json();
+  ```
+  </TabItem>
+</Tabs>
+
+`environment` (`live` or `test`) is optional; without it campaigns of both environments are returned.
+
+**Response:** `{ "data": [ <campaign>, ... ] }`
+
+## Get Campaign
+
+```
+GET /v1/teams/:orgId/campaigns/:id
+```
+
+**Response:** `{ "data": <campaign> }`, or `404`.
+
+## Create Campaign
+
+Creates the campaign together with a default banner configuration (edit it in the dashboard or with [Banner Settings](#banner-settings)). If the campaign is created `active` with an integration, GoPayLocal starts creating the discount codes at the provider in the background.
+
+```
+POST /v1/teams/:orgId/campaigns
+```
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl -X POST https://api.gopaylocal.com/v1/teams/org_123/campaigns \
+    -H "Cookie: <session cookie>" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "productId": "01JD8PZK2M1N0B9V8C7X6Z5A4S",
+      "integrationId": "01JD8Q0Z6N3V4C2X1B0A9S8D7F",
+      "name": "Pro Plan PPP",
+      "status": "active",
+      "pricingMode": "group",
+      "discountDelivery": "banner_coupon",
+      "maxDiscountPercent": 60,
+      "couponPrefix": "PPP",
+      "allowedDomains": ["yourapp.com", "www.yourapp.com"]
+    }'
+  ```
+  </TabItem>
+  <TabItem label="JavaScript">
+  ```js
+  const res = await fetch(`https://api.gopaylocal.com/v1/teams/${orgId}/campaigns`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      productId: '01JD8PZK2M1N0B9V8C7X6Z5A4S',
+      integrationId: '01JD8Q0Z6N3V4C2X1B0A9S8D7F',
+      name: 'Pro Plan PPP',
+      status: 'active',
+      pricingMode: 'group',
+      discountDelivery: 'banner_coupon',
+      maxDiscountPercent: 60,
+      couponPrefix: 'PPP',
+      allowedDomains: ['yourapp.com', 'www.yourapp.com'],
+    }),
+  });
+  const { data } = await res.json();
+  ```
+  </TabItem>
+</Tabs>
+
+**Request Body:** the fields of the campaign object. `productId` and `name` are required; the rest default to `status: "draft"`, `pricingMode: "group"`, `discountDelivery: "banner_coupon"`, `charmPricingStrategy: "none"`, `maxDiscountPercent: 70`. `environment` defaults to the product's environment; a campaign always lives in its product's environment.
+
+**Response:** `201` with `{ "data": <campaign> }`.
+
+Errors:
+- `400` when validation fails (`{ "error": "Validation failed", "details": { "fieldErrors": { ... } } }`, for example `allowedDomains` or `discountOverrides` over its limit), when `productId` or `integrationId` isn't in the workspace, or for an `active` `auto_apply` campaign without an integration.
+- `400` with `"code": "environment_mismatch"` when `environment` differs from the product's.
+- `400` with `"code": "provider_has_no_test_mode"` for a `test` campaign linked to a provider that has no test mode (Gumroad, WooCommerce).
+- `400` with `"code": "integration_missing_key"` for an `active` campaign whose integration has no key for the campaign's environment. A draft is accepted, so the key can be added before going live.
+- `403` when a member creates a campaign for a product they don't have access to.
+
+## Update Campaign
+
+```
+PATCH /v1/teams/:orgId/campaigns/:id
+```
+
+Send only the fields to change; they are validated as on create. Activating a campaign (status to `active`) that has an integration starts creating its discount codes in the background. The same rules as on create apply to the result (`400`): an `active` `auto_apply` campaign must keep an integration; `environment` and `productId` must stay consistent (`environment_mismatch`, so move a campaign to a product in the other environment and switch its `environment` in one request); a `test` campaign can't use Gumroad or WooCommerce (`provider_has_no_test_mode`); and activating needs the integration's key for the campaign's environment (`integration_missing_key`).
+
+**Response:** `{ "data": <campaign> }`, or `404`.
+
+While the campaign is an arm of a running A/B test, setting a status other than `active`, or moving it to another product or environment, is refused with `409` and `{ "error", "code": "campaign_in_running_experiment", "experimentId" }`. Other fields can change mid-test. End the test first.
+
+## Delete Campaign
+
+```
+DELETE /v1/teams/:orgId/campaigns/:id
+```
+
+**Response:** `{ "success": true }`, `404`, or `409` with `"code": "campaign_in_running_experiment"` while the campaign is an arm of a running A/B test. Ended tests keep their results after the campaign is deleted.
+
+Deletes the campaign, its banner configuration and its discount code records in one step; nothing is deleted if any part fails. Banners stop showing its codes right away.
+
+<Aside type="caution">
+Discount codes already created at the payment provider are **not** deleted there, because customers may already have them. Remove them in the provider's dashboard if you need to.
+</Aside>
+
+## Banner Settings
+
+Each campaign has one banner configuration, created with the campaign: the settings of the dashboard's **Banner** card (see [Banner Customization](/banner/customization/)). A secret key, owners and admins can read and edit the banner of any campaign; members only those of campaigns for the products they have access to (others get `404`).
+
+### The Banner Settings Object
+
+```json
+{
+  "id": "01JD8Q1A2B3C4D5E6F7G8H9J0K",
+  "campaignId": "01JD8PZY3Q2W1E0R9T8Y7U6I5O",
+  "position": "bottom",
+  "messageTemplate": "It looks like you're visiting from {{country}}! Use code {{code}} for {{discount}}% off.",
+  "ctaText": "Copy Code",
+  "backgroundColor": "#1a1a2e",
+  "textColor": "#ffffff",
+  "ctaColor": "#e94560",
+  "ctaTextColor": "#ffffff",
+  "showFlag": true,
+  "showCloseBtn": true,
+  "updatedAt": "2026-11-10T15:30:00.000Z"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `position` | `string` | `"top"`, `"bottom"`, `"bottom-left"` or `"bottom-right"` |
+| `messageTemplate` | `string` | 1 to 500 characters, with [placeholders](/banner/customization/#message-placeholders) |
+| `ctaText` | `string` | The copy-code button's label, 1 to 50 characters |
+| `backgroundColor`, `textColor`, `ctaColor`, `ctaTextColor` | `string` | A CSS color, 1 to 64 characters each. The API doesn't check that the value is a valid color |
+| `showFlag` | `boolean` | Show the visitor's country flag |
+| `showCloseBtn` | `boolean` | Show a close button |
+
+### Get Banner Settings
+
+```
+GET /v1/teams/:orgId/banner-configs/:campaignId
+```
+
+**Response:** `{ "data": <banner settings> }`, or `404` with `"Campaign not found"` or `"Banner config not found"`.
+
+### Update Banner Settings
+
+```
+PUT /v1/teams/:orgId/banner-configs/:campaignId
+```
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl -X PUT "https://api.gopaylocal.com/v1/teams/$ORG_ID/banner-configs/01JD8PZY3Q2W1E0R9T8Y7U6I5O" \
+    -H "Authorization: Bearer $GOPAYLOCAL_SECRET_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{ "position": "top", "messageTemplate": "{{flag}} {{discount}}% off for {{countryName}}. Use code {{code}}." }'
+  ```
+  </TabItem>
+  <TabItem label="JavaScript">
+  ```js
+  const res = await fetch(
+    `https://api.gopaylocal.com/v1/teams/${process.env.ORG_ID}/banner-configs/01JD8PZY3Q2W1E0R9T8Y7U6I5O`,
+    {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${process.env.GOPAYLOCAL_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        position: 'top',
+        messageTemplate: '{{flag}} {{discount}}% off for {{countryName}}. Use code {{code}}.',
+      }),
+    },
+  );
+  const { data } = await res.json();
+  ```
+  </TabItem>
+</Tabs>
+
+Send only the fields to change. New visitors usually get the change within about a minute ([Caching and changes](/api/banner/#caching-and-changes)).
+
+**Response:** `{ "data": <banner settings> }`.
+
+Errors:
+- `400` with `{ "error": "Validation failed", "details": { "fieldErrors": { ... } } }` when a field is empty, not one of its allowed values, or longer than its limit. `fieldErrors` names each failing field. Nothing is saved.
+- `404` with `"Campaign not found"` or `"Banner config not found"`.

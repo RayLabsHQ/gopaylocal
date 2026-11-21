@@ -1,0 +1,37 @@
+---
+import SwissLayout from '../layouts/SwissLayout.astro';
+---
+
+<SwissLayout title="Page not found — GoPayLocal">
+  <section class="flex min-h-[60vh] items-center justify-center px-6 py-24">
+    <div class="w-full max-w-xl">
+      <span
+        class="inline-block bg-accent-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white"
+      >
+        404
+      </span>
+      <h1
+        class="font-display mt-4 text-5xl font-semibold tracking-tight text-text-primary"
+      >
+        Page not found
+      </h1>
+      <p class="mt-4 text-base text-text-secondary">
+        The page you're looking for doesn't exist or has moved.
+      </p>
+      <div class="mt-8 flex gap-3">
+        <a
+          href="/"
+          class="bg-bg-inverted px-5 py-2.5 text-sm font-medium text-white"
+        >
+          Back home
+        </a>
+        <a
+          href="https://docs.gopaylocal.com"
+          class="border border-border px-5 py-2.5 text-sm font-medium text-text-primary"
+        >
+          Read the docs
+        </a>
+      </div>
+    </div>
+  </section>
+</SwissLayout>
