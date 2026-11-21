@@ -60,5 +60,10 @@ checked against it, and the README and the docs do not describe these as availab
   visitors.
 - Banner dismissals in analytics. The banner reports them, but only impressions, clicks
   and code copies are stored.
+- Holiday deals for some countries only, and a deal added on top of a country's
+  discount. Today a deal applies to every country, and a visitor is offered the larger of
+  the deal and their country's discount.
+- Holiday deals whose percentage changes from day to day, and a countdown in the banner.
+  Today a deal has one percentage, and its message can name its last day.
 
 Have a suggestion? Open an issue so it can be discussed before anyone writes code.

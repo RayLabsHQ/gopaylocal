@@ -165,7 +165,7 @@ DELETE /v1/teams/:orgId/campaigns/:id
 
 **Response:** `{ "success": true }`, `404`, or `409` with `"code": "campaign_in_running_experiment"` while the campaign is an arm of a running A/B test. Ended tests keep their results after the campaign is deleted.
 
-Deletes the campaign, its banner configuration and its discount code records in one step; nothing is deleted if any part fails. Banners stop showing its codes right away.
+Deletes the campaign, its banner configuration, its [holiday deals](/api/deals/) and its discount code records in one step; nothing is deleted if any part fails. Banners stop showing its codes right away.
 
 <Aside type="caution">
 Discount codes already created at the payment provider are **not** deleted there, because customers may already have them. Remove them in the provider's dashboard if you need to.

@@ -166,7 +166,7 @@ The provider caches a response with a discount in `sessionStorage` for 5 minutes
 
 - The first page load makes an API call
 - Subsequent page loads within the session use cached data
-- The cache is automatically invalidated after 5 minutes
+- The cache is automatically invalidated after 5 minutes, and a cached [holiday deal](/guides/holiday-deals/) when the deal ends
 - The cache is cleared when the browser tab is closed
 
 If storage is blocked, the provider simply asks the API on every page load.

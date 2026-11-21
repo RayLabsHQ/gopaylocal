@@ -1,0 +1,155 @@
+---
+title: Holiday Deals API
+description: API reference for a campaign's holiday deals.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+A holiday deal is a sale attached to a campaign: a name, one percentage, a start and an end, and one code for every visitor. While it runs, the banner offers each visitor the larger of the deal and their country's discount. The guide is [Holiday deals](/guides/holiday-deals/); these are the endpoints the dashboard's **Holiday deals** tab calls.
+
+<Aside type="note">
+These endpoints sit under `/v1/teams/:orgId/campaigns/:campaignId/` and accept a [secret API key](/api/authentication/#secret-keys) (`Authorization: Bearer gpl_sk_...`) or the dashboard session. Reading needs the permission to view campaigns, and the other three the permission to edit them. A campaign the caller cannot access answers `404` with `"Campaign not found"`.
+</Aside>
+
+## The Deal Object
+
+```json
+{
+  "id": "01JE2M7Q4T9X5B8C1D0F3G6H2J",
+  "campaignId": "01JD8PZY3Q2W1E0R9T8Y7U6I5O",
+  "name": "Black Friday",
+  "discountPercent": 40,
+  "startsAt": "2026-11-27T00:00:00.000Z",
+  "endsAt": "2026-12-01T00:00:00.000Z",
+  "messageTemplate": "{{deal}}: {{discount}}% off with code {{code}}. Ends {{ends}}.",
+  "codeSource": "provider",
+  "code": "BLACKFRIDAY40K7QX",
+  "codeReady": true,
+  "phase": "scheduled",
+  "createdAt": "2026-11-21T10:00:00.000Z",
+  "updatedAt": "2026-11-21T10:00:00.000Z"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | 1 to 60 characters. Shown by `{{deal}}` and used to build the code |
+| `discountPercent` | `number` | A whole number from 1 to 100. Fixed once the deal exists |
+| `startsAt`, `endsAt` | `string` | ISO 8601 instants. The deal runs from `startsAt` up to, not including, `endsAt`, for at most 366 days |
+| `messageTemplate` | `string` | 1 to 500 characters. `{{deal}}` and `{{ends}}` plus the banner's [placeholders](/banner/customization/#message-placeholders) |
+| `codeSource` | `string` | `"provider"`: GoPayLocal created the code in the campaign's payment platform. `"manual"`: a code you supplied. `"none"`: no code. Decided when the deal is created and fixed afterwards |
+| `code` | `string \| null` | The code visitors are given. `null` for `"none"`, and for a `"provider"` deal while its code is missing |
+| `codeReady` | `boolean` | `false` only when a `"provider"` deal has no working code at the campaign's integration: the campaign's integration was unlinked, the platform refused the code, or the deal has ended and its code was removed. Such a deal is not offered |
+| `phase` | `string` | `"scheduled"`, `"live"` or `"ended"`, at the time of the request |
+
+## List Deals
+
+```
+GET /v1/teams/:orgId/campaigns/:campaignId/deals
+```
+
+**Response:** `{ "data": [<deal>, ...] }`, every deal of the campaign including ended ones, ordered by start.
+
+## Create Deal
+
+```
+POST /v1/teams/:orgId/campaigns/:campaignId/deals
+```
+
+<Tabs>
+  <TabItem label="curl">
+  ```bash
+  curl -X POST "https://api.gopaylocal.com/v1/teams/$ORG_ID/campaigns/01JD8PZY3Q2W1E0R9T8Y7U6I5O/deals" \
+    -H "Authorization: Bearer $GOPAYLOCAL_SECRET_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "name": "Black Friday",
+      "discountPercent": 40,
+      "startsAt": "2026-11-27T00:00:00Z",
+      "endsAt": "2026-12-01T00:00:00Z"
+    }'
+  ```
+  </TabItem>
+  <TabItem label="JavaScript">
+  ```js
+  const res = await fetch(
+    `https://api.gopaylocal.com/v1/teams/${process.env.ORG_ID}/campaigns/01JD8PZY3Q2W1E0R9T8Y7U6I5O/deals`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.GOPAYLOCAL_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: 'Black Friday',
+        discountPercent: 40,
+        startsAt: '2026-11-27T00:00:00Z',
+        endsAt: '2026-12-01T00:00:00Z',
+      }),
+    },
+  );
+  const { data: deal } = await res.json();
+  ```
+  </TabItem>
+</Tabs>
+
+| Field | Required | Description |
+|---|---|---|
+| `name` | Yes | 1 to 60 characters |
+| `discountPercent` | Yes | A whole number from 1 to 100 |
+| `startsAt`, `endsAt` | Yes | ISO 8601 with a time zone (`Z` or an offset). `endsAt` is after `startsAt`, at most 366 days later, and in the future |
+| `messageTemplate` | No | Defaults to `{{deal}}: {{discount}}% off with code {{code}}. Ends {{ends}}.`, or `{{deal}}: {{discount}}% off. Ends {{ends}}.` for a deal without a code |
+| `code` | No | Only for a campaign **without** a payment integration: a code you created yourself, up to 40 letters, digits, dashes and underscores. Leave it out for a deal without a code |
+
+Where the code comes from follows from the campaign:
+
+- **The campaign has a payment integration.** GoPayLocal creates the code in that platform before it answers, as a percentage discount named after the deal. The code is the name (letters and digits, at most 12), the percentage and four random characters: `BLACKFRIDAY40-K7QX`, without the dash for Stripe, Paddle, Polar and Creem, and cut to 16 characters for Dodo Payments.
+- **The campaign has none.** The deal takes the `code` you send, or has no code.
+
+**Response:** `201` with `{ "data": <deal> }`.
+
+| Status | `code` | When |
+|---|---|---|
+| `400` | | `"Validation failed"` with `details`: a field is missing or out of range |
+| `400` | `deal_in_the_past` | `endsAt` is not in the future |
+| `400` | `code_not_allowed` | `code` was sent for a campaign that has a payment integration |
+| `400` | `integration_unavailable` | The campaign's integration is not active, so no code can be created |
+| `409` | `deal_limit` | The campaign already has 20 deals that have not ended |
+| `502` | `provider_error` | The payment platform refused the code. Nothing is stored; `error` carries the platform's message |
+
+## Update Deal
+
+```
+PATCH /v1/teams/:orgId/campaigns/:campaignId/deals/:dealId
+```
+
+Send any of `name`, `startsAt`, `endsAt` and `messageTemplate`. The percentage and the code cannot be changed: delete the deal and create another. Renaming a deal does not change its code.
+
+A deal that will run after the update needs a working code. For a `"provider"` deal whose code is missing (for example one that had ended, whose code was removed), a new code is created first, and a refusal leaves the deal unchanged.
+
+**Response:** `{ "data": <deal> }`.
+
+| Status | `code` | When |
+|---|---|---|
+| `400` | | `"Validation failed"`: no field was sent, or one is out of range |
+| `400` | `invalid_window` | After the update the deal would not end after it starts, or would run longer than 366 days |
+| `400` | `integration_unavailable` | A code is needed and the campaign's integration is not active |
+| `404` | | `"Deal not found"` |
+| `409` | `deal_limit` | The update would bring an ended deal back while the campaign has 20 that have not ended |
+| `502` | `provider_error` | A code was needed and the payment platform refused it |
+
+## Delete Deal
+
+```
+DELETE /v1/teams/:orgId/campaigns/:campaignId/deals/:dealId
+```
+
+Deletes the deal and removes its code from the payment platform. The banner stops offering it right away.
+
+**Response:** `{ "success": true }`, or `404`. When the platform could not be reached, the response also has a `warning` naming the code: the deal is deleted and no longer offered, and GoPayLocal keeps trying to remove the code every ten minutes.
+
+## What Else Removes a Code
+
+- **The deal ends.** A scheduled job removes the codes of ended deals from the payment platform, usually within ten minutes of the end. The deal itself stays in the list as `"ended"` until you delete it.
+- **The campaign's integration or environment changes.** The deal's code is removed from the old place and a new one is created in the new one; `code` changes. With no integration, the deal has no code (`codeReady: false`) until one is linked again.
+- **The campaign is deleted.** Its deals are deleted with it. As for a campaign's other codes, the code is then left in the payment platform.

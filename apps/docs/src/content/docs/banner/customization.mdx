@@ -59,6 +59,8 @@ The example values are for a $19 product with **Round to X9** charm pricing and 
 
 Prices are formatted in the visitor's locale with exactly the digits the API sent: a whole number shows no decimals, and any other shows two (three in three-decimal currencies such as KWD). Converted prices in currencies written in whole units, such as JPY, PKR or IDR, are whole numbers; an exact price keeps your currency's minor unit (`PKR 1,838.14`). A visitor who pays in your currency, or whose currency has no usable exchange rate that day, sees the exact price in your currency: a US visitor at 60% off sees `$7.60` instead of `$19`. Converted prices are estimates; your payment provider charges the exact discounted price in your currency. See [Multi-currency display](/guides/multi-currency/).
 
+A [holiday deal](/guides/holiday-deals/#the-message) has its own message, which can also use `{{deal}}` (the deal's name) and `{{ends}}` (its last day). While a deal is the visitor's offer, the banner shows that message with the design set here, without the flag.
+
 The default message does not mention prices. To show them, add the placeholders, for example:
 
 ```

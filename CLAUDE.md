@@ -186,6 +186,31 @@ describe an integration as verified beyond what it says.
   remembered in isolate memory only. Do not add a KV write that runs whether or not
   anything changed, or one that an anonymous request can cause.
 
+### Holiday deals
+
+A deal is a percentage with a start and an end on a campaign, with one code for every
+visitor (`deals` table, routes in `apps/api/src/routes/deals.ts`, dashboard tab
+**Holiday deals**). While it runs, a visitor is offered the larger of the deal and their
+country's discount; the deal on a tie.
+
+- The rule is in `packages/shared/src/deals` (`pickActiveDeal`,
+  `dealReplacesCountryDiscount`) and applied per request in the config endpoint, after the
+  allowed-domain check. `unknown_country`, `vpn_detected` and `quota_exceeded` come first
+  and are unchanged.
+- A deal's code at the payment platform is a `coupons` row with `deal_id` set and no
+  country. `coupons.deal_id` has no foreign key on purpose: a row whose deal is gone is a
+  code still to be removed at the provider. The `*/10` scheduled job removes the codes of
+  ended and deleted deals (`retireEndedDealCoupons`), a few per run.
+- The banner document lists a campaign's deals that had not ended when the rows were read
+  (`loadServingInputs`); the pure builder must not look at the clock, or a stored document
+  and a rebuilt one would differ for no reason. `deals` is left out of a campaign that has
+  none.
+- `{{deal}}` and `{{ends}}` are filled in by the API, because the banner script is cached
+  for up to a day. The two SDKs drop a cached answer when its deal has ended.
+- Docs: `guides/holiday-deals.mdx` and `api/deals.mdx`. Not built: a deal for some
+  countries, a deal added on top of the country discount, a percentage that changes by
+  day (all in `ROADMAP.md`).
+
 ### Toolchain notes
 
 - TypeScript 7 has no compiler API. `apps/web` (astro check) and the two SDKs (tsup

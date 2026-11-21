@@ -178,7 +178,8 @@ The `banner` values above are the defaults every new campaign gets.
 | `campaignId` | The campaign that answered (the assigned one during an experiment). Sent with analytics events. |
 | `experimentId`, `variant` | Present only when a running experiment applied; `variant` is `"a"` or `"b"`. Also present on `no_discount` and `domain_not_allowed` answers. |
 | `showBranding` | Server-decided; see Choose one client. |
-| `banner` | The campaign's banner design. |
+| `banner` | The campaign's banner design. For a holiday deal, `messageTemplate` is the deal's message and `showFlag` is `false`. |
+| `deal` | Present only when the offer is a holiday deal: `{ "id", "name", "endsAt" }`. `discount` and `code` are then the deal's (`code` is `null` for a deal without one), and the price fields use the deal's percentage. |
 
 Local prices [packages/shared/src/currency/local-price.ts]:
 - **Converted** (`fxAsOf` present): the visitor's country uses another currency and the exchange rates are less than 96 hours old. `localPrice` = `basePrice × (1 − discount/100) × fxRate`, charm-rounded up (never below that amount, at most 8% above it). `localOriginalPrice` = `basePrice × fxRate`, charm-rounded down. The example above is a $19 product at 30% off with `round_x9`, for a visitor in India on the rates of 2026-11-18: ₹1,249, was ₹1,769. The two are chosen together so that the discount they imply is never above the real one and, except for prices of a few cents, neither more than 2 points below it nor under four fifths of it [packages/shared/src/currency/pair.ts].
@@ -195,9 +196,11 @@ No discount (still HTTP 200): `{ "show": false, "reason": "<reason>" }`, plus `e
 | `quota_exceeded` | The account's monthly API quota is used up. Only hosted accounts whose plan has a quota; never on self-hosted deployments. |
 | `no_active_campaign` | Nothing servable: no active campaign with a banner config for the requested (or default) product, or an invalid `product` value. |
 | `domain_not_allowed` | The campaign has allowed domains and the request's `Origin`/`Referer` host is missing or not listed. |
-| `no_discount` | The campaign gives this country no discount (or 0%). |
+| `no_discount` | The campaign gives this country no discount (or 0%) and no holiday deal is running. |
 
 The key is checked between `unknown_country` and `vpn_detected`.
+
+Holiday deals [packages/shared/src/deals/index.ts, apps/api/src/routes/banner-script.ts]: a campaign can have deals (a percentage, a start, an end, one code for every visitor). After `domain_not_allowed`, a deal running at request time is offered when its percentage is at least the visitor's country discount (0 for a country without one); otherwise the country's discount is. A client needs no change: `discount`, `code`, the prices and `banner.messageTemplate` are already the deal's.
 
 Errors:
 - `401 {"error":"Invalid API key"}`: an unknown or revoked key.

@@ -87,6 +87,25 @@ This is a $19 product with **Round to X9** charm pricing, for a visitor in India
 }
 ```
 
+**Response (a holiday deal is the visitor's offer):** the same fields, with the deal's percentage, code and message, plus `deal`:
+
+```json
+{
+  "show": true,
+  "country": "DE",
+  "countryName": "Germany",
+  "discount": 40,
+  "code": "BLACKFRIDAY40K7QX",
+  "banner": {
+    "messageTemplate": "Black Friday: {{discount}}% off with code {{code}}. Ends 30 November.",
+    "showFlag": false,
+    "...": "..."
+  },
+  "deal": { "id": "01JE2M7Q4T9X", "name": "Black Friday", "endsAt": "2026-12-01T00:00:00.000Z" },
+  "...": "..."
+}
+```
+
 **Response (no banner):**
 
 ```json
@@ -100,9 +119,10 @@ This is a $19 product with **Round to X9** charm pricing, for a visitor in India
 | `show` | `boolean` | Whether to show a banner. When `false`, only `reason` (and, during an A/B test, `experimentId` and `variant`) is present. |
 | `country` | `string` | ISO 3166-1 alpha-2 country code of the visitor |
 | `countryName` | `string` | Country name |
-| `discount` | `number` | Discount percentage |
-| `code` | `string \| null` | Coupon code. `null` for a campaign without a payment integration. |
-| `banner` | `object` | Banner display settings of the campaign |
+| `discount` | `number` | Discount percentage: the country's, or the deal's when `deal` is present |
+| `code` | `string \| null` | Coupon code. `null` for a campaign without a payment integration, and for a deal without a code. |
+| `banner` | `object` | Banner display settings of the campaign. For a deal, `messageTemplate` is the deal's message and `showFlag` is `false`. |
+| `deal` | `object` | Only when the offer is a [holiday deal](#holiday-deals): `id`, `name` and `endsAt` (ISO 8601) |
 | `baseCurrencyCode` | `string` | The product's currency (ISO 4217) |
 | `baseCurrencySymbol` | `string` | Symbol of the product's currency |
 | `currencyCode` | `string` | The currency of `localPrice` and `localOriginalPrice`: the visitor's when the price was converted, otherwise the product's |
@@ -142,7 +162,7 @@ Rate sources, the refresh schedule and the country-to-currency mapping are in [M
 | `quota_exceeded` | The organization used its monthly API calls (Free plan, see below) |
 | `no_active_campaign` | Nothing can be served for this product: no active campaign with a banner, or `product` is unknown or malformed |
 | `domain_not_allowed` | The campaign has an allowed-domains list and the request's `Origin` (or `Referer`) is not on it or a subdomain of it |
-| `no_discount` | The campaign has no discount for the visitor's country, or no coupon code could be produced for it |
+| `no_discount` | The campaign has no discount for the visitor's country and no holiday deal is running, or no coupon code could be produced for the country |
 
 ### Errors
 
@@ -167,6 +187,17 @@ Only **active** campaigns that have a banner are served. For a product:
 Without `product`, the default product is the product of the most recently created campaign that can be served (live first). A single-product site gets exactly what it got before products were supported.
 
 An unknown or malformed `product` returns `no_active_campaign`; another product's campaign is never served.
+
+### Holiday deals
+
+A campaign can have [holiday deals](/guides/holiday-deals/): a percentage with a start and an end, and one code for every visitor. After the campaign is chosen and its allowed domains are checked, a deal that is running at the time of the request is compared with the visitor's country discount:
+
+- The deal is at least as large (or the country has no discount): the answer carries the deal's `discount` and `code`, the deal's message in `banner.messageTemplate` with `{{deal}}` and `{{ends}}` already filled in, `banner.showFlag: false`, and `deal`. The price fields are computed from the deal's percentage.
+- The country's discount is larger: the answer is the country's, without `deal`.
+
+Of several deals running at once, the largest percentage is used; between equal ones, the one that ends first. A deal whose code is missing at the payment platform is never used.
+
+The earlier checks are the same with or without a deal: `unknown_country`, `vpn_detected`, `quota_exceeded`, `no_active_campaign` and `domain_not_allowed`. A request is counted as an API call, and an impression is counted, the same way.
 
 ### A/B tests
 

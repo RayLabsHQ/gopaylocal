@@ -31,7 +31,9 @@ account.
    arrive through your payment platform's webhooks.
 
 Other features: A/B tests that split a product's visitors between two campaigns (sticky
-per visitor) and show the two campaigns' numbers side by side; local prices in the
+per visitor) and show the two campaigns' numbers side by side; holiday deals (a sale with
+a first and a last day and one code, where each visitor is offered the larger of the deal
+and their country's discount); local prices in the
 visitor's currency, converted at the day's exchange rate and rounded with the campaign's
 charm pricing (estimates: your payment platform still charges your own currency);
 per-product campaigns; test-mode campaigns that do not count against your plan; team

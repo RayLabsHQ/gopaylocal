@@ -58,7 +58,7 @@ function PricingBanner() {
 
 | Property | Type | Description |
 |---|---|---|
-| `data` | `PPPResponse \| null` | The response when a discount applies; `null` while loading, on error, or with no discount |
+| `data` | `PPPResponse \| null` | The response when a discount applies; `null` while loading, on error, or with no discount. `data.deal` (`{ id, name, endsAt }`) is set when the offer is a [holiday deal](/guides/holiday-deals/): `discount` and `code` are then the deal's |
 | `isLoading` | `boolean` | Whether the API request is in flight |
 | `error` | `Error \| null` | Error from the API request (including the 8-second timeout) |
 | `country` | `string \| null` | ISO country code (e.g., `'IN'`) when a discount applies |

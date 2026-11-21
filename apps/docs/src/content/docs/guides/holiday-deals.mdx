@@ -1,0 +1,116 @@
+---
+title: Holiday Deals
+description: Run a sale with a first and a last day. Each visitor is offered the larger of the deal and their country's discount.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+A holiday deal is a sale attached to a campaign: a name, one percentage, a start and an end, and one discount code that works for every visitor. Black Friday at 40% for four days is a deal.
+
+While a deal runs, the banner offers each visitor **the larger of the two discounts**: the deal's, or their country's. The two are never added together.
+
+## Who Gets What
+
+Take a campaign that gives India 60% and Brazil 40%, and a deal at 40%:
+
+| Visitor from | Country discount | Deal | Offered |
+|---|---|---|---|
+| India | 60% | 40% | 60%, the country's code |
+| Brazil | 40% | 40% | 40%, the deal's code (on a tie, the deal) |
+| Germany | none | 40% | 40%, the deal's code |
+
+So a deal reaches visitors that parity pricing alone does not: a visitor whose country has no discount normally sees no banner, and during a deal sees the deal.
+
+When a campaign has several deals running at the same time, the one with the largest percentage is used. Between two with the same percentage, the one that ends first.
+
+The checks that come before the discount are unchanged. A visitor whose country is unknown, a visitor on a detected [VPN](/guides/vpn-detection/), a workspace over its monthly API calls, and a page outside the campaign's allowed domains all get no banner, deal or not.
+
+## Creating a Deal
+
+<Steps>
+
+1. Open the campaign and go to the **Holiday deals** tab.
+2. Click **New deal**. Pick a holiday to fill in the name and the days, or keep **Your own dates**.
+3. Set the discount, a whole number from 1 to 100.
+4. Check the first and the last day, then click **Create deal**.
+
+</Steps>
+
+The holidays in the list are New Year, Valentine's Day, Lunar New Year, Halloween, Diwali, Singles' Day, Black Friday (four days, through Cyber Monday), Cyber Monday and Christmas. Each is offered with the next date it can still be run. They are suggestions: a deal can have any name and any dates. Lunar New Year and Diwali are listed through 2030.
+
+A deal can be created ahead of time. It is **Scheduled** until its first day, **Live** while it runs, and **Ended** afterwards.
+
+### Days and time zones
+
+The dashboard works in whole days in UTC: a deal starts at 00:00 UTC on its first day and ends at 24:00 UTC on its last. Under the date fields the dashboard shows the same two moments in your own time zone. Through the [API](/api/deals/) a deal can start and end at any time.
+
+A deal starts and ends on the API's clock, to the request: the first banner request after the end no longer gets it.
+
+## The Code
+
+**A campaign with a payment integration.** GoPayLocal creates the code in your payment platform when you save the deal, the same way it creates a country's code. If the platform refuses it, the deal is not saved and the error is shown. The code is the deal's name, its percentage and four random characters, such as `BLACKFRIDAY40-K7QX`. Stripe, Paddle, Polar and Creem codes have no dash (`BLACKFRIDAY40K7QX`), and a Dodo Payments code is cut to 16 characters.
+
+GoPayLocal removes the code from your payment platform:
+
+- when you delete the deal,
+- after the deal ends, usually within ten minutes,
+- when you link the campaign to another integration or switch it between live and test. A new code is then created in the new place.
+- when you unlink the campaign's integration. The deal then has no code and is not offered until an integration is linked again; the **Holiday deals** tab says so.
+
+If the platform cannot be reached, the removal is tried again every ten minutes, and deleting the deal tells you so.
+
+**A campaign without a payment integration.** GoPayLocal has nowhere to create a code. Enter one you made in your checkout, or leave the field empty and the banner shows the deal and its percentage without a code. Removing your own code after the deal is up to you.
+
+<Aside type="caution">
+A deal's code is one code for everyone. It is not limited to a country or to a number of uses, so anyone who has it can use it at your checkout until it is removed. Keep that in mind when you choose the percentage.
+</Aside>
+
+The percentage of a deal cannot be changed once it exists, because the code carries it. Delete the deal and create another. The name, the days and the message can be changed at any time.
+
+## The Message
+
+A deal is shown in the campaign's own banner, with its position, colors and button, and with the deal's message in place of the usual one. The country flag is left out. The default message is:
+
+```
+{{deal}}: {{discount}}% off with code {{code}}. Ends {{ends}}.
+```
+
+which a visitor reads as "Black Friday: 40% off with code BLACKFRIDAY40-K7QX. Ends 30 November." A deal without a code starts with `{{deal}}: {{discount}}% off. Ends {{ends}}.`
+
+| Placeholder | Becomes |
+|---|---|
+| `{{deal}}` | The deal's name |
+| `{{ends}}` | The last day of the deal in UTC, as a day and a month: `30 November` |
+| `{{discount}}` | The deal's percentage |
+| `{{code}}` | The deal's code |
+
+The banner's other [placeholders](/banner/customization/#message-placeholders), such as `{{localPrice}}` and `{{countryName}}`, work in a deal's message too. Prices are computed from the deal's percentage.
+
+## With Auto-Apply
+
+A campaign set to [auto-apply](/guides/auto-apply/) hands your checkout the code that the banner shows. During a deal that is the deal's code, so your checkout applies the deal without any change.
+
+## With an A/B Test
+
+A deal belongs to one campaign. While that campaign is an arm of a running [A/B test](/guides/ab-testing/), only the visitors assigned to it are offered the deal. To keep the two arms comparable during a sale, add the same deal to both campaigns.
+
+## In Analytics
+
+Impressions, clicks and copies of a deal's banner are counted on the campaign, under the visitor's country, like any other banner.
+
+A purchase made with a deal's code is counted as a redemption of the campaign. The code is not tied to a country, so in the country breakdown these purchases appear in the row `XX`.
+
+## In Your Own Code
+
+The [banner config API](/api/banner/#holiday-deals) answers with the deal's `discount` and `code`, and adds a `deal` object with its id, name and end. The JavaScript SDK has it as `deal` on the data that [`init()`](/js/client/#init) returns, and the React SDK as `data.deal` from [`usePPP()`](/react/hooks/#useppp), so a custom pricing page can show the sale's name or a countdown. Both are `null` or absent when the offer is the visitor's country discount.
+
+Both SDKs keep an answer for five minutes; an answer that carries a deal is dropped when the deal ends.
+
+## Limits
+
+- 20 deals that have not ended per campaign. Ended deals do not count; delete them when you no longer need them.
+- A deal runs for at most 366 days.
+- The percentage is a whole number from 1 to 100; the name is at most 60 characters.
+- A deal applies to every country. A deal for one country, and adding a deal on top of a country's discount, are not available.
+
+Deleting a campaign deletes its deals. As with a campaign's other codes, the deal's code is then left in your payment platform; remove it there if you need to.
