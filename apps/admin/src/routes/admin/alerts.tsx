@@ -95,7 +95,7 @@ function AlertsPage() {
         return (
           <span className="inline-flex border border-border bg-surface-raised px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary">
             {labels[type] ?? type}
-            {fairUse ? ' · Fair use' : ''}
+            {fairUse ? ' · Above allowance' : ''}
           </span>
         )
       },
@@ -111,7 +111,7 @@ function AlertsPage() {
       cell: (info) => (
         <span className="font-mono text-[13px] text-text-secondary">
           {formatNumber(info.getValue())}
-          {info.row.original.kind === 'fair_use' ? ' (fair use)' : ''}
+          {info.row.original.kind === 'fair_use' ? ' (above allowance)' : ''}
         </span>
       ),
     }),
@@ -172,7 +172,7 @@ function AlertsPage() {
       <h1 className="font-display text-[42px] font-bold tracking-tight text-text-primary">Usage Alerts</h1>
       <p className="mt-1 text-base text-text-secondary">
         <span className="font-mono text-accent">//</span> Organizations above 80% of a plan limit. Seat and product caps of 1 never alert — that is the plan's steady state, not an emergency.
-        {' '}Pro is unlimited; Pro organizations past {formatNumber(PRO_FAIR_USE_API_HITS_PER_MONTH)} API calls in a month are flagged for fair use (alert only, nothing is blocked).
+        {' '}Pro includes {formatNumber(PRO_FAIR_USE_API_HITS_PER_MONTH)} API calls a month; Pro organizations past that are flagged here so we can contact them (alert only, nothing is blocked).
         {' '}({filteredAlerts.length} alerts)
       </p>
 
@@ -201,7 +201,7 @@ function AlertsPage() {
           mutedLabel
         />
         <SummaryCard
-          label="Fair use"
+          label="Above allowance"
           qualifier={`Pro > ${formatNumber(PRO_FAIR_USE_API_HITS_PER_MONTH)}/mo`}
           count={fairUseCount}
           tone="border-border bg-surface"

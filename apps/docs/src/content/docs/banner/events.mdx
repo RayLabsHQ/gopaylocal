@@ -54,7 +54,7 @@ Each event is one small JSON body, sent as `text/plain` so it needs no CORS pref
 
 The endpoint answers `204 No Content` when the key is valid. An event is dropped silently (the response is still `204`) when its campaign does not belong to the key's organization or its country code is not two letters, so a public key cannot be used to write into someone else's analytics. An unknown key gets `401`, a malformed body `400`.
 
-The endpoint is rate limited per IP address and per key; a site at the Pro fair-use level stays far below the per-key limit.
+The endpoint is rate limited per IP address and per key; a site using all of Pro's 20 million calls a month stays far below the per-key limit.
 
 ## Session Caching
 

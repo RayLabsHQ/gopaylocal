@@ -1,6 +1,7 @@
 import {
   PLAN_LIMITS,
   PLAN_PRICES_USD,
+  PRO_FAIR_USE_API_HITS_PER_MONTH,
   formatLimit,
 } from '@gopaylocal/shared/constants';
 import { PPP_MULTIPLIERS, calculatePppDiscount } from '@gopaylocal/shared/parity';
@@ -102,11 +103,11 @@ const faqItems = [
   // Pricing FAQs. Numbers come from the shared plan constants (see PRICING below).
   {
     question: 'What counts as an API call?',
-    answer: `One request from the banner or an SDK for a visitor's offer, counted on our servers. A request counts once it reaches campaign selection, whether or not a banner is shown. Script loads, analytics events, visitors flagged as VPN and test-mode campaigns don't count. Free includes ${formatLimit(PLAN_LIMITS.free.apiHitsPerMonth)} a month, counted per calendar month (UTC). Past that, the banner stops showing until the next month or until you upgrade. Pro has no cap.`,
+    answer: `One request from the banner or an SDK for a visitor's offer, counted on our servers. A request counts once it reaches campaign selection, whether or not a banner is shown. Script loads, analytics events, visitors flagged as VPN and test-mode campaigns don't count. Free includes ${formatLimit(PLAN_LIMITS.free.apiHitsPerMonth)} a month, counted per calendar month (UTC). Past that, the banner stops showing until the next month or until you upgrade. Pro includes ${PRO_FAIR_USE_API_HITS_PER_MONTH / 1_000_000} million a month.`,
   },
   {
-    question: "What does 'unlimited' mean on Pro?",
-    answer: `No caps on products, API calls or team members, and nothing is throttled or switched off. Unlimited is covered by fair use: if an account's traffic is far beyond normal, we may reach out to talk about it, but your banner keeps working. Pro is $${PLAN_PRICES_USD.pro.month}/month, or $${PLAN_PRICES_USD.pro.year}/year billed annually ($${PLAN_PRICES_USD.pro.year / 12}/month).`,
+    question: 'How many API calls does Pro include?',
+    answer: `${PRO_FAIR_USE_API_HITS_PER_MONTH / 1_000_000} million a month, with unlimited products and team members. Nothing is throttled or switched off at that number: if you pass it we get in touch, and your banner keeps working. If you expect more than that, contact us first. Pro is $${PLAN_PRICES_USD.pro.month}/month, or $${PLAN_PRICES_USD.pro.year}/year billed annually ($${PLAN_PRICES_USD.pro.year / 12}/month).`,
   },
   {
     question: 'Can I self-host GoPayLocal?',
@@ -162,13 +163,13 @@ const pricingCards: PricingCard[] = [
   {
     name: 'Pro',
     price: `$${PRO_MONTHLY}/mo`,
-    subtitle: `Unlimited everything, one flat price\n$${PRO_YEARLY / 12}/mo billed annually ($${PRO_YEARLY}/yr)`,
+    subtitle: `One flat price\n$${PRO_YEARLY / 12}/mo billed annually ($${PRO_YEARLY}/yr)`,
     cta: 'Start Pro',
     href: APP_URL,
     highlighted: true,
     features: [
       'Unlimited products',
-      'Unlimited API calls (fair use)',
+      `${compactCount(PRO_FAIR_USE_API_HITS_PER_MONTH)} API calls/mo (contact us for more)`,
       'Unlimited team members',
       `${PRO.analyticsRetentionDays}-day analytics`,
       'No GoPayLocal branding',
@@ -332,7 +333,7 @@ const revenueData: LandingData = {
     proofPoints: [
       { label: 'Incremental, not cannibalized', description: 'PPP converts visitors from markets that bounce at full price. Compare two discount levels with an A/B test, and check the net effect against your own sales data.' },
       { label: 'Abuse-resistant by default', description: 'Edge geolocation plus VPN/proxy detection means local prices reach real local buyers — not VPN users gaming the discount.' },
-      { label: 'A complete PPP toolkit', description: `VPN blocking, multi-currency, A/B testing, charm pricing and ${INTEGRATION_COUNT} integrations in one tool. Try every feature free; Pro is one flat $${PLAN_PRICES_USD.pro.month}/mo for unlimited everything.` },
+      { label: 'A complete PPP toolkit', description: `VPN blocking, multi-currency, A/B testing, charm pricing and ${INTEGRATION_COUNT} integrations in one tool. Try every feature free; Pro is one flat $${PLAN_PRICES_USD.pro.month}/mo.` },
     ],
   },
   finalCta: {

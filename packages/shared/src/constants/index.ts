@@ -14,8 +14,10 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     teamMembers: 1,
     analyticsRetentionDays: 7,
   },
-  // One flat paid plan. "Unlimited" is under fair use: nothing is enforced, but
-  // admin usage alerts flag a Pro org past PRO_FAIR_USE_API_HITS_PER_MONTH.
+  // One flat paid plan. Products and seats are unlimited. API calls are not
+  // capped here either: Pro's published allowance is
+  // PRO_FAIR_USE_API_HITS_PER_MONTH, which is not enforced; admin usage alerts
+  // flag a Pro org past it.
   pro: {
     products: null,
     apiHitsPerMonth: null,
@@ -41,8 +43,9 @@ export const PLAN_PRICES_USD: Record<Plan, Record<BillingInterval, number>> = {
   pro: { month: 19, year: 180 },
 };
 
-// Fair-use line for Pro's unlimited API calls: admin alerts flag a hosted Pro
-// org that exceeds this many calls in a month. Alert only, never enforced.
+// Pro's published API-call allowance ("20M API calls a month; contact us for
+// more"). Admin alerts flag a hosted Pro org that exceeds this many calls in a
+// month. Alert only, never enforced: the banner keeps working above it.
 export const PRO_FAIR_USE_API_HITS_PER_MONTH = 20_000_000;
 
 // How long the hosted service stores analytics and API-call counts before

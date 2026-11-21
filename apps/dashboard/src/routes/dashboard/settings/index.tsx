@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import {
   PLAN_LIMITS,
   PLAN_PRICES_USD,
+  PRO_FAIR_USE_API_HITS_PER_MONTH,
   formatLimit,
   hasReachedLimit,
   resolveRole,
@@ -674,7 +675,7 @@ const PLAN_METADATA = {
   },
   pro: {
     name: 'Pro',
-    description: `Unlimited products, API calls and team members (fair use), ${PLAN_LIMITS.pro.analyticsRetentionDays}-day analytics with export, no GoPayLocal branding.`,
+    description: `Unlimited products and team members, ${PRO_FAIR_USE_API_HITS_PER_MONTH / 1_000_000} million API calls a month, ${PLAN_LIMITS.pro.analyticsRetentionDays}-day analytics with export, no GoPayLocal branding.`,
   },
 } as const
 
@@ -804,7 +805,12 @@ function BillingTab() {
         <h3 className="font-display text-base font-semibold text-text-primary">Usage this month</h3>
         <div className="mt-4 space-y-4">
           <UsageMeter label="Products" current={meters.products.current} max={meters.products.max} />
-          <UsageMeter label="API calls" current={meters.apiHits.current} max={meters.apiHits.max} />
+          <UsageMeter
+            label="API calls"
+            current={meters.apiHits.current}
+            max={meters.apiHits.max}
+            included={isPro ? PRO_FAIR_USE_API_HITS_PER_MONTH : undefined}
+          />
           <UsageMeter
             label="Team members"
             current={meters.teamMembers.current}
@@ -819,9 +825,9 @@ function BillingTab() {
         {usage && !isPro && atConsumptionLimit(usage) && (
           <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border border-brand/30 bg-brand-light px-4 py-3">
             <p className="text-sm text-text-primary">
-              You've hit a Free plan limit. Pro removes the caps: unlimited products,
-              API calls and team members for ${PRO_MONTHLY}/month (${PRO_YEARLY / 12}/month
-              billed yearly).
+              You've hit a Free plan limit. Pro lifts it: unlimited products and team
+              members and {PRO_FAIR_USE_API_HITS_PER_MONTH / 1_000_000} million API calls a
+              month, for ${PRO_MONTHLY}/month (${PRO_YEARLY / 12}/month billed yearly).
             </p>
             {canManageBilling && (
               <button
@@ -853,12 +859,19 @@ function atConsumptionLimit(usage: UsageInfo): boolean {
 function UsageMeter({
   label,
   current,
-  max,
+  max: cap,
+  included,
 }: {
   label: string
   current: number
   max: Limit
+  /**
+   * A published allowance for a meter the server does not cap (hosted Pro's
+   * API calls). Shown like a cap; reaching it blocks nothing.
+   */
+  included?: number
 }) {
+  const max = cap ?? included ?? null
   // Unlimited: show the count and "Unlimited", no bar (there is no ratio).
   if (max === null) {
     return (

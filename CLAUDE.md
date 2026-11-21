@@ -11,7 +11,7 @@ and a self-hosted mode with no limits and no billing.
 | | Free | Pro ($19/mo or $180/yr) | Self-hosted |
 |---|---|---|---|
 | Products | 1 | Unlimited | Unlimited |
-| API calls/mo | 10K | Unlimited (fair use) | Unlimited |
+| API calls/mo | 10K | 20M (contact us for more) | Unlimited |
 | Team members | 1 | Unlimited | Unlimited |
 | Analytics | 7-day | 365-day | Unlimited |
 | Branding | GoPayLocal shown | Removed | Removed |
@@ -21,8 +21,9 @@ and a self-hosted mode with no limits and no billing.
   `Plan` type is in `packages/shared/src/types/index.ts`. The effective plan is always
   resolved through `apps/api/src/lib/entitlements.ts`; never read `subscriptions.plan`
   directly.
-- "Fair use" means nothing is enforced on Pro; an admin alert fires above 20M API
-  calls in a month.
+- Pro's API calls: public copy says "20 million API calls a month, contact us for more"
+  (never "unlimited"). Nothing is enforced on Pro; an admin alert fires above 20M API
+  calls in a month (`PRO_FAIR_USE_API_HITS_PER_MONTH`) and the banner keeps working.
 - Self-hosted mode is the Worker var `SELF_HOSTED="true"`: every organization is
   unlimited, branding is off, billing endpoints are disabled.
 - The Dodo products and `DODO_PRICE_ID_PRO_MONTHLY` / `DODO_PRICE_ID_PRO_ANNUAL` are

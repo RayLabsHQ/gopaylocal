@@ -53,7 +53,7 @@ checking one against your own sandbox account, are in
 |---|---|---|---|
 | Price | $0 | $19/month or $180/year | $0 (you pay your own Cloudflare and Postgres costs) |
 | Products | 1 | Unlimited | Unlimited |
-| API calls per month | 10,000 | Unlimited (fair use) | Unlimited |
+| API calls per month | 10,000 | 20 million (contact us for more) | Unlimited |
 | Team members | 1 | Unlimited | Unlimited |
 | Analytics history | 7 days | 365 days | Unlimited |
 | "Powered by GoPayLocal" link on the banner | Shown | Removed | Removed |
@@ -63,7 +63,8 @@ Every feature is available on every plan, including Free. One API call is one re
 for a visitor's offer (`GET /v1/banner/config/...`) that reaches campaign selection.
 Script loads, analytics events, VPN-flagged visitors and test-mode campaigns are not
 counted. When a Free account passes 10,000 calls in a calendar month (UTC), the banner
-stops showing until the next month or an upgrade. Pro has no cap. The limits are enforced
+stops showing until the next month or an upgrade. Pro includes 20 million calls a month and is not
+cut off above that (contact us if you expect more). The limits are enforced
 from `PLAN_LIMITS` in
 [`packages/shared/src/constants/index.ts`](packages/shared/src/constants/index.ts).
 
