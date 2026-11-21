@@ -46,7 +46,10 @@ const options: Option[] = [
   ...otherOptions,
 ];
 
-const sources = [competitor, ...others].map((c) => ({ label: c.sourceLabel, href: c.sourceUrl }));
+// Each product's own page, then the other pages its facts rest on, once each.
+const sources = [competitor, ...others]
+  .flatMap((c) => [{ label: c.sourceLabel, href: c.sourceUrl }, ...(c.extraSources ?? [])])
+  .filter((source, index, all) => all.findIndex((other) => other.href === source.href) === index);
 ---
 
 <!-- Hero -->

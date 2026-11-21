@@ -117,8 +117,10 @@ export interface Competitor {
   cells: Record<RowKey, string>;
   /** Its plan at each volume of volumeRows, same order. */
   volume: string[];
+  /** Other pages a fact about this product rests on, listed under Sources. */
+  extraSources?: { label: string; href: string }[];
   /** The three differences that matter most, for the top of the versus page. */
-  differences: { title: string; body: string }[];
+  differences: { title: string; body: string; link?: { label: string; href: string } }[];
   /** Honest reasons to pick it over GoPayLocal. */
   betterWhen: { title: string; body: string }[];
   /** Facts that make people look for an alternative to it. */
@@ -129,6 +131,18 @@ export interface Competitor {
 
 const NOT_OPEN = 'No';
 const NOT_SELF_HOSTED = 'Not offered';
+
+/**
+ * Lemon Squeezy's own site, read on COMPARISON_CHECKED_ON: sign-ups are closed
+ * and it "will stop processing transactions for all businesses on March 31,
+ * 2027". Said wherever another product lists a Lemon Squeezy integration.
+ */
+const LEMON_SQUEEZY_NOTE = 'Lemon Squeezy has closed sign-ups and stops processing payments on 31 March 2027.';
+const LEMON_SQUEEZY_SOURCE = { label: 'lemonsqueezy.com', href: 'https://www.lemonsqueezy.com/' };
+const LEMON_SQUEEZY_GUIDE = {
+  label: 'Moving from Lemon Squeezy',
+  href: 'https://docs.gopaylocal.com/guides/moving-from-lemon-squeezy/',
+};
 
 export const competitors: Record<CompetitorSlug, Competitor> = {
   paritydeals: {
@@ -149,17 +163,21 @@ export const competitors: Record<CompetitorSlug, Competitor> = {
       calls: '10,000, 50,000 or 100,000 API hits by plan',
       at19: '10,000 API hits and 1 product',
       overLimit:
-        'Above 100,000 API hits a month the price is on request. The pricing page does not say what happens at a smaller plan\'s limit.',
+        'Above 100,000 API hits a month the price is on request. Neither its pricing page nor its terms say what happens at a smaller plan\'s limit.',
       products: '1, 5 or unlimited by plan',
       free: 'A 14-day free trial. The Scale plan is free when you sell through Kelviq, a merchant of record.',
       openSource: NOT_OPEN,
       selfHost: NOT_SELF_HOSTED,
-      platforms: 'Kelviq, Stripe, Lemon Squeezy, Gumroad, Chargebee, Whop, Paddle, Polar and Dodo Payments',
+      platforms: `Kelviq, Stripe, Lemon Squeezy, Gumroad, Chargebee, Whop, Paddle, Polar and Dodo Payments. ${LEMON_SQUEEZY_NOTE}`,
       vpn: 'Yes. A Tor, proxy and VPN blocker is on every plan.',
       abTesting: 'Not listed on its pricing page',
       currency: 'Yes. Its site says prices can be shown in 135+ currencies.',
     },
     volume: ['Starter, $19', 'Builder, $49', 'Scale, $99', 'On request', 'On request'],
+    extraSources: [
+      { label: 'ParityDeals\' terms', href: 'https://www.paritydeals.com/terms-and-conditions/' },
+      LEMON_SQUEEZY_SOURCE,
+    ],
     differences: [
       {
         title: 'What $19 buys',
@@ -184,8 +202,8 @@ export const competitors: Record<CompetitorSlug, Competitor> = {
         body: 'ParityDeals lists holiday discounts and time-based discounts as features. GoPayLocal\'s discounts are by country only.',
       },
       {
-        title: 'You sell through Lemon Squeezy, or on a course or newsletter platform',
-        body: 'ParityDeals lists a Lemon Squeezy integration and tutorials for Kajabi, Podia, Circle, Beehiiv, Framer and Substack. GoPayLocal has no Lemon Squeezy integration and no guides for those platforms.',
+        title: 'You sell on a course or newsletter platform',
+        body: 'ParityDeals lists tutorials for Kajabi, Podia, Circle, Beehiiv, Framer and Substack. GoPayLocal has no guides for those platforms.',
       },
       {
         title: 'You want the established product',
@@ -285,27 +303,29 @@ export const competitors: Record<CompetitorSlug, Competitor> = {
     ],
     cells: {
       price: '$19.50 or $44.50 a month, charged after your first sale',
-      calls: 'Unlimited API requests on both plans',
-      at19: 'At $19.50: unlimited API requests and 5 websites',
-      overLimit: 'No request limit listed',
+      calls: 'Listed as "Unlimited API requests" on both plans. Its site has no terms of service or fair-use policy that says what that covers.',
+      at19: 'At $19.50: 5 websites, with API requests listed as unlimited',
+      overLimit: 'Not stated. No terms of service are published on its site.',
       products: '5 websites or unlimited websites by plan',
       free: 'No charge until you make your first sale',
       openSource: NOT_OPEN,
       selfHost: NOT_SELF_HOSTED,
-      platforms: 'Paddle, Lemon Squeezy, Polar and Stripe',
+      platforms: `Paddle, Lemon Squeezy, Polar and Stripe. ${LEMON_SQUEEZY_NOTE}`,
       vpn: 'Yes. A Tor, proxy and VPN blocker is on both plans.',
       abTesting: 'Listed as coming soon',
       currency: 'Not listed on its site',
     },
     volume: ['$19.50 or $44.50', '$19.50 or $44.50', '$19.50 or $44.50', '$19.50 or $44.50', '$19.50 or $44.50'],
+    extraSources: [LEMON_SQUEEZY_SOURCE],
     differences: [
       {
         title: 'Payment platforms',
-        body: `Parity Kit lists four payment platforms: Paddle, Lemon Squeezy, Polar and Stripe. GoPayLocal supports ${platformNames.length}: ${GOPAYLOCAL_PLATFORMS}.`,
+        body: `Parity Kit lists four payment platforms: Paddle, Lemon Squeezy, Polar and Stripe. ${LEMON_SQUEEZY_NOTE} GoPayLocal supports ${platformNames.length}: ${GOPAYLOCAL_PLATFORMS}.`,
+        link: LEMON_SQUEEZY_GUIDE,
       },
       {
-        title: 'Both are flat-priced',
-        body: `Parity Kit is $19.50 a month for five websites and $44.50 for unlimited websites. GoPayLocal is $${PRO_MONTH} a month for unlimited products, with a free plan for one product.`,
+        title: 'A stated number, not "unlimited"',
+        body: `Both are flat-priced. Parity Kit's pricing says "Unlimited API requests", and its site has no terms of service that say what that covers. GoPayLocal's Pro plan states ${PRO_CALLS_MILLIONS} million calls a month, and its terms say what happens above that: we get in touch, and nothing is cut off.`,
       },
       {
         title: 'Open source, and A/B tests today',
@@ -318,28 +338,25 @@ export const competitors: Record<CompetitorSlug, Competitor> = {
         body: `Parity Kit charges only after your first sale. GoPayLocal's free plan has no time limit but covers one product and ${FREE_CALLS} calls a month.`,
       },
       {
-        title: 'You sell through Lemon Squeezy',
-        body: 'Parity Kit supports it. GoPayLocal does not.',
-      },
-      {
         title: 'You stack a campaign discount on top',
         body: 'Parity Kit can add a launch or holiday discount on top of the country discount. GoPayLocal\'s discounts are by country only.',
       },
       {
-        title: 'You want no stated request limit',
-        body: `Parity Kit lists unlimited API requests. GoPayLocal's Pro plan states ${PRO_CALLS_MILLIONS} million calls a month and asks you to get in touch above that.`,
+        title: 'You want a stated support response time',
+        body: 'Parity Kit lists priority email support with a 24-hour response on both plans. GoPayLocal\'s Pro plan has email support with no stated response time.',
       },
     ],
     whyLook: [
-      'It lists four payment platforms: Paddle, Lemon Squeezy, Polar and Stripe.',
+      `It lists four payment platforms: Paddle, Lemon Squeezy, Polar and Stripe. ${LEMON_SQUEEZY_NOTE}`,
+      'Its pricing says "Unlimited API requests", and its site has no terms of service or fair-use policy that says what that covers.',
       'The $19.50 plan covers five websites; unlimited websites cost $44.50 a month.',
       'A/B testing is listed as coming soon.',
       'It is hosted only, and its source code is not published.',
     ],
     listing: {
       price: '$19.50 or $44.50 a month',
-      calls: 'Unlimited',
-      goodFit: 'You sell through Paddle, Lemon Squeezy, Polar or Stripe and want to pay only after a first sale.',
+      calls: 'Listed as unlimited',
+      goodFit: 'You sell through Paddle, Polar or Stripe and want to pay only after a first sale.',
     },
   },
 };

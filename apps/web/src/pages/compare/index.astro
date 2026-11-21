@@ -72,7 +72,11 @@ const rows = [
     </div>
   </section>
 
-  <ComparisonSources sources={competitorList.map((c) => ({ label: c.sourceLabel, href: c.sourceUrl }))} />
+  <ComparisonSources
+    sources={competitorList
+      .flatMap((c) => [{ label: c.sourceLabel, href: c.sourceUrl }, ...(c.extraSources ?? [])])
+      .filter((source, index, all) => all.findIndex((other) => other.href === source.href) === index)}
+  />
 
   <FinalCTASection
     title={`One flat price.\nOpen source.`}
