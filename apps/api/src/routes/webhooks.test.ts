@@ -31,7 +31,7 @@ vi.mock("../lib/crypto", async (importOriginal) => {
   };
 });
 
-const { default: webhooksRoute, GUMROAD_ACK_BUDGET_MS } = await import("./webhooks");
+const { default: webhooksRoute, GUMROAD_ACK_BUDGET_MS, isOtherDodoProduct } = await import("./webhooks");
 const { healthClears, healthWrites } = await import("../services/integration-health-test-helpers");
 
 const INTEGRATION = "int_1";
@@ -119,6 +119,20 @@ afterEach(() => {
 });
 
 describe("billing webhook (/v1/webhooks/dodo)", () => {
+  it("tells another product of the same Dodo business apart from Pro", () => {
+    const env = { DODO_PRICE_ID_PRO_MONTHLY: "pdt_pro" };
+    expect(isOtherDodoProduct(env, { product_id: "pdt_other" })).toBe(true);
+    expect(isOtherDodoProduct(env, { product: { product_id: "pdt_other" } })).toBe(true);
+    expect(isOtherDodoProduct(env, { product_cart: [{ product_id: "pdt_a" }, { product_id: "pdt_b" }] })).toBe(true);
+    expect(isOtherDodoProduct(env, { product_id: "pdt_pro" })).toBe(false);
+    expect(isOtherDodoProduct(env, { product_cart: [{ product_id: "pdt_a" }, { product_id: "pdt_pro" }] })).toBe(false);
+    // Nothing named, or no product configured: not decided here.
+    expect(isOtherDodoProduct(env, { subscription_id: "sub_1" })).toBe(false);
+    expect(isOtherDodoProduct(env, { product_cart: [null, { quantity: 1 }] })).toBe(false);
+    expect(isOtherDodoProduct({}, { product_id: "pdt_other" })).toBe(false);
+    expect(isOtherDodoProduct(env, null)).toBe(false);
+  });
+
   it("is disabled on self-hosted deployments, like the other billing endpoints", async () => {
     // It used to verify and process deliveries even with SELF_HOSTED="true".
     state.recorder = createSqlRecorder([]);

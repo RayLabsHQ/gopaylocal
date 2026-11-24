@@ -29,7 +29,10 @@ and a self-hosted mode with no limits and no billing.
 - Pro is billed monthly. The yearly plan was removed in November 2026 by the founder;
   do not re-add it. The checkout refuses any interval other than `month`.
 - The Dodo product and `DODO_PRICE_ID_PRO_MONTHLY` are managed by the founder in the
-  Dodo dashboard.
+  Dodo dashboard. The Dodo business that bills Pro also sells other products, and Dodo sends
+  every event of a business to every webhook endpoint: the billing webhook acknowledges
+  and does not store a delivery about another product (`isOtherDodoProduct` in
+  `apps/api/src/routes/webhooks.ts`), and only the Pro product id grants a plan.
 - Pro has a regional price (decided by the founder, November 2026), priced with GoPayLocal
   itself. A display-only campaign (no payment platform, so no codes; capped at 70%) in an
   internal "house" workspace, chosen on the admin's Regional price page, sets each

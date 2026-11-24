@@ -46,6 +46,24 @@ function planFromDodoPriceId(env: Bindings, priceId: string | undefined | null):
 }
 
 /**
+ * True when a delivery is about another product of the same Dodo business.
+ * Dodo sends every event of a business to every webhook endpoint, and the
+ * business that bills Pro can sell other things. Only decided when the Pro
+ * product is configured and the event names at least one product.
+ */
+export function isOtherDodoProduct(env: Pick<Bindings, "DODO_PRICE_ID_PRO_MONTHLY">, data: unknown): boolean {
+  const pro = env.DODO_PRICE_ID_PRO_MONTHLY;
+  if (!pro || !data || typeof data !== "object") return false;
+  const d = data as { product_id?: unknown; product?: { product_id?: unknown }; product_cart?: unknown };
+  const named = [d.product_id, d.product?.product_id];
+  if (Array.isArray(d.product_cart)) {
+    for (const item of d.product_cart) named.push((item as { product_id?: unknown } | null)?.product_id);
+  }
+  const ids = named.filter((id): id is string => typeof id === "string" && id.length > 0);
+  return ids.length > 0 && !ids.includes(pro);
+}
+
+/**
  * POST /v1/webhooks/dodo
  * Dodo Payments webhook handler.
  * - Verifies the Standard Webhooks (standardwebhooks.com) signature
@@ -88,6 +106,12 @@ app.post("/v1/webhooks/dodo", async (c) => {
       type: string;
       data: Record<string, any>;
     };
+
+    // Another product's event: acknowledged so Dodo stops sending it, and not
+    // stored, so another product's customer data never lands here.
+    if (isOtherDodoProduct(c.env, payload.data)) {
+      return c.json({ received: true, ignored: true });
+    }
 
     // Atomic idempotency: claim the webhook-id (unique). If no row is inserted,
     // we've already seen this delivery — skip if it was processed successfully.
@@ -173,15 +197,19 @@ async function processWebhookEvent(
       const orgId = data.metadata?.organizationId as string | undefined;
       if (!orgId) throw new Error("Missing organizationId in subscription metadata");
 
-      // Derive the plan from the verified price/product id; fall back to a
-      // VALIDATED metadata hint only if the id is unconfigured, never to 'pro'.
-      // normalizePlan folds a legacy 'business' hint (old checkouts renewing
-      // on retired products) into 'pro' and rejects anything unknown.
+      // Derive the plan from the verified product id. Metadata can be set by
+      // whoever opens a Dodo payment link, so it is only a hint, and only when
+      // no Pro product is configured (local development); normalizePlan
+      // rejects anything unknown. With a product configured, an event without
+      // the Pro product changes nothing: the upsert below would otherwise mark
+      // the organization's subscription active.
       const productId =
         (data.product_id as string | undefined) ??
         (data.product?.product_id as string | undefined);
-      const resolvedPlan =
-        planFromDodoPriceId(env, productId) ?? normalizePlan(data.metadata?.plan);
+      const resolvedPlan = env.DODO_PRICE_ID_PRO_MONTHLY
+        ? planFromDodoPriceId(env, productId)
+        : normalizePlan(data.metadata?.plan);
+      if (env.DODO_PRICE_ID_PRO_MONTHLY && !resolvedPlan) break;
 
       const periodEnd =
         (data.current_period_end as string | undefined) ??

@@ -9,6 +9,7 @@ import {
   members,
   organizationLimitOverrides,
   subscriptions,
+  webhookEvents,
 } from "../db/schema";
 import {
   createExecutionContext,
@@ -526,6 +527,44 @@ describe("Plan limits (full Worker)", () => {
       const refused = await createProduct(client, t, 3);
       expect(refused.status).toBe(403);
       expect(await refused.json()).toMatchObject({ plan: "free", maxProducts: 1, currentCount: 2 });
+    });
+
+    it("another product's events in the same Dodo business change nothing and are not stored", async () => {
+      const client = billingDeployment();
+      const t = await seedTenant(client, "Shared Business Org");
+      // A cancelled Pro subscription whose paid period has ended.
+      await getTestDb().insert(subscriptions).values({
+        id: ulid(), organizationId: t.orgId, plan: "pro", status: "canceled",
+        currentPeriodEnd: inDays(-1), environment: "live",
+      });
+      const before = await usage(client, t);
+      expect(before.plan).toBe("free");
+
+      // Metadata can be set by whoever opens a payment link.
+      const metadata = { organizationId: t.orgId, plan: "pro" };
+      const deliveries = [
+        { id: "msg_other_active", type: "subscription.active", data: { product_id: "pdt_someone_else", subscription_id: "sub_other", next_billing_date: inDays(30).toISOString(), metadata } },
+        { id: "msg_other_payment", type: "payment.failed", data: { product_cart: [{ product_id: "pdt_someone_else", quantity: 1 }], metadata } },
+        { id: "msg_other_cancel", type: "subscription.cancelled", data: { product_id: "pdt_someone_else", metadata } },
+      ];
+      for (const d of deliveries) {
+        const res = await signedDelivery(client, d.id, { type: d.type, data: d.data });
+        expect(res.status).toBe(200);
+        expect(await res.json()).toMatchObject({ received: true, ignored: true });
+      }
+      const stored = await getTestDb().select().from(webhookEvents).where(eq(webhookEvents.provider, "dodo"));
+      expect(stored.filter((e) => deliveries.some((d) => d.id === e.webhookId))).toHaveLength(0);
+
+      // An activation that names no product doesn't count either.
+      const bare = await signedDelivery(client, "msg_no_product", {
+        type: "subscription.active",
+        data: { subscription_id: "sub_bare", next_billing_date: inDays(30).toISOString(), metadata },
+      });
+      expect(bare.status).toBe(200);
+
+      const [sub] = await getTestDb().select().from(subscriptions).where(eq(subscriptions.organizationId, t.orgId));
+      expect(sub).toMatchObject({ plan: "pro", status: "canceled", dodoSubId: null });
+      expect((await usage(client, t)).plan).toBe("free");
     });
 
     it("subscription.active and subscription.renewed arriving together leave one row with the mode, amount and country", async () => {
