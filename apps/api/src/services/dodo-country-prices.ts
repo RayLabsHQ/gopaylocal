@@ -290,19 +290,32 @@ export interface ApplyResult {
  * One batch: make the product per-country priced if it isn't, then apply
  * planDodoSync's changes until `budget` calls are spent. `label` names the
  * product in problem messages ("the Pro product").
+ *
+ * `check` sees the product as Dodo returns it and `checkRules` its rules before
+ * anything is written; either can stop the batch with a problem. With
+ * `ensureByCountry: false` (removing every rule) the product's pricing mode is
+ * left as it is.
  */
 export async function applyCountryPrices(
   request: DodoRequest,
   productId: string,
   rows: readonly CountryPriceRow[],
-  opts: { budget: number; label: string },
-): Promise<{ ok: true; result: ApplyResult } | { ok: false; problem: string }> {
+  opts: {
+    budget: number;
+    label: string;
+    check?: (product: unknown) => string | null;
+    checkRules?: (rules: readonly DodoRule[]) => string | null;
+    ensureByCountry?: boolean;
+  },
+): Promise<{ ok: true; result: ApplyResult } | { ok: false; problem: string; status?: number }> {
   const path = productPath(productId);
   let calls = 0;
   const product = await request("GET", path);
   calls++;
-  if (!product.ok) return { ok: false, problem: `Couldn't read ${opts.label}. ${dodoErrorMessage(product)}` };
-  if ((product.body as { pricing_mode?: unknown } | null)?.pricing_mode !== "by_country") {
+  if (!product.ok) return { ok: false, problem: `Couldn't read ${opts.label}. ${dodoErrorMessage(product)}`, status: product.status };
+  const refused = opts.check?.(product.body);
+  if (refused) return { ok: false, problem: refused };
+  if (opts.ensureByCountry !== false && (product.body as { pricing_mode?: unknown } | null)?.pricing_mode !== "by_country") {
     const set = await request("PATCH", path, { pricing_mode: "by_country" });
     calls++;
     if (!set.ok) return { ok: false, problem: `Couldn't switch ${opts.label} to per-country prices. ${dodoErrorMessage(set)}` };
@@ -312,6 +325,8 @@ export async function applyCountryPrices(
   if (!listed.ok) return { ok: false, problem: `Couldn't list ${opts.label}'s prices. ${dodoErrorMessage(listed)}` };
 
   const rulesBefore = rulesOf(listed.body);
+  const refusedRules = opts.checkRules?.(rulesBefore);
+  if (refusedRules) return { ok: false, problem: refusedRules };
   const actions = planDodoSync(rows, rulesBefore);
   const after = new Map<string, DodoRule>();
   for (const rule of rulesBefore) {

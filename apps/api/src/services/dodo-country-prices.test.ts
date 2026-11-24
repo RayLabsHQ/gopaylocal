@@ -76,7 +76,7 @@ describe("applyCountryPrices", () => {
   it("names the product and Dodo's answer when a read is refused", async () => {
     const dodo = fakeDodo({ refuse: (method, path) => method === "GET" && path === "/products/pdt_1" });
     const out = await applyCountryPrices(dodo.request, "pdt_1", [row("IN", "INR", 52900)], { budget: 35, label: "the Pro product" });
-    expect(out).toEqual({ ok: false, problem: "Couldn't read the Pro product. Dodo answered 403: INSUFFICIENT_PERMISSION" });
+    expect(out).toEqual({ ok: false, problem: "Couldn't read the Pro product. Dodo answered 403: INSUFFICIENT_PERMISSION", status: 403 });
   });
 
   it("records a refused write per country and keeps going", async () => {
