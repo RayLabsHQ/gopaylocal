@@ -89,11 +89,13 @@ app.get("/v1/admin/activation", async (c) => {
           id: organizations.id,
           name: organizations.name,
           createdAt: organizations.createdAt,
-          ownerEmail: sql<string | null>`(SELECT ${users.email} FROM ${members} INNER JOIN ${users} ON ${users.id} = ${members.userId} WHERE ${members.organizationId} = ${organizations.id} AND ${members.role} = 'owner' ORDER BY ${members.createdAt} LIMIT 1)`,
-          hasProduct: sql<boolean>`EXISTS (SELECT 1 FROM ${products} WHERE ${products.organizationId} = ${organizations.id} AND ${products.environment} = 'live')`,
-          hasActiveCampaign: sql<boolean>`EXISTS (SELECT 1 FROM ${campaigns} WHERE ${campaigns.organizationId} = ${organizations.id} AND ${campaigns.status} = 'active' AND ${campaigns.environment} = 'live')`,
-          hasLiveViews: sql<boolean>`EXISTS (SELECT 1 FROM ${analyticsRollups} WHERE ${analyticsRollups.organizationId} = ${organizations.id} AND ${analyticsRollups.environment} = 'live' AND ${analyticsRollups.period} = 'day' AND ${analyticsRollups.impressions} > 0)`,
-          isPro: sql<boolean>`EXISTS (SELECT 1 FROM ${subscriptions} WHERE ${subscriptions.organizationId} = ${organizations.id} AND ${subscriptions.environment} = 'live' AND ${subscriptions.status} = 'active' AND ${subscriptions.plan} IN ('pro', 'business'))`,
+          // Written out with table names: Drizzle leaves columns unqualified in
+          // a single-table select list, which makes "id" ambiguous in a subquery.
+          ownerEmail: sql<string | null>`(SELECT u.email FROM "member" m INNER JOIN "user" u ON u.id = m."userId" WHERE m."organizationId" = "organization".id AND m.role = 'owner' ORDER BY m."createdAt" LIMIT 1)`,
+          hasProduct: sql<boolean>`EXISTS (SELECT 1 FROM products p WHERE p.organization_id = "organization".id AND p.environment = 'live')`,
+          hasActiveCampaign: sql<boolean>`EXISTS (SELECT 1 FROM campaigns c WHERE c.organization_id = "organization".id AND c.status = 'active' AND c.environment = 'live')`,
+          hasLiveViews: sql<boolean>`EXISTS (SELECT 1 FROM analytics_rollups a WHERE a.organization_id = "organization".id AND a.environment = 'live' AND a.period = 'day' AND a.impressions > 0)`,
+          isPro: sql<boolean>`EXISTS (SELECT 1 FROM subscriptions s WHERE s.organization_id = "organization".id AND s.environment = 'live' AND s.status = 'active' AND s.plan IN ('pro', 'business'))`,
         })
         .from(organizations)
         .where(notInternal(organizations.id))

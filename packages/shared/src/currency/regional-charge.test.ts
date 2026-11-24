@@ -75,11 +75,12 @@ describe("regionalOfferFromAnswer", () => {
     });
   });
 
-  it("ignores no-discount answers, deals, A/B arms and a product in another currency", () => {
+  it("ignores no-discount answers, deals, A/B arms, codes and a product in another currency", () => {
     expect(regionalOfferFromAnswer({ show: false, reason: "no_discount" }, 19, "USD")).toBeNull();
     expect(regionalOfferFromAnswer({ ...answer, deal: { id: "d" } }, 19, "USD")).toBeNull();
     expect(regionalOfferFromAnswer({ ...answer, experimentId: "e", variant: "b" }, 19, "USD")).toBeNull();
     expect(regionalOfferFromAnswer({ ...answer, baseCurrencyCode: "EUR" }, 19, "USD")).toBeNull();
+    expect(regionalOfferFromAnswer({ ...answer, code: "PPP70" }, 19, "USD")).toBeNull();
     expect(regionalOfferFromAnswer(null, 19, "USD")).toBeNull();
   });
 });

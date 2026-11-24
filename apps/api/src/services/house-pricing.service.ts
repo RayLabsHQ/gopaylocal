@@ -25,7 +25,7 @@
 import { eq } from "drizzle-orm";
 import type { Bindings } from "../bindings";
 import type { Database } from "../db";
-import { platformSettings } from "../db/schema";
+import { campaigns, internalOrganizations, platformSettings } from "../db/schema";
 import { COUNTRY_NAMES, PLAN_PRICES_USD } from "@gopaylocal/shared/constants";
 import { localPricing, regionalCharge, type RegionalCharge } from "@gopaylocal/shared/currency";
 import { isSelfHosted } from "../lib/entitlements";
@@ -109,6 +109,31 @@ export async function houseRegionalPrices(
   settings: Pick<HouseSettings, "organizationId" | "campaignId">,
   now: number = Date.now(),
 ): Promise<HousePriceTable> {
+  // Re-checked on every read and every sync, not only when the campaign was
+  // picked: a payment platform connected since would put codes on top of the
+  // per-country price, and a workspace no longer internal would be counted.
+  const [row] = await db
+    .select({
+      organizationId: campaigns.organizationId,
+      integrationId: campaigns.integrationId,
+      internal: internalOrganizations.organizationId,
+    })
+    .from(campaigns)
+    .leftJoin(internalOrganizations, eq(internalOrganizations.organizationId, campaigns.organizationId))
+    .where(eq(campaigns.id, settings.campaignId))
+    .limit(1);
+  if (!row || row.organizationId !== settings.organizationId) {
+    return { ok: false, problem: "The house campaign no longer exists. Pick another one." };
+  }
+  if (!row.internal) return { ok: false, problem: "The house workspace is no longer internal. Mark it internal again." };
+  if (row.integrationId) {
+    return {
+      ok: false,
+      problem:
+        "The house campaign has a payment platform connected, so its banner would offer codes on top of the per-country price. Disconnect it from the campaign.",
+    };
+  }
+
   const doc = await buildBannerDocNow(db, settings.organizationId, env);
   if (!doc) return { ok: false, problem: "The house workspace has no public key. Create one under Settings → API keys." };
   const campaign = Object.hasOwn(doc.campaigns, settings.campaignId) ? doc.campaigns[settings.campaignId]! : null;

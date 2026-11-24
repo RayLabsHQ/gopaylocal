@@ -101,13 +101,15 @@ export interface RegionalOffer extends RegionalCharge {
  * A visitor's charge from the config endpoint's answer for them
  * (`GET /v1/banner/config/{publicKey}`). Null when they get no discount, when
  * the answer is for a product in another currency, and when it is a holiday
- * deal or an A/B test arm: Dodo's per-country prices follow neither.
+ * deal, an A/B test arm, or an offer with a code: Dodo's per-country prices
+ * follow none of them.
  */
 export function regionalOfferFromAnswer(answer: unknown, basePrice: number, baseCurrency: string): RegionalOffer | null {
   if (!answer || typeof answer !== "object") return null;
   const a = answer as Record<string, unknown>;
   if (a.show !== true || typeof a.discount !== "number" || typeof a.country !== "string") return null;
-  if (a.deal || a.experimentId) return null;
+  // A code would be taken off the per-country price at checkout: not this setup.
+  if (a.deal || a.experimentId || a.code) return null;
   if (typeof a.baseCurrencyCode === "string" && a.baseCurrencyCode !== baseCurrency) return null;
   const charge = regionalCharge({
     basePrice,

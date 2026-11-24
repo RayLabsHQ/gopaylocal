@@ -7,6 +7,7 @@ import {
   apiKeys,
   bannerConfigs,
   campaigns,
+  integrations,
   products,
   subscriptions,
   users,
@@ -178,6 +179,16 @@ describe("admin insights and the regional Pro price", () => {
     } while (update.record.remaining > 0);
     expect(dodo.state.rules.find((r) => r.country_code === "IN")).toMatchObject({ currency: "USD", amount: 950 });
     expect(dodo.state.rules).toHaveLength(rows.length);
+
+    // A payment platform connected to the house campaign since it was picked
+    // stops every sync: its codes would come off the per-country price.
+    const integrationId = ulid();
+    await getTestDb().insert(integrations).values({ id: integrationId, organizationId: house.orgId, provider: "dodopayments" });
+    await getTestDb().update(campaigns).set({ integrationId }).where(eq(campaigns.id, house.campaignId));
+    const blocked = (await (await client.request("/v1/admin/house-pricing/sync", { method: "POST", headers: as(admin) })).json()).data;
+    expect(blocked.outcome).toBe("problem");
+    expect(blocked.problem).toMatch(/payment platform/);
+    await getTestDb().update(campaigns).set({ integrationId: null }).where(eq(campaigns.id, house.campaignId));
 
     // The house workspace stays internal while it prices Pro.
     const unmark = await client.request(`/v1/admin/organizations/${house.orgId}/internal`, {
