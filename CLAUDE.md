@@ -158,7 +158,6 @@ Besides `ci.yml` (typecheck, unit, integration and docs build on every push and 
   KV namespace through Cloudflare's API, because the Worker's own cron cannot finish
   on Workers Free. Needs the secrets `CLOUDFLARE_KV_API_TOKEN` and
   `CLOUDFLARE_ACCOUNT_ID`; without them it reports "not set up".
-
 - `release-sdks.yml` (by hand only, from `main`): publishes `@gopaylocal/js` and
   `@gopaylocal/react` to npm when the version in a package's `package.json` is not on
   npm yet (`.github/scripts/release-sdks.sh`); `-f dry_run=true` builds and lists the
