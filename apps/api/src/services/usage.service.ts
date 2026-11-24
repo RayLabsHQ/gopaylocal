@@ -150,6 +150,7 @@ export async function recomputeUsageForAllOrgs(
         plan: subscriptions.plan,
         status: subscriptions.status,
         currentPeriodEnd: subscriptions.currentPeriodEnd,
+        environment: subscriptions.environment,
       })
       .from(subscriptions),
     db

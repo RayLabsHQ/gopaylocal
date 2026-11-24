@@ -598,6 +598,7 @@ app.get("/v1/admin/alerts", async (c) => {
         plan: subscriptions.plan,
         status: subscriptions.status,
         currentPeriodEnd: subscriptions.currentPeriodEnd,
+        environment: subscriptions.environment,
       })
       .from(organizations)
       .leftJoin(subscriptions, eq(subscriptions.organizationId, organizations.id));
@@ -656,7 +657,7 @@ app.get("/v1/admin/alerts", async (c) => {
 
     for (const org of orgsWithPlans) {
       const sub = org.plan
-        ? { plan: org.plan, status: org.status ?? "", currentPeriodEnd: org.currentPeriodEnd }
+        ? { plan: org.plan, status: org.status ?? "", currentPeriodEnd: org.currentPeriodEnd, environment: org.environment }
         : null;
       const ent = resolveEntitlements(sub, c.env, overrideMap.get(org.id) ?? null);
 

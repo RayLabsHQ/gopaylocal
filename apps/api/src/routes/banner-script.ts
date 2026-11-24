@@ -350,6 +350,7 @@ function databaseResolver(inputs: ServingInputs, deps: ResolverDeps): Resolver {
           plan: subscriptions.plan,
           status: subscriptions.status,
           currentPeriodEnd: subscriptions.currentPeriodEnd,
+          environment: subscriptions.environment,
         })
         .from(subscriptions)
         .where(eq(subscriptions.organizationId, deps.organizationId))

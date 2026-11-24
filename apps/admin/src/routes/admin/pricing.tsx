@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { minorToMajor } from '@gopaylocal/shared/currency'
 import { adminApi, ApiError, type HouseSyncRecord } from '~/lib/api'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/select'
 import {
   EmptyState,
   ErrorBox,
@@ -73,6 +74,7 @@ function RegionalPricePage() {
   const matching = rows.filter((r) => r.dodo?.status === 'match').length
   const lastSync = progress?.last ?? data?.settings?.lastSync ?? null
   const current = data?.settings?.campaign ?? null
+  const others = (data?.candidates ?? []).filter((c) => c.campaignId !== current?.campaignId)
 
   return (
     <div>
@@ -172,21 +174,26 @@ function RegionalPricePage() {
                     {current ? 'Use another campaign' : 'Pick the campaign'}
                   </label>
                   <div className="mt-1.5 flex gap-2">
-                    <select
-                      id="house-campaign"
-                      value={choice}
-                      onChange={(e) => setChoice(e.target.value)}
-                      className="min-w-0 flex-1 border border-border bg-bg px-3 py-2 text-sm text-text-primary outline-none focus:border-accent"
-                    >
-                      <option value="">{data.candidates.length === 0 ? 'No campaigns in internal workspaces' : 'Choose…'}</option>
-                      {data.candidates
-                        .filter((c) => c.campaignId !== current?.campaignId)
-                        .map((c) => (
-                          <option key={c.campaignId} value={c.campaignId}>
+                    <Select value={choice || undefined} onValueChange={setChoice} disabled={others.length === 0}>
+                      <SelectTrigger id="house-campaign" className="min-w-0 flex-1">
+                        <SelectValue
+                          placeholder={
+                            data.candidates.length === 0
+                              ? 'No campaigns in internal workspaces'
+                              : others.length === 0
+                                ? 'No other campaigns'
+                                : 'Choose a campaign'
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {others.map((c) => (
+                          <SelectItem key={c.campaignId} value={c.campaignId}>
                             {c.organizationName} · {c.campaignName}
-                          </option>
+                          </SelectItem>
                         ))}
-                    </select>
+                      </SelectContent>
+                    </Select>
                     <button
                       type="button"
                       className={btn}

@@ -143,6 +143,7 @@ app.post("/v1/teams/:orgId/billing/checkout", requirePermission("billing.manage"
         plan: subscriptions.plan,
         status: subscriptions.status,
         currentPeriodEnd: subscriptions.currentPeriodEnd,
+        environment: subscriptions.environment,
       })
       .from(subscriptions)
       .where(eq(subscriptions.organizationId, orgId))

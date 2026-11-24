@@ -50,6 +50,7 @@ const activePro: SubscriptionLike = {
   plan: "pro",
   status: "active",
   currentPeriodEnd: new Date(Date.now() + 10 * DAY),
+  environment: "live",
 };
 const legacyBusiness: SubscriptionLike = { ...activePro, plan: "business" };
 

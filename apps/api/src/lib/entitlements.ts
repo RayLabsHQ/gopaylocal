@@ -8,7 +8,11 @@
 // 2. Subscription status (hosted only). A paid plan only grants paid limits
 //    while the subscription is active (or within a grace window until the paid
 //    period ends). Churned, expired, or failed subscriptions fall back to 'free'
-//    so paid limits don't leak after a cancellation or payment failure.
+//    so paid limits don't leak after a cancellation or payment failure. A
+//    subscription bought in Dodo's test mode counts only while this API runs
+//    in test mode (DODO_ENVIRONMENT="test_mode"): once it runs live, test
+//    webhooks stop arriving and a test subscription would otherwise stay
+//    active forever.
 //
 // Use resolveEntitlements() wherever limits or branding are read (product caps,
 // API-hit quota, team size, analytics retention, branding) instead of reading
@@ -23,11 +27,14 @@ export interface SubscriptionLike {
   plan: string;
   status: string;
   currentPeriodEnd: Date | null;
+  /** subscriptions.environment: 'live', or 'test' for a Dodo test-mode purchase. Required so every caller loads it. */
+  environment: string | null;
 }
 
 /** The slice of the Worker env that entitlements read. `Bindings` satisfies it. */
 export interface DeploymentEnv {
   SELF_HOSTED?: string;
+  DODO_ENVIRONMENT?: string;
 }
 
 /** Per-org admin overrides (organization_limit_overrides). null = no override. */
@@ -58,10 +65,16 @@ export function isSelfHosted(env: DeploymentEnv | null | undefined): boolean {
   return env?.SELF_HOSTED?.trim().toLowerCase() === "true";
 }
 
-/** Effective plan from subscription status alone (ignores deployment mode). */
-export function effectivePlan(sub: SubscriptionLike | null | undefined): Plan {
+/** Whether a subscription can grant its plan in this deployment's Dodo mode. */
+export function subscriptionCountsHere(sub: Pick<SubscriptionLike, "environment">, env: DeploymentEnv | null | undefined): boolean {
+  return sub.environment !== "test" || env?.DODO_ENVIRONMENT === "test_mode";
+}
+
+/** Effective plan from the subscription's status and Dodo mode (ignores self-hosting). */
+export function effectivePlan(sub: SubscriptionLike | null | undefined, env?: DeploymentEnv | null): Plan {
   const stored = normalizePlan(sub?.plan);
   if (!sub || !stored || stored === "free") return "free";
+  if (!subscriptionCountsHere(sub, env)) return "free";
 
   const periodActive = sub.currentPeriodEnd
     ? sub.currentPeriodEnd.getTime() > Date.now()
@@ -93,7 +106,7 @@ export function resolveEntitlements(
   env?: DeploymentEnv | null,
   override?: LimitOverrideLike | null,
 ): Entitlements {
-  const plan = effectivePlan(sub);
+  const plan = effectivePlan(sub, env);
 
   if (isSelfHosted(env)) {
     return {

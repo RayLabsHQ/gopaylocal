@@ -12,10 +12,16 @@ const DAY = 86_400_000;
 const future = () => new Date(Date.now() + 10 * DAY);
 const past = () => new Date(Date.now() - 10 * DAY);
 
-const sub = (plan: string, status: string, currentPeriodEnd: Date | null = future()): SubscriptionLike => ({
+const sub = (
+  plan: string,
+  status: string,
+  currentPeriodEnd: Date | null = future(),
+  environment: string | null = "live",
+): SubscriptionLike => ({
   plan,
   status,
   currentPeriodEnd,
+  environment,
 });
 
 const HOSTED = { SELF_HOSTED: "false" };
@@ -71,9 +77,39 @@ describe("effectivePlan", () => {
     expect(effectivePlan(sub("pro", "expired"))).toBe("free");
     expect(effectivePlan(sub("pro", "weird"))).toBe("free");
   });
+
+  it("a test-mode subscription counts only while the API runs in Dodo test mode", () => {
+    const test = sub("pro", "active", future(), "test");
+    expect(effectivePlan(test, { DODO_ENVIRONMENT: "test_mode" })).toBe("pro");
+    expect(effectivePlan(test, { DODO_ENVIRONMENT: "live_mode" })).toBe("free");
+    // Unset means live, as the webhook handler reads it.
+    expect(effectivePlan(test, {})).toBe("free");
+    expect(effectivePlan(test)).toBe("free");
+    // Grace states follow the same rule.
+    expect(effectivePlan(sub("pro", "canceled", future(), "test"), { DODO_ENVIRONMENT: "live_mode" })).toBe("free");
+    expect(effectivePlan(sub("pro", "canceled", future(), "test"), { DODO_ENVIRONMENT: "test_mode" })).toBe("pro");
+  });
+
+  it("a live subscription counts in both modes", () => {
+    for (const mode of ["live_mode", "test_mode", undefined]) {
+      expect(effectivePlan(sub("pro", "active"), { DODO_ENVIRONMENT: mode })).toBe("pro");
+      expect(effectivePlan(sub("pro", "active", future(), null), { DODO_ENVIRONMENT: mode })).toBe("pro");
+    }
+  });
 });
 
 describe("resolveEntitlements (hosted)", () => {
+  it("a test-mode Pro subscription gets Free limits and branding once the API runs live", () => {
+    const test = sub("pro", "active", future(), "test");
+    const live = resolveEntitlements(test, { ...HOSTED, DODO_ENVIRONMENT: "live_mode" });
+    expect(live.plan).toBe("free");
+    expect(live.limits).toEqual(PLAN_LIMITS.free);
+    expect(live.showBranding).toBe(true);
+    const testMode = resolveEntitlements(test, { ...HOSTED, DODO_ENVIRONMENT: "test_mode" });
+    expect(testMode.plan).toBe("pro");
+    expect(testMode.showBranding).toBe(false);
+  });
+
   it("free: plan caps, branding on, billing on", () => {
     const ent = resolveEntitlements(null, HOSTED);
     expect(ent).toEqual({

@@ -45,6 +45,9 @@ and a self-hosted mode with no limits and no billing.
   charge them).
 - Internal workspaces (`internal_organizations`, set in the admin) and Dodo test-mode
   subscriptions (`subscriptions.environment = 'test'`) are left out of every admin metric.
+  A test-mode subscription also grants Pro only while the Worker runs in Dodo test mode
+  (`DODO_ENVIRONMENT="test_mode"`, checked in `effectivePlan`), so test purchases stop
+  counting when the hosted service switches to live.
 
 Positioning: the open-source PPP tool with one paid plan, priced per country with
 GoPayLocal itself. Compete on completeness (VPN detection, A/B testing, multi-currency,

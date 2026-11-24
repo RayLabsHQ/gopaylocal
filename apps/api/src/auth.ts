@@ -279,6 +279,7 @@ export function createAuth(env: Bindings, opts?: CreateAuthOptions) {
           plan: schema.subscriptions.plan,
           status: schema.subscriptions.status,
           currentPeriodEnd: schema.subscriptions.currentPeriodEnd,
+          environment: schema.subscriptions.environment,
         })
         .from(schema.subscriptions)
         .where(eq(schema.subscriptions.organizationId, orgId))

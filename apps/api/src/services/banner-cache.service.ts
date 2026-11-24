@@ -710,6 +710,7 @@ async function loadBannerDocSource(
         plan: subscriptions.plan,
         status: subscriptions.status,
         currentPeriodEnd: subscriptions.currentPeriodEnd,
+        environment: subscriptions.environment,
       })
       .from(subscriptions)
       .where(eq(subscriptions.organizationId, organizationId))
