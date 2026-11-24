@@ -31,7 +31,9 @@ import { campaigns, internalOrganizations, platformSettings } from "../db/schema
 import { COUNTRY_NAMES, PLAN_PRICES_USD } from "@gopaylocal/shared/constants";
 import {
   charm,
+  DODO_MIN_SUBSCRIPTION_USD,
   localPricing,
+  minorUnitExponent,
   regionalCharge,
   type CharmStrategy,
   type LocalPricing,
@@ -136,7 +138,7 @@ export type HousePriceTable =
  * the pages state ("70% off") is therefore never more than the real one. The
  * config endpoint rounds a visitor's estimate UP instead, which is right next to
  * a code for the exact percentage and wrong for a price that is charged as shown.
- * A price in the product's own currency is exact and left to regionalCharge.
+ * A price in the product's own currency is exact here; houseCharge rounds it.
  */
 export function chargedLocalPrice(
   basePrice: number,
@@ -146,6 +148,34 @@ export function chargedLocalPrice(
 ): number | null {
   if (!local.fxAsOf) return local.localPrice;
   return charm(basePrice * (1 - discount / 100) * local.fxRate, local.currencyCode, strategy, "down");
+}
+
+/**
+ * What Dodo charges one country: regionalCharge with the local price from
+ * chargedLocalPrice, and a charge in the product's own currency (a currency
+ * Dodo can't charge, or a visitor who pays in USD) charm-rounded down the same
+ * way, with the same 8% limit. A price no charm point fits under stays exact,
+ * as does one that would fall under Dodo's minimum.
+ */
+export function houseCharge(input: {
+  basePrice: number;
+  baseCurrency: string;
+  discount: number;
+  local: Pick<LocalPricing, "currencyCode" | "fxRate" | "fxAsOf" | "localPrice"> | null;
+  strategy: CharmStrategy;
+}): RegionalCharge | null {
+  const { basePrice, baseCurrency, discount, local, strategy } = input;
+  const charge = regionalCharge({
+    basePrice,
+    baseCurrency,
+    discount,
+    local: local ? { currencyCode: local.currencyCode, localPrice: chargedLocalPrice(basePrice, discount, local, strategy) } : null,
+  });
+  if (!charge || charge.local) return charge;
+  const rounded = charm(charge.amount, charge.currency, strategy, "down");
+  if (rounded === null || rounded >= charge.amount) return charge;
+  if (charge.currency === "USD" && rounded < DODO_MIN_SUBSCRIPTION_USD) return charge;
+  return { ...charge, amount: rounded, minorAmount: Math.round(rounded * 10 ** minorUnitExponent(charge.currency)) };
 }
 
 /** Every discounted country's price, as the house sync writes it to Dodo. */
@@ -212,13 +242,12 @@ export async function houseRegionalPrices(
       excludedCurrencies: excluded,
     });
     if (local?.fxAsOf) fxAsOf = local.fxAsOf;
-    const charge = regionalCharge({
+    const charge = houseCharge({
       basePrice: pricing.basePrice,
       baseCurrency: pricing.currency,
       discount: info.discount,
-      local: local
-        ? { currencyCode: local.currencyCode, localPrice: chargedLocalPrice(pricing.basePrice, info.discount, local, pricing.charm) }
-        : null,
+      local,
+      strategy: pricing.charm,
     });
     if (charge) rows.push({ country, countryName: COUNTRY_NAMES[country] ?? info.countryName ?? country, discount: info.discount, charge });
   }

@@ -3,6 +3,7 @@ import { CHARM_STRATEGIES } from "@gopaylocal/shared/currency";
 import {
   chargedLocalPrice,
   compareWithDodo,
+  houseCharge,
   dodoErrorMessage,
   houseSyncUnavailable,
   isHouseSyncRun,
@@ -165,5 +166,38 @@ describe("chargedLocalPrice", () => {
 
   it("leaves a price in the product's own currency as the config endpoint gave it", () => {
     expect(chargedLocalPrice(19, 70, { currencyCode: "USD", fxRate: 1, localPrice: 5.7 }, "region_aware")).toBe(5.7);
+  });
+});
+
+describe("houseCharge", () => {
+  const usd = (discount: number, strategy: (typeof CHARM_STRATEGIES)[number] = "region_aware") =>
+    houseCharge({ basePrice: 19, baseCurrency: "USD", discount, local: null, strategy });
+
+  it("charm-rounds a charge in USD down, like a local one", () => {
+    expect(usd(55)).toEqual({ currency: "USD", amount: 7.99, minorAmount: 799, local: false });
+    expect(usd(44)).toMatchObject({ amount: 9.99, minorAmount: 999 });
+    expect(usd(17)).toMatchObject({ amount: 14.99, minorAmount: 1499 });
+    expect(usd(55, "nearest_5")).toMatchObject({ amount: 8.5, minorAmount: 850 });
+  });
+
+  it("keeps the exact amount when no charm price fits within 8% under it, or with no strategy", () => {
+    // $5.70: the next charm price down, $4.99, is 12% under it.
+    expect(usd(70)).toMatchObject({ amount: 5.7, minorAmount: 570 });
+    expect(usd(55, "none")).toMatchObject({ amount: 8.55, minorAmount: 855 });
+  });
+
+  it("rounds a visitor who pays in USD (no conversion) the same way", () => {
+    const local = { currencyCode: "USD", fxRate: 1, localPrice: 8.55 };
+    expect(houseCharge({ basePrice: 19, baseCurrency: "USD", discount: 55, local, strategy: "round_x9" })).toMatchObject({ amount: 7.99 });
+  });
+
+  it("charges a converted price in the local currency, rounded down", () => {
+    const local = { currencyCode: "INR", fxRate: 92.867, fxAsOf: "2026-11-24", localPrice: 539 };
+    expect(houseCharge({ basePrice: 19, baseCurrency: "USD", discount: 70, local, strategy: "region_aware" })).toEqual({
+      currency: "INR",
+      amount: 529,
+      minorAmount: 52900,
+      local: true,
+    });
   });
 });
