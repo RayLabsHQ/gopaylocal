@@ -35,7 +35,7 @@ const others = competitorList.filter((c) => c.slug !== competitor.slug);
     </h1>
 
     <p class="mt-6 text-base sm:text-lg text-text-secondary leading-[1.7] max-w-2xl">
-      {competitor.summary} GoPayLocal does the same job as open-source software with one flat price. This page puts the
+      {competitor.summary} GoPayLocal does the same job as open-source software with one paid plan and no usage tiers. This page puts the
       two side by side, including where {competitor.name} is the better choice.
     </p>
 
@@ -169,7 +169,7 @@ const others = competitorList.filter((c) => c.slug !== competitor.slug);
 <ComparisonSources sources={[{ label: competitor.sourceLabel, href: competitor.sourceUrl }, ...(competitor.extraSources ?? [])]} />
 
 <FinalCTASection
-  title={`One flat price.\nOpen source.`}
+  title={`One paid plan.\nOpen source.`}
   subtitle={CTA_SUBTITLE}
   dark={false}
 />

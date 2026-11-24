@@ -46,9 +46,9 @@ and a self-hosted mode with no limits and no billing.
 - Internal workspaces (`internal_organizations`, set in the admin) and Dodo test-mode
   subscriptions (`subscriptions.environment = 'test'`) are left out of every admin metric.
 
-Positioning: the open-source PPP tool with one flat price. Compete on completeness
-(VPN detection, A/B testing, multi-currency, charm pricing, many integrations) and on
-not metering API hits. Every feature is available on every plan including Free.
+Positioning: the open-source PPP tool with one paid plan, priced per country with
+GoPayLocal itself. Compete on completeness (VPN detection, A/B testing, multi-currency,
+charm pricing, many integrations) and on not metering API hits. Every feature is available on every plan including Free.
 Marketing and docs claims must match the code; do not describe a feature as available
 until it is implemented and tested.
 

@@ -120,7 +120,7 @@ const faqItems = [
 ];
 
 // ─── PRICING ────────────────────────────────────────────
-// Free + one flat paid plan (Pro) + self-hosted. Limits and prices come from
+// Free + one paid plan (Pro) + self-hosted. Limits and prices come from
 // the same constants the API enforces (PLAN_LIMITS / PLAN_PRICES_USD in
 // packages/shared), so the page can't drift from what the product does.
 
@@ -203,7 +203,7 @@ const fullData: LandingData = {
     stats: [
       { value: String(PPP_COUNTRY_COUNT), label: 'Countries with PPP data' },
       { value: '<4KB', label: 'Script size (gzip)' },
-      { value: `$${PRO_MONTHLY}`, label: 'Flat price on Pro' },
+      { value: `$${PRO_MONTHLY}`, label: 'Pro, never metered' },
       { value: String(INTEGRATION_COUNT), label: 'Integrations', accent: true },
     ],
   },
@@ -306,7 +306,7 @@ const revenueData: LandingData = {
     stats: [
       { value: String(PPP_COUNTRY_COUNT), label: 'Countries with PPP data' },
       { value: String(INTEGRATION_COUNT), label: 'Payment integrations' },
-      { value: `$${PRO_MONTHLY}`, label: 'Flat price on Pro' },
+      { value: `$${PRO_MONTHLY}`, label: 'Pro, never metered' },
       { value: 'All', label: 'Features on Free', accent: true },
     ],
   },
@@ -336,7 +336,7 @@ const revenueData: LandingData = {
     proofPoints: [
       { label: 'Incremental, not cannibalized', description: 'PPP converts visitors from markets that bounce at full price. Compare two discount levels with an A/B test, and check the net effect against your own sales data.' },
       { label: 'Abuse-resistant by default', description: 'Edge geolocation plus VPN/proxy detection means local prices reach real local buyers — not VPN users gaming the discount.' },
-      { label: 'A complete PPP toolkit', description: `VPN blocking, multi-currency, A/B testing, charm pricing and ${INTEGRATION_COUNT} integrations in one tool. Try every feature free; Pro is one flat $${PLAN_PRICES_USD.pro.month}/mo.` },
+      { label: 'A complete PPP toolkit', description: `VPN blocking, multi-currency, A/B testing, charm pricing and ${INTEGRATION_COUNT} integrations in one tool. Try every feature free; Pro is $${PLAN_PRICES_USD.pro.month}/mo, and less where $${PLAN_PRICES_USD.pro.month} goes further.` },
     ],
   },
   finalCta: {
