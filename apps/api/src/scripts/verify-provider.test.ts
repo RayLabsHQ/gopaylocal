@@ -332,6 +332,24 @@ describe('Redactor', () => {
     expect(out).not.toContain('WXYZ');
   });
 
+  it('with hideAll, hides a key the provider echoes partly masked, and leaves ordinary words alone', () => {
+    const r = new Redactor({ hideAll: true });
+    r.add(`sk_test_${'x'.repeat(40)}WXYZ`);
+    r.add('ck_0123456789abcdef0123:cs_0123456789abcdef0123');
+    expect(r.redact('Invalid API Key provided: sk_test_********************WXYZ.')).toBe('Invalid API Key provided: [hidden key]');
+    expect(r.redact('consumer key ck_0123***def is not valid')).toBe('consumer key [hidden key] is not valid');
+    // "ck_" inside a word, and the bare prefix in the tool's own messages, stay.
+    expect(r.redact('stock_status is instock; expected a key starting with sk_test_ or rk_test_')).toBe(
+      'stock_status is instock; expected a key starting with sk_test_ or rk_test_',
+    );
+  });
+
+  it('without hideAll, a partly masked key is left as the provider printed it', () => {
+    const r = new Redactor();
+    r.add(`sk_test_${'x'.repeat(40)}WXYZ`);
+    expect(r.redact('Invalid API Key provided: sk_test_****WXYZ')).toBe('Invalid API Key provided: sk_test_****WXYZ');
+  });
+
   it('replaces a labelled value wherever it appears, in any letter case, and leaves very short ones alone', () => {
     const r = new Redactor();
     r.addLabel('Acme-Test', '[account id]');
@@ -708,8 +726,13 @@ describe('main: verify run', () => {
     expect(statusOf(report, 'checkout-url')).toEqual(['PASS']);
   });
 
-  it('--public-log hides a key the provider echoes in an error', async () => {
-    const fake = makeFakeProvider({ failOn: { listProducts: new Error(`Invalid key ${TEST_KEY} provided`) } });
+  it('--public-log hides a key the provider echoes in an error, whole or partly masked', async () => {
+    const fake = makeFakeProvider({
+      failOn: {
+        listProducts: new Error(`Invalid key ${TEST_KEY} provided`),
+        createDiscount: new Error(`Invalid API Key provided: sk_test_***********${TEST_KEY.slice(-4)}`),
+      },
+    });
     const h = harness(env, fake.provider);
     await main(['stripe', '--public-log', '--json'], h.deps);
     expect(h.all()).not.toContain(TEST_KEY);

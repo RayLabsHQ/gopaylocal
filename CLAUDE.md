@@ -37,6 +37,32 @@ not metering API hits. Every feature is available on every plan including Free.
 Marketing and docs claims must match the code; do not describe a feature as available
 until it is implemented and tested.
 
+## This repository is public
+
+Anyone can read the code, the history, the pull requests and everything GitHub Actions
+prints: logs, step summaries, artifacts. Write tests, scripts, workflows, fixtures, docs
+and commit messages with that reader in mind.
+
+- Never print a secret or any part of one: no first or last characters, no encoded form.
+  Print its length, or that it is set.
+- Never print what an account holds: product names, prices and ids, customers, emails,
+  checkout or dashboard links, account names, store hosts. Print counts and pass or fail.
+  The accounts used for checks are shared with other projects.
+- `verify:provider` does both with `--public-log`, which the CI wrapper
+  (`apps/api/scripts/verify-provider/ci.ts`) always passes. Anything new the tool prints,
+  or puts in its JSON report, must respect that flag and have a test in
+  `apps/api/src/scripts/verify-provider.test.ts`.
+- A workflow that uses secrets or `id-token: write` runs on a schedule or by hand, never
+  for pull requests and never on `pull_request_target`. It gives a secret only to the step
+  that needs it, pins every action to a commit and uploads no artifact.
+  `apps/api/src/scripts/verify-provider-ci.test.ts` enforces part of this; keep it passing
+  when you add or rename a workflow.
+- Fixtures and examples use made-up values (`sk_test_FAKE…`, `example.com`). Never commit a
+  real key, a payload captured from a real account, a personal email address, or the host
+  of the production database.
+- After changing a workflow or what one prints, read the log of a real run the way a
+  stranger would before calling the work done.
+
 ## Tech Stack
 
 - **API**: Cloudflare Workers (Hono) + Postgres (via Hyperdrive) + KV (analytics are Postgres rollups)

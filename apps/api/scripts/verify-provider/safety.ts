@@ -30,6 +30,7 @@ export function hidden(value: string | null | undefined): string {
 export class Redactor {
   private readonly secrets = new Map<string, string>(); // variant → mask
   private readonly labels = new Map<string, string>(); // lowercased value → label
+  private readonly keyPrefixes = new Set<string>(); // "sk_test_", "ck_", ...
   private readonly hideAll: boolean;
 
   /** `hideAll`: show no part of a secret, only its length (--public-log). */
@@ -80,6 +81,11 @@ export class Redactor {
       this.add(secret.slice(colon + 1));
     }
     const masked = this.hideAll ? hidden(secret) : mask(secret);
+    // A provider can echo a key partly masked ("Invalid API Key provided:
+    // sk_test_***...1234"). That is not the key as given, so the replacement
+    // below misses it; with hideAll, anything that starts like the key goes.
+    const prefix = /^[a-z]{2,8}(?:_[a-z]{2,8}){0,2}_/.exec(secret)?.[0];
+    if (this.hideAll && prefix) this.keyPrefixes.add(prefix);
     const variants = new Set<string>([secret, encodeURIComponent(secret)]);
     try {
       variants.add(btoa(secret));
@@ -95,6 +101,11 @@ export class Redactor {
     // Longest first so a secret never gets partially replaced by a shorter variant.
     const entries = [...this.secrets.entries()].sort((a, b) => b[0].length - a[0].length);
     for (const [secret, masked] of entries) out = out.split(secret).join(masked);
+    for (const prefix of this.keyPrefixes) {
+      // Not inside a longer word ("stock_status" contains "ck_").
+      const pattern = new RegExp(`(?<![A-Za-z0-9_])${prefix}[^\\s"'\`<>,;)\\]]{4,}`, 'g');
+      out = out.replace(pattern, '[hidden key]');
+    }
     const labels = [...this.labels.entries()].sort((a, b) => b[0].length - a[0].length);
     for (const [value, label] of labels) {
       const pattern = new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
