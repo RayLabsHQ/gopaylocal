@@ -220,7 +220,7 @@ const fullData: LandingData = {
     title: 'Built for developers.\nLoved by finance teams.',
     items: [
       { icon: 'globe', title: `${PPP_COUNTRY_COUNT} Countries`, description: 'Built-in PPP data for each one, with location detection at the Cloudflare edge. No third-party API calls.' },
-      { icon: 'shield', title: 'VPN Detection', description: 'Block discount abuse with ASN + IP-based proxy detection. Open-source datasets.' },
+      { icon: 'shield', title: 'VPN Detection', description: 'No discount for visitors on known VPN, Tor or datacenter networks. ASN + IP checks on open-source datasets.' },
       { icon: 'trending-up', title: 'A/B Testing', description: "Split a product's visitors between two discount campaigns. Compare impressions, copies and redemptions side by side." },
       { icon: 'banknote', title: 'Multi-Currency', description: "Show the discounted price in the visitor's currency, for example ₹3,999 instead of '30% off $59.99' with Round to X9 charm pricing. Local prices are estimates at the day's exchange rate." },
       { icon: 'sparkles', title: 'Charm Pricing', description: 'Psychology-driven rounding per currency. .99, X9, nearest-5, or region-aware.' },
@@ -323,7 +323,7 @@ const revenueData: LandingData = {
     title: 'Everything you need\nto grow global revenue.',
     items: [
       { icon: 'map-pin', title: `${PPP_COUNTRY_COUNT}-Country Coverage`, description: 'Built-in purchasing-power data for each of them, with automatic geo-detection at the Cloudflare edge.' },
-      { icon: 'shield-check', title: 'Fraud Protection', description: 'VPN and proxy detection blocks discount abuse. Protect margins while offering fair pricing.' },
+      { icon: 'shield-check', title: 'Fraud Protection', description: 'Visitors on known VPN, proxy and datacenter networks see no discount, so fair pricing stays with local buyers.' },
       { icon: 'bar-chart-2', title: 'Revenue Analytics', description: 'Impressions, copies, redemptions and discount given per country. A/B test two discount campaigns and compare them side by side.' },
       { icon: 'coins', title: 'Local Currency Display', description: "For example, show '₹3,999 (was ₹5,589)' instead of '$59.99 (30% off)', with Round to X9 charm pricing. Local prices are estimates at the day's exchange rate." },
       { icon: 'brain', title: 'Smart Charm Pricing', description: 'Psychologically optimized price points per currency. .99, X9, nearest-5 — all automated.' },
@@ -335,7 +335,7 @@ const revenueData: LandingData = {
     subtitle: 'A/B test two discount levels and judge the results for yourself.',
     proofPoints: [
       { label: 'Incremental, not cannibalized', description: 'PPP converts visitors from markets that bounce at full price. Compare two discount levels with an A/B test, and check the net effect against your own sales data.' },
-      { label: 'Abuse-resistant by default', description: 'Edge geolocation plus VPN/proxy detection means local prices reach real local buyers — not VPN users gaming the discount.' },
+      { label: 'Abuse-resistant by default', description: 'Edge geolocation plus checks against known VPN, Tor and datacenter networks keep the common ways of faking a country out.' },
       { label: 'A complete PPP toolkit', description: `VPN blocking, multi-currency, A/B testing, charm pricing and ${INTEGRATION_COUNT} integrations in one tool. Try every feature free; Pro is $${PLAN_PRICES_USD.pro.month}/mo, and less where $${PLAN_PRICES_USD.pro.month} goes further.` },
     ],
   },

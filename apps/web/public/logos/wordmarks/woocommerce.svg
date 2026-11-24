@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 40" fill="none">
   <!-- Plain text tile: WooCommerce's trademark guidelines do not allow using the WooCommerce or Woo logos and ask for the name in plain, non-stylized text (https://woocommerce.com/trademark-guidelines/). -->
-  <text x="1" y="30" font-family="system-ui, -apple-system, sans-serif" font-size="30" font-weight="700" fill="white">WooCommerce</text>
+  <!-- The text is drawn in the visitor's system font, whose width varies (bold San Francisco is wider than 210 units at this size). textLength fits it to the box in every font, so it is never cut off. -->
+  <text x="1" y="30" font-family="system-ui, -apple-system, sans-serif" font-size="30" font-weight="700" fill="white" textLength="207" lengthAdjust="spacingAndGlyphs">WooCommerce</text>
 </svg>
