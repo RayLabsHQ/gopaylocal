@@ -24,6 +24,12 @@ describe("createAuth email/password gating", () => {
 // all of them on a mismatch. The drizzle adapter compares src/db/schema.ts with
 // the columns Better Auth and its plugins expect, without opening a connection,
 // so a missing column (organization.metadata was one) fails here, not in production.
+describe("createAuth sign-in tokens", () => {
+  it("encrypts the GitHub and Google tokens it stores", () => {
+    expect(createAuth(createTestBindings()).options.account?.encryptOAuthTokens).toBe(true);
+  });
+});
+
 describe("createAuth drizzle schema check", () => {
   // Unreachable on purpose: the check must not need a database.
   const offline = () =>

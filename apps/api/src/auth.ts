@@ -358,6 +358,11 @@ export function createAuth(env: Bindings, opts?: CreateAuthOptions) {
       // Avoid DB-backed OAuth state to keep social sign-in working
       // even when the Better Auth `verification` table is not present.
       storeStateStrategy: "cookie",
+      // The GitHub/Google tokens Better Auth keeps in the `account` table are
+      // encrypted with the auth secret, so a copy of the database alone does
+      // not hand them out. GoPayLocal never uses them after sign-in. Tokens
+      // stored in plain text before this setting are still read as they are.
+      encryptOAuthTokens: true,
     },
     session: {
       cookieCache: { enabled: true, maxAge: 300 },
