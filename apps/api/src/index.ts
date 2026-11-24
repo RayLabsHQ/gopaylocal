@@ -31,6 +31,9 @@ import billing from "./routes/billing";
 import teamMembers from "./routes/team-members";
 import webhooks from "./routes/webhooks";
 import admin from "./routes/admin";
+import adminInsights from "./routes/admin-insights";
+import adminHousePricing from "./routes/admin-house-pricing";
+import { runScheduledHouseSync } from "./services/house-pricing.service";
 
 const app = new Hono<AppEnv>();
 
@@ -68,6 +71,8 @@ app.route("/", webhooks);
 app.use("/v1/admin/*", sessionMiddleware);
 app.use("/v1/admin/*", adminMiddleware);
 app.route("/", admin);
+app.route("/", adminInsights);
+app.route("/", adminHousePricing);
 
 // ── Authenticated routes ────────────────────────────────────────────────────
 
@@ -147,6 +152,11 @@ export default {
         // code could not be removed) are removed at the payment platform.
         retireEndedDealCoupons(db, env).catch((err) => {
           console.error("Deal code clean-up failed:", err);
+        }),
+        // The regional Pro price at Dodo follows the house campaign and the
+        // exchange rates (services/house-pricing.service.ts).
+        runScheduledHouseSync(db, env, controller.scheduledTime).catch((err) => {
+          console.error("House pricing sync failed:", err);
         }),
         isRetentionRun(controller.scheduledTime)
           ? runRetention(db, env).catch((err) => {

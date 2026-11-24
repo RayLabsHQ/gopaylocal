@@ -16,6 +16,8 @@ interface Props {
 }
 
 const { title, description = 'PPP discounts that just work. Give your global customers fair, localized pricing.' } = Astro.props;
+const houseKey = import.meta.env.PUBLIC_GOPAYLOCAL_PUBLIC_KEY as string | undefined;
+const houseApi = (import.meta.env.PUBLIC_GOPAYLOCAL_API_URL as string | undefined) || "https://api.gopaylocal.com";
 ---
 
 <!doctype html>
@@ -50,5 +52,12 @@ const { title, description = 'PPP discounts that just work. Give your global cus
       <slot />
     </main>
     <SwissFooter />
+    {
+      /* GoPayLocal's own banner, from its house workspace: tells each visitor
+         their country's Pro discount. Only when the key is set at build time. */
+      houseKey && (
+        <script is:inline async src={`${houseApi}/v1/banner/script.js?key=${encodeURIComponent(houseKey)}`} />
+      )
+    }
   </body>
 </html>

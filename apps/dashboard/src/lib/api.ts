@@ -214,6 +214,10 @@ export type BillingInfo = {
   currentPeriodEnd: string | null
   dodoCustId: string | null
   dodoSubId: string | null
+  // What Dodo charges each month, pre-tax, in the smallest unit of `currency`.
+  // Null until a subscription event carried it.
+  recurringAmount?: number | null
+  currency?: string | null
   // Self-hosted deployments have no billing: hide checkout/upgrade UI.
   selfHosted?: boolean
   billingEnabled?: boolean

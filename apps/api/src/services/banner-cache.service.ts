@@ -655,6 +655,20 @@ async function writeBannerDocs(
   return true;
 }
 
+/**
+ * The organization's document as a rebuild would write it now, without writing
+ * it. Null when the organization has no public key. Used by the house pricing
+ * sync, which must price Pro exactly as the config endpoint serves it.
+ */
+export async function buildBannerDocNow(
+  db: Database,
+  organizationId: string,
+  env: DeploymentEnv,
+): Promise<CachedBannerConfig | null> {
+  const source = await loadBannerDocSource(db, organizationId, env);
+  return source ? source.build("preview", Date.now()) : null;
+}
+
 /** The rows of one organization's document, read once; `build` is pure. */
 interface BannerDocSource {
   /** Ids of the organization's public keys (one stored document each). */

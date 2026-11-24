@@ -1,6 +1,7 @@
 ---
 import { Button } from "../ui/button";
 import { pricingCards } from "@/lib/landing-data";
+import RegionalProPrice from "./RegionalProPrice";
 ---
 
 <section id="pricing" class="border-t border-border">
@@ -48,6 +49,7 @@ import { pricingCards } from "@/lib/landing-data";
               >
                 {card.subtitle}
               </p>
+              {card.highlighted && <RegionalProPrice client:idle />}
             </div>
 
             <div class="mt-5">

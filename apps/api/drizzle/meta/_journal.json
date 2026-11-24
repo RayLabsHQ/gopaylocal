@@ -43,6 +43,13 @@
       "when": 1795509332209,
       "tag": "0005_subscription_per_org_and_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795512351119,
+      "tag": "0006_internal_orgs_and_platform_settings",
+      "breakpoints": true
     }
   ]
 }

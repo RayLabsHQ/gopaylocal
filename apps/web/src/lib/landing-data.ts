@@ -166,7 +166,7 @@ const pricingCards: PricingCard[] = [
   {
     name: 'Pro',
     price: `$${PRO_MONTHLY}/mo`,
-    subtitle: 'One flat price\nBilled monthly',
+    subtitle: 'One plan, never metered\nBilled monthly',
     cta: 'Start Pro',
     href: APP_URL,
     highlighted: true,

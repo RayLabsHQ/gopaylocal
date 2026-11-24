@@ -17,6 +17,8 @@ import {
 } from '@gopaylocal/shared'
 import { ErrorText, ToneIcon } from '~/components/ui/status'
 import { btnPrimary, btnSecondary, PageHeader } from '~/components/ui/page'
+import { minorToMajor } from '@gopaylocal/shared/currency'
+import { formatCharge, useRegionalProPrice } from '~/lib/regional-price'
 
 type Tab = 'team' | 'billing' | 'api-keys'
 
@@ -754,6 +756,14 @@ function BillingTab({ returnedFromCheckout }: { returnedFromCheckout: boolean })
   const planData = PLAN_METADATA[plan]
   const isPro = plan === 'pro'
   const hasBillingAccount = !!billing?.dodoCustId
+  // The visitor's Pro price where it is lower than the list price (useRegionalProPrice).
+  const regional = useRegionalProPrice(!isPending && !isPro)
+  const proLabel = regional ? formatCharge(regional.amount, regional.currency) : `$${PRO_MONTHLY}`
+  // What a Pro workspace pays, as Dodo reported it.
+  const paying =
+    isPro && typeof billing?.recurringAmount === 'number' && billing.currency
+      ? formatCharge(minorToMajor(billing.recurringAmount, billing.currency), billing.currency)
+      : null
 
   // While usage loads, fall back to the plan's published caps. Checked with a
   // ternary, not `??`, because an unlimited cap is null and must stay null.
@@ -792,7 +802,7 @@ function BillingTab({ returnedFromCheckout }: { returnedFromCheckout: boolean })
               <h2 id="plan-title" className="font-display text-[28px] font-semibold text-text-primary">
                 {planData.name}
               </h2>
-              <span className="text-sm text-text-secondary">{isPro ? `$${PRO_MONTHLY} a month` : '$0'}</span>
+              <span className="text-sm text-text-secondary">{isPro ? `${paying ?? `$${PRO_MONTHLY}`} a month` : '$0'}</span>
               {!isPending && billing?.status && isPro && (
                 <span className="inline-flex items-center gap-1.5 text-[13px] capitalize text-text-secondary">
                   <ToneIcon tone={billing.status === 'active' ? 'ok' : 'warn'} />
@@ -867,10 +877,19 @@ function BillingTab({ returnedFromCheckout }: { returnedFromCheckout: boolean })
             </h2>
             {canManageBilling && (
               <button type="button" onClick={() => createCheckout.mutate()} disabled={createCheckout.isPending || !teamId} className={btnPrimary}>
-                Upgrade to Pro · ${PRO_MONTHLY}/mo
+                Upgrade to Pro · {proLabel}/mo
               </button>
             )}
           </div>
+          {regional && (
+            <p className="flex items-start gap-2.5 border-b border-border px-6 py-3 text-[13px] text-text-primary">
+              <ToneIcon tone="ok" className="mt-0.5 h-3.5 w-3.5" />
+              <span>
+                Pro is {proLabel} a month in {regional.countryName}, {regional.discount}% off the ${PRO_MONTHLY} list price.
+                Checkout charges this price when your billing address is in {regional.countryName}.
+              </span>
+            </p>
+          )}
           {/* A Free workspace that used up products or this month's API calls
               hears it here first. Team seats are left out: a solo user sits at
               1 of 1, which isn't a limit worth calling out. */}

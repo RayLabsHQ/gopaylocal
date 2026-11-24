@@ -17,10 +17,11 @@ import {
   apiUsageDaily,
   organizationLimitOverrides,
   adminAuditLog,
+  internalOrganizations,
 } from "../db/schema";
 import { PLAN_PRICES_USD, normalizePlan } from "@gopaylocal/shared/constants";
 import type { Plan } from "@gopaylocal/shared/types";
-import { minorUnitExponent } from "@gopaylocal/shared/currency";
+import { notInternal, summarizeSubscriptions } from "../lib/revenue";
 import { resolveEntitlements } from "../lib/entitlements";
 import {
   computeLimitWarnings,
@@ -293,9 +294,12 @@ app.get("/v1/admin/organizations", async (c) => {
           createdAt: organizations.createdAt,
           plan: subscriptions.plan,
           subscriptionStatus: subscriptions.status,
+          subscriptionEnvironment: subscriptions.environment,
+          internal: sql<boolean>`(${internalOrganizations.organizationId} IS NOT NULL)`,
         })
         .from(organizations)
         .leftJoin(subscriptions, eq(subscriptions.organizationId, organizations.id))
+        .leftJoin(internalOrganizations, eq(internalOrganizations.organizationId, organizations.id))
         .where(searchCondition)
         .orderBy(desc(organizations.createdAt))
         .limit(limit)
@@ -326,7 +330,7 @@ app.get("/v1/admin/organizations/:id", async (c) => {
   const db = createDb(c.env);
 
   try {
-    const [orgRows, subResult, productCountResult, memberCountRows, overrideResult, apiHitsResult] =
+    const [orgRows, subResult, productCountResult, memberCountRows, overrideResult, apiHitsResult, internalRows] =
       await Promise.all([
         db
           .select({
@@ -369,6 +373,11 @@ app.get("/v1/admin/organizations/:id", async (c) => {
               meteredApiCallsSince(utcMonthStart()),
             ),
           ),
+        db
+          .select({ note: internalOrganizations.note, createdAt: internalOrganizations.createdAt })
+          .from(internalOrganizations)
+          .where(eq(internalOrganizations.organizationId, orgId))
+          .limit(1),
       ]);
 
     const org = orgRows[0];
@@ -421,6 +430,8 @@ app.get("/v1/admin/organizations/:id", async (c) => {
         usage,
         effectiveLimits,
         override,
+        // Set when the workspace is internal: left out of every admin metric.
+        internal: internalRows[0] ?? null,
       },
     });
   } catch (err) {
@@ -684,45 +695,8 @@ app.get("/v1/admin/alerts", async (c) => {
 
 // ── Platform-wide stats ────────────────────────────────────────────────────
 
-type SubscriptionRevenueRow = {
-  plan: string;
-  environment: string;
-  recurringAmount: number | null;
-  currency: string | null;
-};
-
-/**
- * Plan counts and monthly recurring revenue from active subscriptions.
- * Test-mode rows are counted apart and never as revenue. Each subscription
- * counts at the amount Dodo charges it (pre-tax); a row recorded before
- * amounts were stored counts at the Pro list price. `mrrByCurrency` is in
- * major units and never adds currencies together; `estimatedMRR` is its USD
- * entry, the figure for a business priced in USD.
- */
-export function summarizeSubscriptions(rows: SubscriptionRevenueRow[]): {
-  planCounts: Record<Plan, number>;
-  testSubscriptions: number;
-  mrrByCurrency: Record<string, number>;
-  estimatedMRR: number;
-} {
-  const planCounts: Record<Plan, number> = { free: 0, pro: 0 };
-  const mrrByCurrency: Record<string, number> = {};
-  let testSubscriptions = 0;
-  for (const row of rows) {
-    const plan = normalizePlan(row.plan);
-    if (plan !== "pro") continue;
-    if (row.environment === "test") {
-      testSubscriptions += 1;
-      continue;
-    }
-    planCounts.pro += 1;
-    const known = row.recurringAmount !== null && row.currency !== null;
-    const currency = known ? row.currency! : "USD";
-    const amount = known ? row.recurringAmount! / 10 ** minorUnitExponent(currency) : PLAN_PRICES_USD.pro.month;
-    mrrByCurrency[currency] = Math.round(((mrrByCurrency[currency] ?? 0) + amount) * 100) / 100;
-  }
-  return { planCounts, testSubscriptions, mrrByCurrency, estimatedMRR: mrrByCurrency.USD ?? 0 };
-}
+// Live MRR and plan counts (lib/revenue.ts); re-exported for the admin tests.
+export { summarizeSubscriptions };
 
 app.get("/v1/admin/stats", async (c) => {
   const db = createDb(c.env);
@@ -738,9 +712,16 @@ app.get("/v1/admin/stats", async (c) => {
       campaignStats,
       productCount,
       integrationBreakdown,
+      internalCountRows,
     ] = await Promise.all([
-      db.select({ total: count() }).from(users),
-      db.select({ total: count() }).from(organizations),
+      // Members of an internal workspace (the people running this deployment) don't count.
+      db
+        .select({ total: count() })
+        .from(users)
+        .where(
+          sql`NOT EXISTS (SELECT 1 FROM ${members} INNER JOIN ${internalOrganizations} ON ${internalOrganizations.organizationId} = ${members.organizationId} WHERE ${members.userId} = ${users.id})`,
+        ),
+      db.select({ total: count() }).from(organizations).where(notInternal(organizations.id)),
       // Active subscriptions, with the mode and amount each one is billed at.
       db
         .select({
@@ -750,7 +731,7 @@ app.get("/v1/admin/stats", async (c) => {
           currency: subscriptions.currency,
         })
         .from(subscriptions)
-        .where(eq(subscriptions.status, "active")),
+        .where(and(eq(subscriptions.status, "active"), notInternal(subscriptions.organizationId))),
       db
         .select({
           impressions: sumInt(analyticsRollups.impressions),
@@ -763,18 +744,29 @@ app.get("/v1/admin/stats", async (c) => {
         .where(
           and(
             eq(analyticsRollups.period, "day"),
+            eq(analyticsRollups.environment, "live"),
+            notInternal(analyticsRollups.organizationId),
             sql`${analyticsRollups.periodStart} >= date_trunc('month', NOW())`,
           ),
         ),
       db
         .select({ total: sql<number>`COALESCE(SUM(${analyticsRollups.revenueSaved}), 0)`.mapWith(Number) })
-        .from(analyticsRollups),
+        .from(analyticsRollups)
+        .where(
+          and(
+            eq(analyticsRollups.period, "day"),
+            eq(analyticsRollups.environment, "live"),
+            notInternal(analyticsRollups.organizationId),
+          ),
+        ),
       db
         .select({ total: sql<number>`COUNT(DISTINCT ${analyticsRollups.organizationId})`.mapWith(Number) })
         .from(analyticsRollups)
         .where(
           and(
             eq(analyticsRollups.period, "day"),
+            eq(analyticsRollups.environment, "live"),
+            notInternal(analyticsRollups.organizationId),
             sql`${analyticsRollups.periodStart} >= NOW() - INTERVAL '30 days'`,
           ),
         ),
@@ -783,13 +775,18 @@ app.get("/v1/admin/stats", async (c) => {
           total: count(),
           active: sql<number>`COUNT(*) FILTER (WHERE ${campaigns.status} = 'active')`.mapWith(Number),
         })
-        .from(campaigns),
-      db.select({ total: count() }).from(products),
+        .from(campaigns)
+        .where(and(eq(campaigns.environment, "live"), notInternal(campaigns.organizationId))),
+      db
+        .select({ total: count() })
+        .from(products)
+        .where(and(eq(products.environment, "live"), notInternal(products.organizationId))),
       db
         .select({ provider: integrations.provider, count: count() })
         .from(integrations)
-        .where(eq(integrations.status, "active"))
+        .where(and(eq(integrations.status, "active"), notInternal(integrations.organizationId)))
         .groupBy(integrations.provider),
+      db.select({ total: count() }).from(internalOrganizations),
     ]);
 
     // Live subscriptions only: a Dodo test-mode subscription grants Pro but
@@ -821,6 +818,8 @@ app.get("/v1/admin/stats", async (c) => {
         totalCampaigns: campaignStats[0]?.total ?? 0,
         activeCampaigns: (campaignStats[0]?.active as number) ?? 0,
         integrationsByProvider: integrationCounts,
+        // Left out of every figure above.
+        internalOrganizations: internalCountRows[0]?.total ?? 0,
       },
     });
   } catch (err) {
@@ -851,6 +850,8 @@ app.get("/v1/admin/stats/top-orgs", async (c) => {
       .where(
         and(
           eq(analyticsRollups.period, "day"),
+          eq(analyticsRollups.environment, "live"),
+          notInternal(analyticsRollups.organizationId),
           sql`${analyticsRollups.periodStart} >= date_trunc('month', NOW())`,
         ),
       )
@@ -867,6 +868,7 @@ app.get("/v1/admin/stats/top-orgs", async (c) => {
           .where(and(
             inArray(subscriptions.organizationId, orgIds),
             eq(subscriptions.status, "active"),
+            eq(subscriptions.environment, "live"),
           ))
       : [];
 

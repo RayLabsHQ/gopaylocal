@@ -1,7 +1,7 @@
 import { createFileRoute, Link, type LinkProps } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
 import { adminApi } from '~/lib/api'
+import { EmptyState, KPICard, MiniStat, Panel, Spinner, formatNumber } from '~/components/ui'
 
 export const Route = createFileRoute('/admin/')({
   component: AdminDashboardPage,
@@ -31,6 +31,12 @@ function AdminDashboardPage() {
       <p className="mt-1 text-base text-text-secondary">
         <span className="font-mono text-accent">//</span> Business intelligence, in real time
       </p>
+      {!statsLoading && (stats?.internalOrganizations ?? 0) > 0 && (
+        <p className="mt-2 text-[13px] text-text-muted">
+          Live data only. {stats?.internalOrganizations} internal{' '}
+          {stats?.internalOrganizations === 1 ? 'workspace and its members are' : 'workspaces and their members are'} left out.
+        </p>
+      )}
 
       {/* KPI Cards */}
       <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -75,7 +81,7 @@ function AdminDashboardPage() {
             )}
           </Panel>
 
-          <Panel title="Platform funnel" chip="This month">
+          <Panel title="Platform funnel" chip="This month, live sites">
             {statsLoading ? (
               <Spinner className="h-20" />
             ) : (
@@ -164,7 +170,9 @@ function AdminDashboardPage() {
 
           {/* Quick Links */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <ActionTile to="/admin/users" title="Users" body="Manage accounts" />
+            <ActionTile to="/admin/revenue" title="Revenue" body="Subscriptions and buyers" />
+            <ActionTile to="/admin/activation" title="Activation" body="Who is stuck where" />
+            <ActionTile to="/admin/health" title="Health" body="Failures and backlog" />
             <ActionTile to="/admin/alerts" title="Alerts" body="Usage warnings" />
           </div>
         </div>
@@ -174,57 +182,6 @@ function AdminDashboardPage() {
 }
 
 // ── Components ──────────────────────────────────────────────────────────────
-
-/** One bordered region. Interiors are divided by hairlines, never nested boxes.
- *  `chip` carries the qualifier that would otherwise sit in the title as a
- *  parenthetical — "(This month)", "(MTD)" — so the title stays a clean L1. */
-function Panel({ title, chip, action, children }: { title: string; chip?: string; action?: ReactNode; children: ReactNode }) {
-  return (
-    <div className="border border-border bg-surface p-5">
-      <div className="flex items-baseline justify-between gap-3">
-        <div className="flex min-w-0 items-baseline gap-2.5">
-          <h2 className="truncate text-base font-semibold text-text-primary">{title}</h2>
-          {chip && <span className="eyebrow shrink-0 text-text-muted">{chip}</span>}
-        </div>
-        {action}
-      </div>
-      <div className="mt-4">{children}</div>
-    </div>
-  )
-}
-
-function Spinner({ className = '' }: { className?: string }) {
-  return (
-    <div className={`flex items-center justify-center ${className}`}>
-      <div className="h-4 w-4 animate-spin rounded-full border-2 border-border-strong border-t-accent" />
-    </div>
-  )
-}
-
-function EmptyState({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="flex h-48 flex-col items-center justify-center px-4 text-center">
-      <p className="text-base font-medium text-text-primary">{title}</p>
-      <p className="mt-1.5 max-w-xs text-sm text-text-secondary">{body}</p>
-    </div>
-  )
-}
-
-/** L2: a mono caps eyebrow sitting directly on one big number. */
-function KPICard({ title, qualifier, value, sub, highlight }: { title: string; qualifier?: string; value: string; sub?: string; highlight?: boolean }) {
-  return (
-    <div className="border border-border bg-surface p-5">
-      <p className="eyebrow">
-        {title}
-        {qualifier && <span className="ml-1.5 font-normal text-text-muted">{qualifier}</span>}
-      </p>
-      <p className={`mt-2 font-display text-[28px] font-bold tabular-nums tracking-tight ${highlight ? 'text-accent' : 'text-text-primary'}`}>
-        {value}
-      </p>
-      {sub && <p className="mt-1 text-[13px] text-text-secondary">{sub}</p>}
-    </div>
-  )
-}
 
 /** Interactive tile: accent left rule + arrow + hover border, so it never
  *  reads as one of the static stat cards. */
@@ -298,18 +255,6 @@ function FunnelStep({ label, value, rate }: { label: string; value: number; rate
   )
 }
 
-function MiniStat({ label, value, sub }: { label: string; value: number; sub?: string }) {
-  return (
-    <div className="py-3 sm:px-4 sm:py-0 sm:first:pl-0 sm:last:pr-0">
-      <p className="text-[13px] text-text-secondary">{label}</p>
-      <p className="mt-1.5 font-display text-lg font-bold tabular-nums text-text-primary">
-        {value}
-      </p>
-      {sub && <p className="mt-0.5 text-[13px] text-text-secondary">{sub}</p>}
-    </div>
-  )
-}
-
 function PlanBadge({ plan }: { plan: string }) {
   const colors: Record<string, string> = {
     free: 'text-text-muted',
@@ -333,10 +278,4 @@ function mrrNote(byCurrency: Record<string, number> | undefined, test: number | 
     .map(([currency, amount]) => `+ ${currency} ${amount.toLocaleString('en-US')}`)
   if (test) parts.push(`${test} test ${test === 1 ? 'subscription' : 'subscriptions'} not counted`)
   return parts.length > 0 ? parts.join(' · ') : undefined
-}
-
-function formatNumber(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
-  return String(Math.round(n))
 }

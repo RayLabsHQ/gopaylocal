@@ -5,3 +5,4 @@ export * from "./fx";
 export * from "./local-price";
 export * from "./pair";
 export * from "./supported-currencies";
+export * from "./regional-charge";

@@ -31,6 +31,10 @@ export type AdminOrganization = {
   createdAt: string
   plan: string | null
   subscriptionStatus: string | null
+  /** 'test' when the subscription was paid in Dodo test mode. */
+  subscriptionEnvironment?: string | null
+  /** Left out of every admin metric. */
+  internal?: boolean
 }
 
 export type OrgMember = {
@@ -67,6 +71,7 @@ export type AdminOrganizationDetail = {
     maxTeamMembers: number | null
   }
   override: Record<string, unknown> | null
+  internal?: { note: string | null; createdAt: string } | null
 }
 
 export type AdminAlert = {
@@ -109,7 +114,153 @@ export type AdminStats = {
   totalCampaigns: number
   activeCampaigns: number
   integrationsByProvider: Record<string, number>
+  /** Internal workspaces, left out of every figure above. */
+  internalOrganizations?: number
 }
+
+export type MoneyByCurrency = Record<string, number>
+
+export type RevenueData = {
+  summary: {
+    active: number
+    pastDue: number
+    newThisMonth: number
+    cancelledThisMonth: number
+    churn: { runningOnFirst: number; ended: number; rate: number | null }
+    mrrByCurrency: MoneyByCurrency
+    estimatedMRR: number
+    byCountry: Array<{ country: string | null; countryName: string; subscriptions: number; mrrByCurrency: MoneyByCurrency }>
+    leftOut: { test: number; internal: number }
+  }
+  subscriptions: Array<{
+    organizationId: string
+    organizationName: string | null
+    plan: string
+    status: string
+    environment: string
+    recurringAmount: number | null
+    currency: string | null
+    billingCountry: string | null
+    createdAt: string
+    updatedAt: string
+    currentPeriodEnd: string | null
+    internal: boolean
+  }>
+}
+
+export type ActivationStep = {
+  key: string
+  label: string
+  reached: number
+  stuckCount: number
+  stuck: Array<{ id: string; name: string; ownerEmail: string | null; createdAt: string; daysSinceSignup: number }>
+}
+
+export type ActivationData = {
+  totalOrganizations: number
+  signupsLast7Days: number
+  signupsLast30Days: number
+  signupsByWeek: Array<{ weekStart: string; signups: number }>
+  funnel: ActivationStep[]
+  adoption: {
+    pricingModes: Record<string, number>
+    discountDelivery: Record<string, number>
+    charmPricing: number
+    activeCampaigns: number
+    integrations: Record<string, number>
+    runningAbTests: { tests: number; organizations: number }
+    dealsNotEnded: { deals: number; organizations: number }
+    teamsOfTwoOrMore: number
+    serverApiLast30Days: number
+  }
+}
+
+export type HouseSyncRecord = {
+  at: string
+  trigger: 'admin' | 'schedule'
+  environment: 'test_mode' | 'live_mode'
+  productId: string
+  created: number
+  updated: number
+  archived: number
+  failures: Array<{ country: string | null; status: number; message: string }>
+  remaining: number
+}
+
+export type HealthData = {
+  failedWebhooks: Array<{ provider: string; eventType: string; count: number; lastAt: string; lastError: string | null }>
+  webhookBacklog: { unprocessed: number; oldest: string | null }
+  integrations: Array<{
+    id: string
+    provider: string
+    status: string
+    organizationId: string
+    organizationName: string
+    internal: boolean
+    issues: Array<{ area: string; message: string; environment?: string; at: string }>
+  }>
+  fxRates: { state: 'off' } | { state: 'fresh' | 'stale' | 'missing'; asOf: string | null }
+  housePricing: { lastSync: HouseSyncRecord | null } | null
+}
+
+export type AuditEntry = {
+  id: string
+  action: string
+  targetType: string
+  targetId: string
+  details: Record<string, unknown> | null
+  createdAt: string
+  adminName: string | null
+  adminEmail: string | null
+}
+
+export type HouseCandidate = {
+  campaignId: string
+  campaignName: string
+  status: string
+  environment: string
+  maxDiscountPercent: number
+  pricingMode: string
+  hasIntegration: boolean
+  organizationId: string
+  organizationName: string
+  productName: string
+  productPrice: number
+  productCurrency: string
+}
+
+export type HouseDodoMatch = { status: 'match' } | { status: 'missing' } | { status: 'differs'; currency: string; amount: number }
+
+export type HousePricingData = {
+  unavailable: string | null
+  dodoEnvironment: 'test_mode' | 'live_mode'
+  settings: { organizationId: string; campaignId: string; campaign: HouseCandidate | null; lastSync: HouseSyncRecord | null } | null
+  candidates: HouseCandidate[]
+  table:
+    | {
+        ok: true
+        fxAsOf: string | null
+        charm: string
+        rows: Array<{
+          country: string
+          countryName: string
+          discount: number
+          currency: string
+          amount: number
+          minorAmount: number
+          local: boolean
+          dodo: HouseDodoMatch | null
+        }>
+      }
+    | { ok: false; problem: string }
+    | null
+  dodo: { ok: true; extraRules: number } | { ok: false; message: string } | null
+}
+
+export type HouseSyncResult =
+  | { outcome: 'skipped'; reason: string }
+  | { outcome: 'problem'; problem: string }
+  | { outcome: 'synced'; record: HouseSyncRecord }
 
 export type TopOrg = {
   organizationId: string
@@ -200,6 +351,11 @@ export const adminApi = {
       apiFetch<PaginatedResponse<AdminOrganization>>('/v1/admin/organizations', { params }),
     get: (id: string) =>
       apiFetch<{ data: AdminOrganizationDetail }>(`/v1/admin/organizations/${id}`).then((r) => r.data),
+    setInternal: (id: string, internal: boolean, note?: string) =>
+      apiFetch<{ data: { organizationId: string; internal: boolean } }>(`/v1/admin/organizations/${id}/internal`, {
+        method: 'PUT',
+        body: JSON.stringify({ internal, note }),
+      }).then((r) => r.data),
     overrideLimits: (id: string, data: { maxProducts?: number | null; maxApiHitsPerMonth?: number | null; maxTeamMembers?: number | null; note?: string }) =>
       apiFetch<{ data: Record<string, unknown> }>(`/v1/admin/organizations/${id}/limits`, {
         method: 'PATCH',
@@ -213,6 +369,28 @@ export const adminApi = {
   alerts: {
     list: () =>
       apiFetch<{ data: AdminAlert[] }>('/v1/admin/alerts').then((r) => r.data),
+  },
+  revenue: {
+    get: () => apiFetch<{ data: RevenueData }>('/v1/admin/revenue').then((r) => r.data),
+  },
+  activation: {
+    get: () => apiFetch<{ data: ActivationData }>('/v1/admin/activation').then((r) => r.data),
+  },
+  health: {
+    get: () => apiFetch<{ data: HealthData }>('/v1/admin/health').then((r) => r.data),
+  },
+  audit: {
+    list: (page = 1) => apiFetch<PaginatedResponse<AuditEntry>>('/v1/admin/audit', { params: { page } }),
+  },
+  housePricing: {
+    get: () => apiFetch<{ data: HousePricingData }>('/v1/admin/house-pricing').then((r) => r.data),
+    set: (campaignId: string) =>
+      apiFetch<{ data: { organizationId: string; campaignId: string } }>('/v1/admin/house-pricing', {
+        method: 'PUT',
+        body: JSON.stringify({ campaignId }),
+      }).then((r) => r.data),
+    sync: () =>
+      apiFetch<{ data: HouseSyncResult }>('/v1/admin/house-pricing/sync', { method: 'POST' }).then((r) => r.data),
   },
   stats: {
     get: () =>

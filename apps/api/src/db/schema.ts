@@ -576,3 +576,26 @@ export const adminAuditLog = pgTable("admin_audit_log", {
   details: t.jsonb(),
   createdAt: t.timestamp("created_at").defaultNow().notNull(),
 });
+
+// ── Internal organizations ──────────────────────────────────────────────────
+// Workspaces the people running this deployment use themselves (their own
+// testing, the house workspace that prices Pro). Admin metrics leave them out.
+export const internalOrganizations = pgTable("internal_organizations", {
+  organizationId: t
+    .text("organization_id")
+    .primaryKey()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  note: t.text("note"),
+  markedByUserId: t.text("marked_by_user_id"),
+  createdAt: t.timestamp("created_at").defaultNow().notNull(),
+});
+
+// ── Platform settings ───────────────────────────────────────────────────────
+// Deployment-wide settings changed from the admin, one JSON value per key
+// (e.g. "house_pricing": which campaign prices Pro, and the last Dodo sync).
+export const platformSettings = pgTable("platform_settings", {
+  key: t.text("key").primaryKey(),
+  value: t.jsonb("value").$type<Record<string, unknown>>().notNull(),
+  updatedByUserId: t.text("updated_by_user_id"),
+  updatedAt: t.timestamp("updated_at").defaultNow().notNull(),
+});

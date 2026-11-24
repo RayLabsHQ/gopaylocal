@@ -13,9 +13,13 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminActivationRouteImport } from './routes/admin/activation'
 import { Route as AdminAlertsRouteImport } from './routes/admin/alerts'
 import { Route as AdminAuditRouteImport } from './routes/admin/audit'
+import { Route as AdminHealthRouteImport } from './routes/admin/health'
 import { Route as AdminOrganizationsRouteImport } from './routes/admin/organizations'
+import { Route as AdminPricingRouteImport } from './routes/admin/pricing'
+import { Route as AdminRevenueRouteImport } from './routes/admin/revenue'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
 
 const IndexRoute = IndexRouteImport.update({
@@ -38,6 +42,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminActivationRoute = AdminActivationRouteImport.update({
+  id: '/activation',
+  path: '/activation',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminAlertsRoute = AdminAlertsRouteImport.update({
   id: '/alerts',
   path: '/alerts',
@@ -48,9 +57,24 @@ const AdminAuditRoute = AdminAuditRouteImport.update({
   path: '/audit',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminHealthRoute = AdminHealthRouteImport.update({
+  id: '/health',
+  path: '/health',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminOrganizationsRoute = AdminOrganizationsRouteImport.update({
   id: '/organizations',
   path: '/organizations',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPricingRoute = AdminPricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminRevenueRoute = AdminRevenueRouteImport.update({
+  id: '/revenue',
+  path: '/revenue',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminUsersRoute = AdminUsersRouteImport.update({
@@ -63,18 +87,26 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
+  '/admin/activation': typeof AdminActivationRoute
   '/admin/alerts': typeof AdminAlertsRoute
   '/admin/audit': typeof AdminAuditRoute
+  '/admin/health': typeof AdminHealthRoute
   '/admin/organizations': typeof AdminOrganizationsRoute
+  '/admin/pricing': typeof AdminPricingRoute
+  '/admin/revenue': typeof AdminRevenueRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/': typeof AdminIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/admin/activation': typeof AdminActivationRoute
   '/admin/alerts': typeof AdminAlertsRoute
   '/admin/audit': typeof AdminAuditRoute
+  '/admin/health': typeof AdminHealthRoute
   '/admin/organizations': typeof AdminOrganizationsRoute
+  '/admin/pricing': typeof AdminPricingRoute
+  '/admin/revenue': typeof AdminRevenueRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin': typeof AdminIndexRoute
 }
@@ -83,9 +115,13 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
+  '/admin/activation': typeof AdminActivationRoute
   '/admin/alerts': typeof AdminAlertsRoute
   '/admin/audit': typeof AdminAuditRoute
+  '/admin/health': typeof AdminHealthRoute
   '/admin/organizations': typeof AdminOrganizationsRoute
+  '/admin/pricing': typeof AdminPricingRoute
+  '/admin/revenue': typeof AdminRevenueRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/': typeof AdminIndexRoute
 }
@@ -95,18 +131,26 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/login'
+    | '/admin/activation'
     | '/admin/alerts'
     | '/admin/audit'
+    | '/admin/health'
     | '/admin/organizations'
+    | '/admin/pricing'
+    | '/admin/revenue'
     | '/admin/users'
     | '/admin/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
+    | '/admin/activation'
     | '/admin/alerts'
     | '/admin/audit'
+    | '/admin/health'
     | '/admin/organizations'
+    | '/admin/pricing'
+    | '/admin/revenue'
     | '/admin/users'
     | '/admin'
   id:
@@ -114,9 +158,13 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/login'
+    | '/admin/activation'
     | '/admin/alerts'
     | '/admin/audit'
+    | '/admin/health'
     | '/admin/organizations'
+    | '/admin/pricing'
+    | '/admin/revenue'
     | '/admin/users'
     | '/admin/'
   fileRoutesById: FileRoutesById
@@ -157,6 +205,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/activation': {
+      id: '/admin/activation'
+      path: '/activation'
+      fullPath: '/admin/activation'
+      preLoaderRoute: typeof AdminActivationRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/alerts': {
       id: '/admin/alerts'
       path: '/alerts'
@@ -171,11 +226,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAuditRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/health': {
+      id: '/admin/health'
+      path: '/health'
+      fullPath: '/admin/health'
+      preLoaderRoute: typeof AdminHealthRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/organizations': {
       id: '/admin/organizations'
       path: '/organizations'
       fullPath: '/admin/organizations'
       preLoaderRoute: typeof AdminOrganizationsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/pricing': {
+      id: '/admin/pricing'
+      path: '/pricing'
+      fullPath: '/admin/pricing'
+      preLoaderRoute: typeof AdminPricingRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/revenue': {
+      id: '/admin/revenue'
+      path: '/revenue'
+      fullPath: '/admin/revenue'
+      preLoaderRoute: typeof AdminRevenueRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/users': {
@@ -189,17 +265,25 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminRouteChildren {
+  AdminActivationRoute: typeof AdminActivationRoute
   AdminAlertsRoute: typeof AdminAlertsRoute
   AdminAuditRoute: typeof AdminAuditRoute
+  AdminHealthRoute: typeof AdminHealthRoute
   AdminOrganizationsRoute: typeof AdminOrganizationsRoute
+  AdminPricingRoute: typeof AdminPricingRoute
+  AdminRevenueRoute: typeof AdminRevenueRoute
   AdminUsersRoute: typeof AdminUsersRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminActivationRoute: AdminActivationRoute,
   AdminAlertsRoute: AdminAlertsRoute,
   AdminAuditRoute: AdminAuditRoute,
+  AdminHealthRoute: AdminHealthRoute,
   AdminOrganizationsRoute: AdminOrganizationsRoute,
+  AdminPricingRoute: AdminPricingRoute,
+  AdminRevenueRoute: AdminRevenueRoute,
   AdminUsersRoute: AdminUsersRoute,
   AdminIndexRoute: AdminIndexRoute,
 }

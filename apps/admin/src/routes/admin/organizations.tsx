@@ -12,7 +12,9 @@ import {
   type ExpandedState,
 } from '@tanstack/react-table'
 import { useState, useEffect, useId, Fragment } from 'react'
+import { minorToMajor } from '@gopaylocal/shared/currency'
 import { adminApi, type AdminOrganization } from '~/lib/api'
+import { Tag, btn, flag, formatMoney } from '~/components/ui'
 
 export const Route = createFileRoute('/admin/organizations')({
   component: OrganizationsPage,
@@ -87,7 +89,12 @@ function OrganizationsPage() {
     }),
     columnHelper.accessor('name', {
       header: 'Name',
-      cell: (info) => <span className="font-medium text-text-primary">{info.getValue()}</span>,
+      cell: (info) => (
+        <span className="flex items-center gap-2">
+          <span className="font-medium text-text-primary">{info.getValue()}</span>
+          {info.row.original.internal && <Tag>Internal</Tag>}
+        </span>
+      ),
     }),
     columnHelper.accessor('slug', {
       header: 'Slug',
@@ -105,6 +112,7 @@ function OrganizationsPage() {
             }`}
           >
             {plan}
+            {info.row.original.subscriptionEnvironment === 'test' && plan !== 'free' ? ' · test' : ''}
           </span>
         )
       },
@@ -384,9 +392,23 @@ function OrgDetails({ org }: { org: AdminOrganization }) {
               <Field label="Effective plan" value={detail.effectivePlan} />
             )}
             {detail.selfHosted && <Field label="Deployment" value="Self-hosted (unlimited)" />}
+            {typeof detail.subscription.environment === 'string' && (
+              <Field label="Paid in" value={detail.subscription.environment === 'test' ? 'Dodo test mode (not revenue)' : 'Dodo live mode'} />
+            )}
+            {typeof detail.subscription.recurringAmount === 'number' && typeof detail.subscription.currency === 'string' && (
+              <Field
+                label="Pays monthly"
+                value={formatMoney(minorToMajor(detail.subscription.recurringAmount, detail.subscription.currency), detail.subscription.currency)}
+              />
+            )}
+            {typeof detail.subscription.billingCountry === 'string' && (
+              <Field label="Billing country" value={`${flag(detail.subscription.billingCountry)} ${detail.subscription.billingCountry}`} />
+            )}
           </div>
         </div>
       )}
+
+      {detail && <InternalToggle orgId={org.id} internal={detail.internal ?? null} />}
 
       {/* Members */}
       {detail?.members && detail.members.length > 0 && (
@@ -509,6 +531,44 @@ function OrgDetails({ org }: { org: AdminOrganization }) {
 // ── Shared Sub-Components ────────────────────────────────────────────────────
 
 /** L3: label above one value inside a panel — sentence case, not an eyebrow. */
+/** Internal workspaces (the team's own) are left out of every admin metric. */
+function InternalToggle({ orgId, internal }: { orgId: string; internal: { note: string | null } | null }) {
+  const queryClient = useQueryClient()
+  const [note, setNote] = useState('')
+  const toggle = useMutation({
+    mutationFn: (next: boolean) => adminApi.organizations.setInternal(orgId, next, note || undefined),
+    onSuccess: () => {
+      setNote('')
+      queryClient.invalidateQueries({ queryKey: ['admin'] })
+    },
+  })
+  return (
+    <div>
+      <h3 className="text-base font-semibold text-text-primary">Internal workspace</h3>
+      <p className="mt-1 text-sm text-text-secondary">
+        {internal
+          ? `Left out of every metric${internal.note ? `: ${internal.note}` : ''}.`
+          : 'Counted in every metric. Mark your own and test workspaces internal so they stay out of the numbers.'}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {!internal && (
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Note (optional), e.g. founder testing"
+            aria-label="Note"
+            className="min-w-0 flex-1 border border-border bg-bg px-3 py-2 text-sm text-text-primary outline-none transition-colors placeholder:text-text-muted focus:border-accent sm:max-w-xs"
+          />
+        )}
+        <button type="button" className={btn} disabled={toggle.isPending} onClick={() => toggle.mutate(!internal)}>
+          {internal ? 'Count it again' : 'Mark internal'}
+        </button>
+      </div>
+      {toggle.error && <p className="mt-2 text-[13px] text-danger">{toggle.error.message}</p>}
+    </div>
+  )
+}
+
 function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="min-w-0">

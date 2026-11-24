@@ -30,6 +30,20 @@ and a self-hosted mode with no limits and no billing.
   do not re-add it. The checkout refuses any interval other than `month`.
 - The Dodo product and `DODO_PRICE_ID_PRO_MONTHLY` are managed by the founder in the
   Dodo dashboard.
+- Pro has a regional price (decided by the founder, November 2026), priced with GoPayLocal
+  itself. A display-only campaign (no payment platform, so no codes; capped at 70%) in an
+  internal "house" workspace, chosen on the admin's Regional price page, sets each
+  country's discount. The website's Pro card, its banner and the dashboard's Billing page
+  read it from the public config endpoint with the house public key
+  (`PUBLIC_GOPAYLOCAL_PUBLIC_KEY` for `apps/web`, `VITE_GOPAYLOCAL_PUBLIC_KEY` for the
+  dashboard, both set at build time and never committed). Dodo charges the same amount
+  through per-country Localized Pricing rules that
+  `apps/api/src/services/house-pricing.service.ts` writes. Both sides go through
+  `regionalCharge` (`packages/shared/src/currency/regional-charge.ts`), so the price shown
+  is the price charged. Dodo's own PPP setting stays off (it would discount again), and the
+  house campaign gets no deals or A/B tests (Dodo would not charge them).
+- Internal workspaces (`internal_organizations`, set in the admin) and Dodo test-mode
+  subscriptions (`subscriptions.environment = 'test'`) are left out of every admin metric.
 
 Positioning: the open-source PPP tool with one flat price. Compete on completeness
 (VPN detection, A/B testing, multi-currency, charm pricing, many integrations) and on

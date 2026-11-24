@@ -577,9 +577,21 @@ describe("the key never reaches a log or a response", () => {
 describe("route handlers", () => {
   it("no /v1/teams route module reads c.get(\"user\") or c.get(\"memberRole\") directly", () => {
     const dir = fileURLToPath(new URL("../routes/", import.meta.url));
+    const isAdminModule = (f: string) => /^admin(-[a-z-]+)?\.ts$/.test(f);
     const offenders = readdirSync(dir)
-      .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts") && f !== "admin.ts")
+      .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts") && !isAdminModule(f))
       .filter((f) => /c\.get\("(user|memberRole)"\)/.test(readFileSync(dir + f, "utf8")));
     expect(offenders).toEqual([]);
+  });
+
+  it("admin route modules register only /v1/admin/ routes (the exemption above relies on it)", () => {
+    const dir = fileURLToPath(new URL("../routes/", import.meta.url));
+    const adminModules = readdirSync(dir).filter((f) => /^admin(-[a-z-]+)?\.ts$/.test(f));
+    expect(adminModules).toContain("admin.ts");
+    for (const f of adminModules) {
+      const paths = [...readFileSync(dir + f, "utf8").matchAll(/app\.(?:get|post|put|patch|delete)\(\s*"([^"]+)"/g)].map((m) => m[1]!);
+      expect(paths.length, f).toBeGreaterThan(0);
+      expect(paths.filter((p) => !p.startsWith("/v1/admin/")), f).toEqual([]);
+    }
   });
 });
