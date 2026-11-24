@@ -11,15 +11,23 @@ Stripe is the most popular payment provider for SaaS. GoPayLocal creates Stripe 
 
 <Steps>
 
-1. **Get your Stripe secret key**
+1. **Create a restricted key in Stripe**
 
-   Go to [Stripe Dashboard](https://dashboard.stripe.com/apikeys) > **Developers > API keys**. Copy your **Secret key**.
+   In the [Stripe Dashboard](https://dashboard.stripe.com/apikeys), go to **Developers > API keys** and click **Create restricted key** ([restricted keys](https://docs.stripe.com/keys/restricted-api-keys)). Give it these permissions and leave everything else at **None**:
 
-   For testing, use a test mode or sandbox key (starts with `sk_test_`).
+   | Permission | Used for |
+   |---|---|
+   | Products: Read | Importing your products |
+   | Prices: Read | Showing each product's price when you import it |
+   | Coupons: Write | Creating, listing and deleting the coupon behind each code |
+   | Promotion Codes: Write | Creating and listing the codes customers enter |
+   | Webhook Endpoints: Write | Creating the webhook that reports redemptions, and removing it when you disconnect |
+
+   For testing, create the key in a sandbox or in test mode: it starts with `rk_test_`. A secret key (`sk_…`) also works, but it can do anything in your Stripe account.
 
 2. **Connect in GoPayLocal**
 
-   In your GoPayLocal dashboard, open **Integrations** in the sidebar and click **Connect** on the Stripe card. Enter your secret key in the dialog. The key is saved for the environment selected in the sidebar (**Test** or **Live**), so switch to **Test** first if you are using a test key.
+   In your GoPayLocal dashboard, open **Integrations** in the sidebar and click **Connect** on the Stripe card. Paste the key in the dialog. The key is saved for the environment selected in the sidebar (**Test** or **Live**), so switch to **Test** first if you are using a test key.
 
    Click **Test** after connecting to verify your credentials.
 

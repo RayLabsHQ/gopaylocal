@@ -76,6 +76,10 @@ You can connect several providers at once, one connection per provider. Each cam
 4. Enter the API key for that environment. Chargebee also needs your site name, Whop your account ID (`biz_...`) and WooCommerce your store URL.
 5. Click **Connect**. To add the other environment's key later, switch environments and click **Add test key** or **Add live key**.
 
+The Connect dialog lists the permissions the key needs, and so does each provider's page. Where the provider lets you, create a key with only those.
+
+GoPayLocal encrypts each key (AES-256-GCM) before storing it. Only GoPayLocal's server uses it, to call your provider, and neither the dashboard nor the API ever shows it again.
+
 When you connect, GoPayLocal checks the key and sets up redemption tracking: it creates a webhook in your provider account that points back to GoPayLocal. If that step fails, the provider is still connected and its card says so; you can retry from the card. **Test** checks the key again at any time.
 
 Only the workspace owner and admins can connect and disconnect providers. See [Team](/dashboard/team/).

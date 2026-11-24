@@ -82,6 +82,14 @@ check that for you.
 The account id ends up in `ProviderConfig.siteId`, the same way the dashboard's
 connect flow (`src/routes/integrations.ts`) passes `providerAccountId`.
 
+**Key permissions.** The permissions the app needs, which the Connect dialog and
+the docs show merchants, are in `PROVIDER_KEY_ACCESS`
+(`packages/shared/src/constants/provider-key-access.ts`). The tool needs more:
+its Checkout URL step creates a checkout, which the app never does
+(`src/provider-key-access.test.ts` checks that). A key limited to the app's list
+passes every step except Checkout URL. The per-provider sections below list the
+tool's permissions.
+
 Full flag reference:
 
 ```sh

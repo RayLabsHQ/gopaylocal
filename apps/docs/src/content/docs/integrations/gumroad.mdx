@@ -11,9 +11,18 @@ Gumroad is a popular platform for selling digital products. GoPayLocal creates o
 
 <Steps>
 
-1. **Get your Gumroad API key**
+1. **Get a Gumroad access token**
 
-   Go to [Gumroad Settings](https://app.gumroad.com/settings/advanced) > **Advanced** > **API**. Copy your access token.
+   Go to [Gumroad Settings](https://app.gumroad.com/settings/advanced) > **Advanced**, create an application under **Applications**, then click **Generate access token** and copy it. Gumroad asks for a redirect URI when you create the application; GoPayLocal doesn't use it.
+
+   GoPayLocal uses two of the token's scopes:
+
+   | Scope | Used for |
+   |---|---|
+   | `edit_products` | Creating, listing and deleting offer codes on your products |
+   | `view_sales` | Reading the sale that used a code, and subscribing to sale notifications |
+
+   Gumroad gives this token every scope it has, and its form has no way to narrow it. GoPayLocal only calls endpoints these two scopes cover.
 
 2. **Connect in GoPayLocal**
 

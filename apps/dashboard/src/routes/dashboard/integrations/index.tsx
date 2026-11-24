@@ -13,7 +13,7 @@ import { getActiveTeamId, useSession } from '~/lib/auth'
 import { useEnv } from '~/lib/env'
 import { usePermissions } from '~/lib/permissions'
 import type { IntegrationProvider } from '@gopaylocal/shared'
-import { CURRENCY_SYMBOLS, providerCanImportProducts, providerHasTestMode } from '@gopaylocal/shared'
+import { CURRENCY_SYMBOLS, PROVIDER_KEY_ACCESS, providerCanImportProducts, providerHasTestMode } from '@gopaylocal/shared'
 import {
   Dialog,
   DialogHeader,
@@ -43,8 +43,8 @@ const PROVIDERS: {
     id: 'stripe',
     name: 'Stripe',
     description: 'Creates PPP promotion codes in Stripe and records their redemptions.',
-    placeholder: { live: 'sk_live_...', test: 'sk_test_...' },
-    docsUrl: 'https://docs.stripe.com/keys',
+    placeholder: { live: 'rk_live_...', test: 'rk_test_...' },
+    docsUrl: 'https://docs.stripe.com/keys/restricted-api-keys',
   },
   {
     id: 'paddle',
@@ -72,7 +72,7 @@ const PROVIDERS: {
     name: 'Chargebee',
     description: 'Creates PPP coupons in Chargebee and records their redemptions.',
     placeholder: { live: 'live_...', test: 'test_...' },
-    docsUrl: 'https://www.chargebee.com/docs/2.0/api_keys.html',
+    docsUrl: 'https://www.chargebee.com/docs/billing/2.0/site-configuration/api_keys',
     accountId: {
       label: 'Site name',
       placeholder: 'acme',
@@ -96,7 +96,7 @@ const PROVIDERS: {
     name: 'Polar',
     description: 'Creates PPP discount codes in Polar and records their redemptions.',
     placeholder: { live: 'polar_oat_...', test: 'polar_oat_...' },
-    docsUrl: 'https://docs.polar.sh/api/authentication',
+    docsUrl: 'https://polar.sh/docs/integrate/oat',
   },
   {
     id: 'creem',
@@ -115,7 +115,7 @@ const PROVIDERS: {
     accountId: {
       label: 'Store URL',
       placeholder: 'https://shop.example.com',
-      help: "Your store's https:// address. For the key, go to WooCommerce > Settings > Advanced > REST API, choose an Administrator or Shop Manager, set Read/Write, and paste the consumer key and secret as ck_...:cs_... WooCommerce has no test mode, so connect it in Live.",
+      help: "Your store's https:// address. Paste the key as ck_...:cs_... (consumer key, a colon, consumer secret). WooCommerce has no test mode, so connect it in Live.",
     },
   },
 ]
@@ -436,6 +436,7 @@ function IntegrationsPage() {
   const connectProviderMeta = PROVIDERS.find((p) => p.id === connectProvider)
   const providerLabel = connectProviderMeta?.name ?? connectProvider
   const accountIdField = connectProviderMeta?.accountId
+  const keyAccess = connectProvider ? PROVIDER_KEY_ACCESS[connectProvider] : undefined
 
   return (
     <div>
@@ -627,6 +628,26 @@ function IntegrationsPage() {
           </DialogHeader>
 
           <div className="space-y-4">
+            {keyAccess && (
+              <section aria-labelledby="key-access-title" className="border border-border bg-surface px-3 py-2.5">
+                <h3 id="key-access-title" className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                  What the key needs
+                </h3>
+                <p className="mt-1 text-[13px] text-text-primary">{keyAccess.key}</p>
+                <ul className="mt-2 space-y-1.5">
+                  {keyAccess.permissions.map((permission) => (
+                    <li key={permission.name} className="text-[13px] leading-snug">
+                      <code className="font-mono text-[12px] font-medium text-text-primary">{permission.name}</code>
+                      <span className="block text-text-secondary">{permission.usedFor}</span>
+                    </li>
+                  ))}
+                </ul>
+                {keyAccess.note && (
+                  <p className="mt-2 text-xs text-text-secondary">{keyAccess.note}</p>
+                )}
+              </section>
+            )}
+
             <div>
               <label
                 htmlFor="api-key"
@@ -671,6 +692,7 @@ function IntegrationsPage() {
 
             <p className="text-[13px] text-text-secondary">
               Credentials will be saved for <span className={env === 'test' ? 'font-medium text-amber-400' : 'font-medium text-success'}>{env}</span> mode.
+              {' '}GoPayLocal encrypts the key before storing it and never shows it again.
             </p>
 
             {connectMutation.error && (

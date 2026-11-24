@@ -13,7 +13,16 @@ GoPayLocal creates percentage promo codes in your Whop account and counts the pa
 
 1. **Get your Whop API key and account ID**
 
-   In the [Whop dashboard](https://dash.whop.com), create an API key for your account. You also need your account ID, which starts with `biz_`.
+   In the [Whop dashboard](https://dash.whop.com), create an API key for your account with only these permissions:
+
+   | Permission | Used for |
+   |---|---|
+   | `promo_code:create` | Creating the promo codes |
+   | `promo_code:basic:read` | Listing them |
+   | `promo_code:delete` | Deleting them |
+   | `developer:manage_webhook` | Creating the webhook that reports redemptions, and removing it when you disconnect |
+
+   You also need your account ID, which starts with `biz_`.
 
 2. **Connect in GoPayLocal**
 

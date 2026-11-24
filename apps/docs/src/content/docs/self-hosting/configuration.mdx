@@ -68,7 +68,7 @@ Set from `apps/api` with `pnpm wrangler secret put <NAME>`.
 
 | Secret | Required | Purpose | How to create |
 |---|---|---|---|
-| `BETTER_AUTH_SECRET` | Yes | Signs sessions. Also encrypts stored payment-provider tokens when `TOKEN_ENCRYPTION_KEY` is not set. | `openssl rand -base64 32` |
+| `BETTER_AUTH_SECRET` | Yes | Signs sessions and encrypts the GitHub and Google tokens stored at sign-in. Also encrypts stored payment-provider tokens when `TOKEN_ENCRYPTION_KEY` is not set. | `openssl rand -base64 32` |
 | `TOKEN_ENCRYPTION_KEY` | Recommended | Encrypts stored payment-provider tokens and webhook secrets, so `BETTER_AUTH_SECRET` can be rotated on its own. Set it before connecting the first integration: tokens stored under one key cannot be decrypted with another. | `openssl rand -base64 32` |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | At least one provider pair | Google sign-in. Enabled only when both are set. | [OAuth setup](/self-hosting/oauth/#google) |
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | At least one provider pair | GitHub sign-in. Enabled only when both are set. | [OAuth setup](/self-hosting/oauth/#github) |

@@ -1,5 +1,7 @@
 import type { Plan, PlanLimits, Limit, BannerConfig } from '../types/index.js';
 
+export * from './provider-key-access.js';
+
 // ── Plan Limits ─────────────────────────────────────────────────────────────
 
 // Enforced caps per plan. `null` = unlimited (see the `Limit` type). These are

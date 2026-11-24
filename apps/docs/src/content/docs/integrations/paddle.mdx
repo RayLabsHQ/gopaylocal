@@ -13,7 +13,14 @@ GoPayLocal creates Paddle Billing discounts automatically, one per discount leve
 
 1. **Get your Paddle API key**
 
-   Go to [Paddle Dashboard](https://vendors.paddle.com) > **Developer Tools > Authentication**. Create an API key.
+   Go to [Paddle Dashboard](https://vendors.paddle.com) > **Developer Tools > Authentication**. Create an API key with only these permissions ([permissions](https://developer.paddle.com/api-reference/about/permissions)):
+
+   | Permission | Used for |
+   |---|---|
+   | `discount.write` | Creating, listing and archiving the discounts (write includes read) |
+   | `product.read` | Importing your products |
+   | `price.read` | Showing each product's prices when you import it |
+   | `notification_setting.write` | Creating the webhook that reports redemptions, and removing it when you disconnect |
 
    For testing, create the key in the [Paddle Sandbox](https://sandbox-vendors.paddle.com) instead. Sandbox keys start with `pdl_sdbx_apikey_`.
 

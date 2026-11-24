@@ -13,7 +13,15 @@ GoPayLocal creates percentage discount codes in your Dodo Payments account and c
 
 1. **Get your Dodo API key**
 
-   In the [Dodo Payments dashboard](https://dashboard.dodopayments.com), create an API key. Test mode and live mode have separate keys.
+   In the [Dodo Payments dashboard](https://dashboard.dodopayments.com), go to **Developer > API Keys** and click **Create New Key** ([API keys](https://docs.dodopayments.com/api-reference/introduction)). Set these resources and leave the others at **None**:
+
+   | Resource | Access | Used for |
+   |---|---|---|
+   | Discounts | Write | Creating, listing and deleting the discount codes |
+   | Products | Read | Importing your products |
+   | Webhooks | Write | Creating the webhook that reports redemptions, and removing it when you disconnect; reading its signing secret |
+
+   Test mode and live mode have separate keys.
 
 2. **Connect in GoPayLocal**
 

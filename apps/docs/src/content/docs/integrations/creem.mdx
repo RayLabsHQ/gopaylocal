@@ -19,15 +19,17 @@ The Creem integration is implemented and covered by automated tests against Cree
 
    In the [Creem dashboard](https://creem.io/dashboard/developers), open **Developers** and create an API key. Test mode and production have separate keys: switch on **Test Mode** at the bottom of Creem's left sidebar to create a test key. Test keys start with `creem_test_`.
 
-   A **Full access** key works. If you restrict the key, give it:
+   Switch **Full access** off and grant only these scopes:
 
-   | Permission | Used for |
+   | Scope | Used for |
    |---|---|
-   | Products: read | Listing your products, and scoping each code to them |
-   | Discounts: read and write | Creating, listing and deleting the discount codes |
-   | Webhooks: read and write | Creating the redemption webhook, and removing it when you disconnect |
+   | `products:read` | Importing your products, and applying each code to them |
+   | `discounts:read` | Listing the discount codes |
+   | `discounts:write` | Creating and deleting them |
+   | `webhooks:read` | Reading the redemption webhook's signing secret |
+   | `webhooks:write` | Creating the webhook that reports redemptions, and removing it when you disconnect |
 
-   Creem's documentation doesn't name the permission for creating checkout sessions. GoPayLocal doesn't create checkout sessions in normal use, so a key without it still works for codes and redemption tracking.
+   GoPayLocal never creates checkout sessions with your key, so it needs no checkout permission. A **Full access** key also works, but it can do anything in your Creem store.
 
 2. **Connect in GoPayLocal**
 

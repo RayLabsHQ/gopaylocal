@@ -13,7 +13,7 @@ GoPayLocal creates percentage discounts in your Polar organization and counts th
 
 1. **Create a Polar organization access token**
 
-   In [Polar](https://polar.sh), create an **organization** access token (it starts with `polar_oat_`) with these scopes: `discounts:read`, `discounts:write`, `checkouts:write` and `webhooks:write`. A personal access token doesn't work.
+   In [Polar](https://polar.sh), create an **organization** access token (it starts with `polar_oat_`) with only these scopes: `discounts:read` (listing the discounts), `discounts:write` (creating and deleting them) and `webhooks:write` (creating the webhook that reports redemptions, and removing it when you disconnect). A personal access token doesn't work.
 
 2. **Connect in GoPayLocal**
 

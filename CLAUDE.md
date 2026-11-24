@@ -124,6 +124,11 @@ facts and the date together.
 
 Stripe, Paddle, Gumroad, Chargebee, Dodo, Polar, Whop, Creem, WooCommerce.
 
+The permissions each platform's key needs are in `PROVIDER_KEY_ACCESS`
+(`packages/shared/src/constants/provider-key-access.ts`), shown in the dashboard's
+Connect dialog and repeated on each integration's docs page: change both together
+when an integration starts or stops calling an endpoint.
+
 Lemon Squeezy was removed in November 2026 (the platform stops processing payments
 on 2027-03-31); do not re-add it. Its merchants are being moved to Stripe Managed
 Payments (Stripe as merchant of record, opted into per Checkout Session), which

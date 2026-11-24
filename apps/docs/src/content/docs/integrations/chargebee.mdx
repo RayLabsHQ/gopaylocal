@@ -13,7 +13,9 @@ GoPayLocal creates percentage coupons on your Chargebee site (Product Catalog 2.
 
 1. **Get your Chargebee API key**
 
-   In Chargebee, go to **Settings > Configure Chargebee > API Keys** and create a full-access key. Your test site and live site have separate keys.
+   In Chargebee, go to **Settings > Configure Chargebee > API Keys** and create a full-access key of the type **All** ([API keys](https://www.chargebee.com/docs/billing/2.0/site-configuration/api_keys)). Your test site and live site have separate keys.
+
+   GoPayLocal uses the key to create, list and delete coupons, and to create the webhook endpoint that reports redemptions (deleted when you disconnect). Chargebee keys can't be limited to some resources. Its **Write** and **Update** full-access keys can't delete, which removing codes needs, and a read-only key can't create them.
 
 2. **Connect in GoPayLocal**
 

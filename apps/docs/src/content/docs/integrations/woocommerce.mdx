@@ -33,7 +33,7 @@ To show the banner on the site itself, add the script as described in [WordPress
    Go to **WooCommerce > Settings > Advanced > REST API** and click **Add key** ([generate keys](https://developer.woocommerce.com/docs/apis/rest-api/#generate-keys)).
 
    - **User:** an **Administrator** or **Shop Manager**. GoPayLocal creates webhooks, which need the `manage_woocommerce` capability.
-   - **Permissions:** **Read/Write**. A Read key can't create coupons or webhooks.
+   - **Permissions:** **Read/Write**. A Read key can't create coupons or webhooks. WooCommerce keys can't be limited to some resources: Read/Write reaches everything that user can do in the store API.
 
    Click **Generate API key** and copy the **Consumer key** (`ck_…`) and **Consumer secret** (`cs_…`). WooCommerce shows the secret only once.
 
