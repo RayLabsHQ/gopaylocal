@@ -39,7 +39,7 @@ in its header (commit plus whether the tree was dirty).
 
 | Provider | List products | Create discount | List discounts | Checkout URL | Test purchase with discount | Provision webhook | Cleanup (delete + confirm) | Replay: verifyWebhook | Replay: parseRedemption | Date | Verifier | Commit |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Stripe | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | | | |
+| Stripe | Not yet verified live (the call succeeded, but the sandbox had no products to read) | **Verified** | **Verified** | Not yet verified live | Not yet verified live | Not yet verified live | **Verified** | Not yet verified live | Not yet verified live | 2026-11-24 | `provider-checks.yml` | `863e3e2` |
 | Stripe Managed Payments (`--managed-payments`) | Same as Stripe | Same as Stripe | Same as Stripe | Not yet verified live (`mp-*` probes; promotion codes an open question) | Not yet verified live | Same as Stripe | Same as Stripe | Not yet verified live | Not yet verified live (`mp-delivery` too) | | | |
 | Paddle | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | | | |
 | Gumroad | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | Not yet verified live | | | |
