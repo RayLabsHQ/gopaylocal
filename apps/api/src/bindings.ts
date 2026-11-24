@@ -22,9 +22,8 @@ export type Bindings = {
   // the hosted sender when hosted; when SELF_HOSTED="true", no email is sent
   // (lib/email.ts senderAddressFor).
   EMAIL_FROM?: string;
-  // Dodo product ids for the one paid plan (Pro: $19/month, $180/year).
+  // Dodo product id for the one paid plan (Pro: $19/month).
   DODO_PRICE_ID_PRO_MONTHLY?: string;
-  DODO_PRICE_ID_PRO_ANNUAL?: string;
   // "true" = self-hosted deployment: every org is unlimited with branding off,
   // billing endpoints return 404 billing_disabled. Anything else = hosted.
   // Resolved only through lib/entitlements.ts (isSelfHosted / resolveEntitlements).

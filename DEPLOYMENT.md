@@ -21,9 +21,8 @@ differences:
 - `SELF_HOSTED = "false"` in `apps/api/wrangler.toml`, which turns on the Free and Pro
   plans (`PLAN_LIMITS` in `packages/shared/src/constants/index.ts`) and billing.
 - Billing through Dodo Payments: secrets `DODO_API_KEY` and `DODO_WEBHOOK_SECRET`; vars
-  `DODO_ENVIRONMENT` (`test_mode` or `live_mode`), `DODO_PRICE_ID_PRO_MONTHLY` and
-  `DODO_PRICE_ID_PRO_ANNUAL` (the Pro products, $19/month and $180/year, managed in the
-  Dodo dashboard).
+  `DODO_ENVIRONMENT` (`test_mode` or `live_mode`) and `DODO_PRICE_ID_PRO_MONTHLY` (the
+  Pro product, $19/month, managed in the Dodo dashboard).
 - Dodo sends subscription webhooks to `https://api.gopaylocal.com/v1/webhooks/dodo`
   (`apps/api/src/routes/webhooks.ts`). Handled events: `subscription.active`,
   `subscription.renewed`, `subscription.plan_changed`, `subscription.on_hold`,

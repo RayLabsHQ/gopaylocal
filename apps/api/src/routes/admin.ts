@@ -757,9 +757,7 @@ app.get("/v1/admin/stats", async (c) => {
     const paidSubs = Object.values(planCounts).reduce((a, b) => a + b, 0);
     planCounts.free = Math.max(0, totalOrgs - paidSubs + (planCounts.free ?? 0));
 
-    // Estimated MRR: active Pro subs at the monthly list price. Subscription
-    // rows don't record the billing interval, so annual subs ($15/month
-    // effective) are counted at $19: an upper-bound estimate.
+    // Estimated MRR: active Pro subscriptions at the monthly list price.
     const estimatedMRR = planCounts.pro * PLAN_PRICES_USD.pro.month;
 
     const funnel = funnelThisMonth[0] ?? { impressions: 0, clicks: 0, copies: 0, redemptions: 0, revenueSaved: 0 };

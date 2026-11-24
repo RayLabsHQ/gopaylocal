@@ -53,7 +53,7 @@ checking one against your own sandbox account, are in
 
 | | Free | Pro | Self-hosted |
 |---|---|---|---|
-| Price | $0 | $19/month or $180/year | $0 (you pay your own Cloudflare and Postgres costs) |
+| Price | $0 | $19/month | $0 (you pay your own Cloudflare and Postgres costs) |
 | Products | 1 | Unlimited | Unlimited |
 | API calls per month | 10,000 | 20 million (contact us for more) | Unlimited |
 | Team members | 1 | Unlimited | Unlimited |

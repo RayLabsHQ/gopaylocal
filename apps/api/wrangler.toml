@@ -201,10 +201,9 @@ API_BASE_URL = "https://api.gopaylocal.com"
 APP_BASE_URL = "https://app.gopaylocal.com"
 ADMIN_BASE_URL = "https://admin.gopaylocal.com"
 DODO_ENVIRONMENT = "test_mode"
-# Dodo products for Pro ($19/month, $180/year). Must point at products priced
+# The Dodo product for Pro ($19/month). Must point at a product priced
 # to match the pricing page.
 DODO_PRICE_ID_PRO_MONTHLY = "pdt_0NbW5BSRZW6DVA451GDSV"
-DODO_PRICE_ID_PRO_ANNUAL = "pdt_0NbW5UzwzxwYTuVkl96c8"
 # Set to "true" when self-hosting: every organization is unlimited, the
 # "Powered by GoPayLocal" banner link is off, and billing is disabled.
 SELF_HOSTED = "false"

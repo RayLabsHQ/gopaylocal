@@ -30,14 +30,12 @@ const selfHostedEnv = () =>
   createTestBindings({
     SELF_HOSTED: "true",
     DODO_PRICE_ID_PRO_MONTHLY: "pdt_month",
-    DODO_PRICE_ID_PRO_ANNUAL: "pdt_year",
   });
 
 const hostedEnv = (overrides?: Partial<Bindings>) =>
   createTestBindings({
     SELF_HOSTED: "false",
     DODO_PRICE_ID_PRO_MONTHLY: "pdt_month",
-    DODO_PRICE_ID_PRO_ANNUAL: "pdt_year",
     ...overrides,
   });
 
@@ -69,19 +67,19 @@ describe("checkout validation (hosted)", () => {
     expect(res.status).toBe(400);
   });
 
-  it("rejects an unknown interval", async () => {
-    const res = await post(appWith(hostedEnv()), "/v1/teams/org1/billing/checkout", {
-      plan: "pro",
-      interval: "week",
-    });
-    expect(res.status).toBe(400);
+  it("refuses yearly billing, which no longer exists, and any other interval", async () => {
+    for (const interval of ["year", "week"]) {
+      const res = await post(appWith(hostedEnv()), "/v1/teams/org1/billing/checkout", { plan: "pro", interval });
+      expect(res.status, interval).toBe(400);
+      expect(((await res.json()) as { code: string }).code).toBe("invalid_interval");
+    }
   });
 
-  it("answers 503 billing_not_configured when the interval's price id is unset", async () => {
+  it("answers 503 billing_not_configured when the Pro product id is unset", async () => {
     const res = await post(
-      appWith(hostedEnv({ DODO_PRICE_ID_PRO_ANNUAL: undefined })),
+      appWith(hostedEnv({ DODO_PRICE_ID_PRO_MONTHLY: undefined })),
       "/v1/teams/org1/billing/checkout",
-      { plan: "pro", interval: "year" },
+      { plan: "pro", interval: "month" },
     );
     expect(res.status).toBe(503);
     expect(((await res.json()) as { code: string }).code).toBe("billing_not_configured");

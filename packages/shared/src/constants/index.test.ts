@@ -69,14 +69,12 @@ describe('SELF_HOSTED_LIMITS', () => {
 });
 
 describe('PLAN_PRICES_USD', () => {
-  it('Pro is $19/month or $180/year ($15/month billed annually)', () => {
-    expect(PLAN_PRICES_USD.pro.month).toBe(19);
-    expect(PLAN_PRICES_USD.pro.year).toBe(180);
-    expect(PLAN_PRICES_USD.pro.year / 12).toBe(15);
+  it('Pro is $19 a month, and there is no yearly price', () => {
+    expect(PLAN_PRICES_USD.pro).toEqual({ month: 19 });
   });
 
   it('Free costs nothing', () => {
-    expect(PLAN_PRICES_USD.free).toEqual({ month: 0, year: 0 });
+    expect(PLAN_PRICES_USD.free).toEqual({ month: 0 });
   });
 });
 

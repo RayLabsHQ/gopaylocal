@@ -7,7 +7,6 @@ import type {
   BannerConfig,
   Plan,
   Limit,
-  BillingInterval,
   ExperimentStatus,
 } from '@gopaylocal/shared'
 import type { FxRatesView } from '@gopaylocal/shared/currency'
@@ -577,10 +576,10 @@ export const api = {
       apiFetch<{ data: BillingInfo }>(`/v1/teams/${teamId}/billing`).then((r) => r.data),
     usage: (teamId: string) =>
       apiFetch<{ data: UsageInfo }>(`/v1/teams/${teamId}/billing/usage`).then((r) => r.data),
-    createCheckout: (teamId: string, interval: BillingInterval) =>
+    createCheckout: (teamId: string) =>
       apiFetch<{ data: { checkoutUrl: string; sessionId: string } }>(`/v1/teams/${teamId}/billing/checkout`, {
         method: 'POST',
-        body: JSON.stringify({ plan: 'pro', interval }),
+        body: JSON.stringify({ plan: 'pro' }),
       }).then((r) => r.data),
     createPortal: (teamId: string) =>
       apiFetch<{ data: { portalUrl: string } }>(`/v1/teams/${teamId}/billing/portal`, {

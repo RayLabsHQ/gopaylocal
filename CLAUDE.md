@@ -8,7 +8,7 @@ GoPayLocal is open source: `apps/*` are AGPL-3.0-only, `packages/*` (SDKs, banne
 shared) are MIT. See `LICENSING.md`. There is a hosted version with exactly two plans,
 and a self-hosted mode with no limits and no billing.
 
-| | Free | Pro ($19/mo or $180/yr) | Self-hosted |
+| | Free | Pro ($19/mo) | Self-hosted |
 |---|---|---|---|
 | Products | 1 | Unlimited | Unlimited |
 | API calls/mo | 10K | 20M (contact us for more) | Unlimited |
@@ -26,8 +26,10 @@ and a self-hosted mode with no limits and no billing.
   calls in a month (`PRO_FAIR_USE_API_HITS_PER_MONTH`) and the banner keeps working.
 - Self-hosted mode is the Worker var `SELF_HOSTED="true"`: every organization is
   unlimited, branding is off, billing endpoints are disabled.
-- The Dodo products and `DODO_PRICE_ID_PRO_MONTHLY` / `DODO_PRICE_ID_PRO_ANNUAL` are
-  managed by the founder in the Dodo dashboard.
+- Pro is billed monthly. The yearly plan was removed in November 2026 by the founder;
+  do not re-add it. The checkout refuses any interval other than `month`.
+- The Dodo product and `DODO_PRICE_ID_PRO_MONTHLY` are managed by the founder in the
+  Dodo dashboard.
 
 Positioning: the open-source PPP tool with one flat price. Compete on completeness
 (VPN detection, A/B testing, multi-currency, charm pricing, many integrations) and on

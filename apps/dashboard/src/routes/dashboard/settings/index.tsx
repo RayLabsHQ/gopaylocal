@@ -13,7 +13,6 @@ import {
   formatLimit,
   hasReachedLimit,
   resolveRole,
-  type BillingInterval,
   type Limit,
 } from '@gopaylocal/shared'
 
@@ -666,7 +665,6 @@ function MemberAccessEditor({
 
 const FREE = PLAN_LIMITS.free
 const PRO_MONTHLY = PLAN_PRICES_USD.pro.month
-const PRO_YEARLY = PLAN_PRICES_USD.pro.year
 
 const PLAN_METADATA = {
   free: {
@@ -698,7 +696,7 @@ function BillingTab() {
   })
 
   const createCheckout = useMutation({
-    mutationFn: (interval: BillingInterval) => api.billing.createCheckout(teamId, interval),
+    mutationFn: () => api.billing.createCheckout(teamId),
     onSuccess: ({ checkoutUrl }) => {
       window.location.href = checkoutUrl
     },
@@ -759,24 +757,14 @@ function BillingTab() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {canManageBilling && !isPro && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => createCheckout.mutate('month')}
-                  disabled={createCheckout.isPending || !teamId}
-                  className="bg-brand px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50"
-                >
-                  Upgrade to Pro · ${PRO_MONTHLY}/mo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => createCheckout.mutate('year')}
-                  disabled={createCheckout.isPending || !teamId}
-                  className="border border-border px-4 py-2 text-[13px] font-medium text-text-primary transition-colors hover:bg-bg disabled:opacity-50"
-                >
-                  Pro yearly · ${PRO_YEARLY}/yr (${PRO_YEARLY / 12}/mo)
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={() => createCheckout.mutate()}
+                disabled={createCheckout.isPending || !teamId}
+                className="bg-brand px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50"
+              >
+                Upgrade to Pro · ${PRO_MONTHLY}/mo
+              </button>
             )}
             {canManageBilling && (isPro || hasBillingAccount) && (
               <button
@@ -827,12 +815,12 @@ function BillingTab() {
             <p className="text-sm text-text-primary">
               You've hit a Free plan limit. Pro lifts it: unlimited products and team
               members and {PRO_FAIR_USE_API_HITS_PER_MONTH / 1_000_000} million API calls a
-              month, for ${PRO_MONTHLY}/month (${PRO_YEARLY / 12}/month billed yearly).
+              month, for ${PRO_MONTHLY}/month.
             </p>
             {canManageBilling && (
               <button
                 type="button"
-                onClick={() => createCheckout.mutate('month')}
+                onClick={() => createCheckout.mutate()}
                 disabled={createCheckout.isPending || !teamId}
                 className="shrink-0 bg-brand px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50"
               >

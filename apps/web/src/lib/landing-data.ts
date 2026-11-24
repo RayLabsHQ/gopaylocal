@@ -111,7 +111,7 @@ const faqItems = [
   },
   {
     question: 'How many API calls does Pro include?',
-    answer: `${PRO_FAIR_USE_API_HITS_PER_MONTH / 1_000_000} million a month, with unlimited products and team members. Nothing is throttled or switched off at that number: if you pass it we get in touch, and your banner keeps working. If you expect more than that, contact us first. Pro is $${PLAN_PRICES_USD.pro.month}/month, or $${PLAN_PRICES_USD.pro.year}/year billed annually ($${PLAN_PRICES_USD.pro.year / 12}/month).`,
+    answer: `${PRO_FAIR_USE_API_HITS_PER_MONTH / 1_000_000} million a month, with unlimited products and team members. Nothing is throttled or switched off at that number: if you pass it we get in touch, and your banner keeps working. If you expect more than that, contact us first. Pro is $${PLAN_PRICES_USD.pro.month} a month.`,
   },
   {
     question: 'Can I self-host GoPayLocal?',
@@ -131,7 +131,6 @@ const APP_URL = 'https://app.gopaylocal.com';
 const FREE = PLAN_LIMITS.free;
 const PRO = PLAN_LIMITS.pro;
 const PRO_MONTHLY = PLAN_PRICES_USD.pro.month;
-const PRO_YEARLY = PLAN_PRICES_USD.pro.year;
 
 /** 10000 -> "10K", 20000000 -> "20M". Only used for round plan numbers. */
 function compactCount(n: number | null): string {
@@ -167,7 +166,7 @@ const pricingCards: PricingCard[] = [
   {
     name: 'Pro',
     price: `$${PRO_MONTHLY}/mo`,
-    subtitle: `One flat price\n$${PRO_YEARLY / 12}/mo billed annually ($${PRO_YEARLY}/yr)`,
+    subtitle: 'One flat price\nBilled monthly',
     cta: 'Start Pro',
     href: APP_URL,
     highlighted: true,

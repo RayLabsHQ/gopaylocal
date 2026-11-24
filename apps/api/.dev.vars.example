@@ -45,10 +45,8 @@ DODO_API_KEY=replace-with-dodo-test-mode-api-key
 DODO_WEBHOOK_SECRET=replace-with-dodo-webhook-secret
 # Dodo environment: test_mode or live_mode.
 DODO_ENVIRONMENT=test_mode
-# Dodo product ID for the Pro plan billed monthly.
+# Dodo product ID for the Pro plan ($19 a month).
 DODO_PRICE_ID_PRO_MONTHLY=pdt_replace_with_monthly_product_id
-# Dodo product ID for the Pro plan billed annually.
-DODO_PRICE_ID_PRO_ANNUAL=pdt_replace_with_annual_product_id
 
 # --- Other --------------------------------------------------------------------
 

@@ -54,7 +54,7 @@ Set in the `[vars]` section of `apps/api/wrangler.toml`.
 | `FX_RATES_FALLBACK_URL` | No | `"https://frankfurter.example.com/v2/rates?base=usd"` or `"off"` | Second feed. It cross-checks the first: a currency gets a new rate only when the two agree within 5% (2% for a move over 15%); otherwise it keeps its last confirmed rate for up to 96 hours, then is not converted. It is also used when the first fails. `off` means one source with no cross-check: a new rate is accepted only within 15% of the last accepted one, and a bigger move is held until it comes back in range; to accept such a move, set this variable to a feed that confirms it, or delete the `fx:rates` key in the `CACHE` namespace so the next refresh starts over. A [self-hosted Frankfurter](https://frankfurter.dev/deploy/) works here. | Frankfurter v2 (`api.frankfurter.dev`) |
 | `FX_EXCLUDED_CURRENCIES` | No | `"VES,LBP"` | Comma-separated currencies that are never converted; visitors who use them see exact prices in your product's currency | None |
 | `DODO_ENVIRONMENT` | No | | Hosted billing only (`test_mode` or `live_mode`) | Not read when self-hosted |
-| `DODO_PRICE_ID_PRO_MONTHLY`, `DODO_PRICE_ID_PRO_ANNUAL` | No | | Hosted billing only (Dodo product ids) | Not read when self-hosted |
+| `DODO_PRICE_ID_PRO_MONTHLY` | No | | Hosted billing only (the Dodo product id of Pro) | Not read when self-hosted |
 
 With the defaults, the API fetches exchange rates from cdn.jsdelivr.net, currency-api.pages.dev and api.frankfurter.dev four times a day. To make no third-party requests, point `FX_RATES_URL` and `FX_RATES_FALLBACK_URL` at your own feed, or set `FX_RATES_URL` to `off`.
 

@@ -243,7 +243,6 @@ SELF_HOSTED = "true"
 # Hosted billing only (SELF_HOSTED unset or "false"). Not read when SELF_HOSTED="true".
 # DODO_ENVIRONMENT = "test_mode"            # or "live_mode"
 # DODO_PRICE_ID_PRO_MONTHLY = "<DODO_PRODUCT_ID>"
-# DODO_PRICE_ID_PRO_ANNUAL = "<DODO_PRODUCT_ID>"
 
 # Secrets: set each with (from apps/api)
 #   pnpm wrangler secret put <NAME>

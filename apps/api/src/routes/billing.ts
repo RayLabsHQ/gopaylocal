@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { eq } from "drizzle-orm";
 import { normalizePlan, remainingUnder } from "@gopaylocal/shared";
-import type { BillingInterval } from "@gopaylocal/shared";
 import type { AppEnv } from "../bindings";
 import { createDb } from "../db";
 import { subscriptions } from "../db/schema";
@@ -22,8 +21,6 @@ function billingDisabled(c: Context<AppEnv>) {
     404,
   );
 }
-
-const BILLING_INTERVALS: ReadonlySet<string> = new Set<BillingInterval>(["month", "year"]);
 
 // Get current plan + subscription info.
 // `plan` is the stored plan (legacy 'business' reported as 'pro');
@@ -108,7 +105,7 @@ app.get("/v1/teams/:orgId/billing/usage", requirePermission("billing.view"), asy
 });
 
 // Create Dodo checkout session for upgrade to Pro (the only paid plan).
-// Body: { plan: "pro", interval?: "month" | "year" } (interval defaults to month).
+// Body: { plan: "pro" }. Pro is billed monthly; there is no yearly plan.
 app.post("/v1/teams/:orgId/billing/checkout", requirePermission("billing.manage"), async (c) => {
   if (isSelfHosted(c.env)) return billingDisabled(c);
 
@@ -124,13 +121,13 @@ app.post("/v1/teams/:orgId/billing/checkout", requirePermission("billing.manage"
       return c.json({ error: "Invalid plan. Must be 'pro'." }, 400);
     }
 
-    const interval = (body.interval ?? "month") as string;
-    if (!BILLING_INTERVALS.has(interval)) {
-      return c.json({ error: "Invalid interval. Must be 'month' or 'year'." }, 400);
+    // A dashboard page loaded before the yearly plan was removed can still ask
+    // for it. Refuse, so nobody is put on monthly billing who chose yearly.
+    if (body.interval !== undefined && body.interval !== "month") {
+      return c.json({ error: "Pro is billed monthly.", code: "invalid_interval" }, 400);
     }
 
-    const productId =
-      interval === "year" ? c.env.DODO_PRICE_ID_PRO_ANNUAL : c.env.DODO_PRICE_ID_PRO_MONTHLY;
+    const productId = c.env.DODO_PRICE_ID_PRO_MONTHLY;
     if (!productId) {
       return c.json(
         { error: "Billing is not configured on this deployment.", code: "billing_not_configured" },
@@ -187,7 +184,6 @@ app.post("/v1/teams/:orgId/billing/checkout", requirePermission("billing.manage"
         metadata: {
           organizationId: orgId,
           plan: "pro",
-          interval,
         },
         return_url: `${appBaseUrl}/dashboard/settings?tab=billing&success=true`,
       }),

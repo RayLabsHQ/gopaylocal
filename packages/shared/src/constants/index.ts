@@ -1,4 +1,4 @@
-import type { Plan, PlanLimits, Limit, BillingInterval, BannerConfig } from '../types/index.js';
+import type { Plan, PlanLimits, Limit, BannerConfig } from '../types/index.js';
 
 // ── Plan Limits ─────────────────────────────────────────────────────────────
 
@@ -35,12 +35,11 @@ export const SELF_HOSTED_LIMITS: PlanLimits = {
   analyticsRetentionDays: null,
 };
 
-// List prices in USD per billing interval. Pro: $19/month or $180/year
-// ($15/month billed annually). The charged amount is whatever the Dodo product
-// behind DODO_PRICE_ID_PRO_MONTHLY / DODO_PRICE_ID_PRO_ANNUAL is set to.
-export const PLAN_PRICES_USD: Record<Plan, Record<BillingInterval, number>> = {
-  free: { month: 0, year: 0 },
-  pro: { month: 19, year: 180 },
+// List prices in USD. Pro is $19 a month; there is no yearly plan. The charged
+// amount is whatever the Dodo product behind DODO_PRICE_ID_PRO_MONTHLY is set to.
+export const PLAN_PRICES_USD: Record<Plan, { month: number }> = {
+  free: { month: 0 },
+  pro: { month: 19 },
 };
 
 // Pro's published API-call allowance ("20M API calls a month; contact us for

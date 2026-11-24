@@ -4,9 +4,6 @@
 // the API's entitlement resolver (apps/api/src/lib/entitlements.ts).
 export type Plan = 'free' | 'pro';
 
-// Billing cadence for the paid plan (Pro: $19/month or $180/year).
-export type BillingInterval = 'month' | 'year';
-
 /**
  * A plan cap. `null` means UNLIMITED.
  *

@@ -37,15 +37,12 @@ const app = new Hono<AppEnv>();
 /**
  * Resolve the plan from the VERIFIED Dodo price/product id rather than trusting
  * client-supplied checkout metadata (which a buyer could tamper with to claim a
- * higher tier). Pro is the only paid plan (monthly or annual product). Returns
- * null when the id matches neither configured product.
+ * higher tier). Pro is the only paid plan and has one product. Returns null when
+ * the id is not that product.
  */
 function planFromDodoPriceId(env: Bindings, priceId: string | undefined | null): Plan | null {
   if (!priceId) return null;
-  if (priceId === env.DODO_PRICE_ID_PRO_MONTHLY || priceId === env.DODO_PRICE_ID_PRO_ANNUAL) {
-    return "pro";
-  }
-  return null;
+  return priceId === env.DODO_PRICE_ID_PRO_MONTHLY ? "pro" : null;
 }
 
 /**

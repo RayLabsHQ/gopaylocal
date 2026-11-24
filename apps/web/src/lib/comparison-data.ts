@@ -22,7 +22,6 @@ export const COMPARISON_CHECKED_ON = '21 November 2026';
 const FREE = PLAN_LIMITS.free;
 const FREE_CALLS = formatLimit(FREE.apiHitsPerMonth);
 const PRO_MONTH = PLAN_PRICES_USD.pro.month;
-const PRO_YEAR = PLAN_PRICES_USD.pro.year;
 const PRO_CALLS_MILLIONS = PRO_FAIR_USE_API_HITS_PER_MONTH / 1_000_000;
 
 /** "Stripe, Paddle, ... and WooCommerce", with Dodo under its full name. */
@@ -48,7 +47,7 @@ export type RowKey =
 
 /** The rows of a head-to-head table, with GoPayLocal's side. */
 export const comparisonRows: { key: RowKey; label: string; gopaylocal: string }[] = [
-  { key: 'price', label: 'Price', gopaylocal: `Free, or Pro at $${PRO_MONTH} a month ($${PRO_YEAR} a year)` },
+  { key: 'price', label: 'Price', gopaylocal: `Free, or Pro at $${PRO_MONTH} a month` },
   {
     key: 'calls',
     label: 'API calls a month',
