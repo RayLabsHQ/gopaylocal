@@ -332,11 +332,32 @@ describe('Redactor', () => {
     expect(out).not.toContain('WXYZ');
   });
 
-  it('replaces a labelled value wherever it appears, and leaves very short ones alone', () => {
+  it('replaces a labelled value wherever it appears, in any letter case, and leaves very short ones alone', () => {
     const r = new Redactor();
-    r.addLabel('acme-test', '[account id]');
+    r.addLabel('Acme-Test', '[account id]');
     r.addLabel('abc', '[account id]');
-    expect(r.redact('Hosts contacted: acme-test.chargebee.com (abc)')).toBe('Hosts contacted: [account id].chargebee.com (abc)');
+    expect(r.redact('Hosts contacted: acme-test.chargebee.com (abc), site ACME-TEST')).toBe(
+      'Hosts contacted: [account id].chargebee.com (abc), site [account id]',
+    );
+  });
+
+  it('labels a store URL in every form it can be printed in', () => {
+    const r = new Redactor();
+    r.addAccount('https://Shop.Private-Store.example:8443/');
+    const text = [
+      'account id:  https://Shop.Private-Store.example:8443/ (GPL_VERIFY_STORE_URL)',
+      'GET https://shop.private-store.example:8443/wp-json/wc/v3/coupons failed',
+      'Hosts contacted: shop.private-store.example',
+    ].join('\n');
+    const out = r.redact(text);
+    expect(out.toLowerCase()).not.toContain('private-store');
+    expect(out).toContain('Hosts contacted: [account host]');
+  });
+
+  it('a label is plain text, not a pattern', () => {
+    const r = new Redactor();
+    r.addLabel('a.b+c(d)', '[account id]');
+    expect(r.redact('x a.b+c(d) y aXb+c(d)')).toBe('x [account id] y aXb+c(d)');
   });
 
   it('replaces a secret and its URL- and base64-encoded forms', () => {
@@ -664,7 +685,7 @@ describe('main: verify run', () => {
 
   it('--public-log prints no part of the key, no product, no checkout link and no account host', async () => {
     const fake = makeFakeProvider({ name: 'woocommerce' });
-    const storeEnv = { GPL_VERIFY_API_KEY: TEST_KEY, GPL_VERIFY_STORE_URL: 'https://shop.private-store.example' };
+    const storeEnv = { GPL_VERIFY_API_KEY: TEST_KEY, GPL_VERIFY_STORE_URL: 'https://Shop.Private-Store.example:8443/' };
     for (const flags of [['--public-log'], ['--public-log', '--json']]) {
       const h = harness(storeEnv, fake.provider);
       const code = await main(['woocommerce', '--product', 'price_1', '--allow-live', ...flags], h.deps);
@@ -677,7 +698,7 @@ describe('main: verify run', () => {
       expect(text).not.toContain('"Pro"');
       expect(text).not.toContain('19 usd');
       expect(text).not.toContain('checkout.example.test');
-      expect(text).not.toContain('private-store.example');
+      expect(text.toLowerCase()).not.toContain('private-store');
       expect(text).toContain('1 product(s); --product is one of them');
     }
     const h = harness(storeEnv, fake.provider);

@@ -29,6 +29,7 @@ export function hidden(value: string | null | undefined): string {
  */
 export class Redactor {
   private readonly secrets = new Map<string, string>(); // variant → mask
+  private readonly labels = new Map<string, string>(); // lowercased value → label
   private readonly hideAll: boolean;
 
   /** `hideAll`: show no part of a secret, only its length (--public-log). */
@@ -38,12 +39,34 @@ export class Redactor {
 
   /**
    * Replace a value that is not a credential but should not be printed (an
-   * account name, a store's host) with a label. Very short values are left
-   * alone: replacing them would garble unrelated text.
+   * account name, a store's host) with a label, in any letter case: hosts are
+   * printed lowercased whatever case they were given in. Very short values are
+   * left alone: replacing them would garble unrelated text.
    */
   addLabel(value: string | null | undefined, label: string): void {
-    if (!value || value.length < 4) return;
-    this.secrets.set(value, label);
+    const v = value?.trim();
+    if (!v || v.length < 4) return;
+    this.labels.set(v.toLowerCase(), label);
+  }
+
+  /**
+   * Label an account id in every form the tool can print it in: as given, and,
+   * when it is a URL, without its trailing slash, as host with and without the
+   * port, and as the bare host name.
+   */
+  addAccount(value: string | null | undefined): void {
+    const v = value?.trim();
+    if (!v) return;
+    this.addLabel(v, '[account id]');
+    this.addLabel(v.replace(/\/+$/, ''), '[account id]');
+    try {
+      const url = new URL(v);
+      this.addLabel(url.host, '[account host]');
+      this.addLabel(url.hostname, '[account host]');
+      this.addLabel(url.hostname.replace(/\.$/, ''), '[account host]');
+    } catch {
+      // not a URL (a Chargebee site name, a Whop company id)
+    }
   }
 
   add(secret: string | null | undefined): void {
@@ -72,6 +95,11 @@ export class Redactor {
     // Longest first so a secret never gets partially replaced by a shorter variant.
     const entries = [...this.secrets.entries()].sort((a, b) => b[0].length - a[0].length);
     for (const [secret, masked] of entries) out = out.split(secret).join(masked);
+    const labels = [...this.labels.entries()].sort((a, b) => b[0].length - a[0].length);
+    for (const [value, label] of labels) {
+      const pattern = new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+      out = out.replace(pattern, () => label);
+    }
     return out;
   }
 

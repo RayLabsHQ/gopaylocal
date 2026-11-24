@@ -82,16 +82,9 @@ export async function main(argv: string[], deps: MainDeps): Promise<number> {
   redactor.add(apiKey);
   redactor.add(webhookSecret);
   const account = resolveAccountId(profile, deps.env);
-  if (options.publicLog && account.value) {
-    // The account name can be part of a host ({site}.chargebee.com) or be a
-    // store's URL; neither belongs in a log anyone can read.
-    redactor.addLabel(account.value, '[account id]');
-    try {
-      redactor.addLabel(new URL(account.value).host, '[account host]');
-    } catch {
-      // not a URL
-    }
-  }
+  // The account name can be part of a host ({site}.chargebee.com) or be a
+  // store's URL; neither belongs in a log anyone can read.
+  if (options.publicLog) redactor.addAccount(account.value);
 
   const problems: string[] = [];
   if (account.conflict) problems.push(account.conflict);
