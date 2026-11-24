@@ -44,13 +44,14 @@ type Environment = "live" | "test";
 
 /** An expected failure, mapped 1:1 to the HTTP response by the route. */
 export class ExperimentError extends Error {
-  constructor(
-    readonly status: 400 | 403 | 404 | 409,
-    message: string,
-    readonly code: string,
-  ) {
+  readonly status: 400 | 403 | 404 | 409;
+  readonly code: string;
+
+  constructor(status: 400 | 403 | 404 | 409, message: string, code: string) {
     super(message);
     this.name = "ExperimentError";
+    this.status = status;
+    this.code = code;
   }
 }
 

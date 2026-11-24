@@ -1,6 +1,8 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    // The API's scripts run this source on plain Node, which only removes types.
+    "erasableSyntaxOnly": true,
     "outDir": "dist",
     "rootDir": "src"
   },

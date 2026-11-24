@@ -175,15 +175,18 @@ export interface PaymentProvider {
 // ── Provider Errors ─────────────────────────────────────────────────────────
 
 export class ProviderError extends Error {
-  constructor(
-    public readonly provider: string,
-    public readonly operation: string,
-    message: string,
-    public readonly statusCode?: number,
-    public readonly providerErrorCode?: string,
-  ) {
+  readonly provider: string;
+  readonly operation: string;
+  readonly statusCode?: number;
+  readonly providerErrorCode?: string;
+
+  constructor(provider: string, operation: string, message: string, statusCode?: number, providerErrorCode?: string) {
     super(`[${provider}] ${operation}: ${message}`);
     this.name = 'ProviderError';
+    this.provider = provider;
+    this.operation = operation;
+    this.statusCode = statusCode;
+    this.providerErrorCode = providerErrorCode;
   }
 }
 

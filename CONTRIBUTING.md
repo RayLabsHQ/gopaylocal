@@ -12,14 +12,14 @@ report a security problem, do not open an issue: follow [SECURITY.md](SECURITY.m
 - **Node.js 22.23.4 or newer on the 22 line, 24.11 or newer on the 24 line, or
   26 and later** (the `engines` field of the root `package.json`). Astro 7 needs
   22.23.4; Vitest 5 and tsup 9 do not support the odd-numbered releases (23, 25).
-  The maintainers use Node 24, which is what [`.nvmrc`](.nvmrc) selects
+  The maintainers use Node 26, which is what [`.nvmrc`](.nvmrc) selects
   (`nvm use`).
 - **pnpm 12**, at the exact version pinned in the `packageManager` field of the
   root `package.json`. Run `corepack enable` once and Corepack will fetch and use
   exactly that version whenever you run `pnpm` in this repository. CI reads the
-  same field, so the two never drift apart. Node 24 ships Corepack; Node 26 does
-  not, so there install it first (`npm install -g corepack`) or install pnpm
-  12 another way.
+  same field, so the two never drift apart. Node 26 does not ship Corepack, so
+  install it first (`npm install -g corepack`) or install pnpm 12 another way;
+  Node 22 and 24 ship it.
 - pnpm refuses to install packages published less than a day ago
   (`minimumReleaseAge`, on by default since pnpm 11), so `pnpm update` may stop
   one release short of the newest. Dependencies may only run install scripts if

@@ -20,10 +20,13 @@ export class IsolateCache<T> {
   private readonly entries = new Map<string, { value: T; expiresAt: number; weight: number }>();
   private totalWeight = 0;
 
-  constructor(
-    private ttlMs: number,
-    private readonly maxWeight = 10_000,
-  ) {}
+  private ttlMs: number;
+  private readonly maxWeight: number;
+
+  constructor(ttlMs: number, maxWeight = 10_000) {
+    this.ttlMs = ttlMs;
+    this.maxWeight = maxWeight;
+  }
 
   /** Change the time limit. Existing entries keep the limit they were stored with. */
   configure(options: { ttlMs: number }): void {

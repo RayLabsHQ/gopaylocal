@@ -58,6 +58,6 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           VPN_KV_NAMESPACE_ID: ${{ vars.VPN_KV_NAMESPACE_ID }}
         run: >-
-          node --experimental-transform-types --disable-warning=ExperimentalWarning
+          node --disable-warning=ExperimentalWarning
           --import ./scripts/verify-provider/register-ts-resolve.mjs
           scripts/refresh-vpn-dataset.ts

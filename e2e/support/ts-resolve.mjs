@@ -1,4 +1,4 @@
-// Lets plain `node` (>= 22.15, with --experimental-transform-types) run
+// Lets plain `node` (22.18 or newer, which strips TypeScript types itself) run
 // e2e/support/seed-user.ts, which imports the API's TypeScript sources. Node
 // strips the types itself but resolves imports the ESM way, while the API and
 // packages/shared use bundler-style specifiers: extensionless ('../db') and
@@ -7,15 +7,15 @@
 // and, for '.js' specifiers, the '.ts' sibling. Everything else resolves as
 // Node normally does. No dependency (tsx is not installed in this workspace).
 //
-// Used as: node --experimental-transform-types --import ./e2e/support/ts-resolve.mjs <entry.ts>
+// Used as: node --import ./e2e/support/ts-resolve.mjs <entry.ts>
 
 import * as nodeModule from "node:module";
 import { statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const { registerHooks } = nodeModule;
-if (typeof registerHooks !== "function") {
-  process.stderr.write(`e2e seeding needs Node 22.15 or newer (.nvmrc pins 24); this is ${process.version}.\n`);
+if (typeof registerHooks !== "function" || !process.features.typescript) {
+  process.stderr.write(`e2e seeding needs Node 22.18 or newer (.nvmrc pins 26); this is ${process.version}.\n`);
   process.exit(2);
 }
 

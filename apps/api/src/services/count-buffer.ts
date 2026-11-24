@@ -72,16 +72,19 @@ export class CountBuffer<Row extends CountedRow> {
   private readonly pending = new Map<string, Batch<Row>>();
   private readonly flushing = new Map<string, Flush>();
   private retryAfter = 0;
+  private readonly label: string;
+  private options: CountBufferOptions;
+  private readonly describe: (rows: Row[]) => Record<string, unknown>;
 
   /**
    * `label` starts every log line; `describe` adds fields that identify a
    * failed batch (the counts and the error are added here).
    */
-  constructor(
-    private readonly label: string,
-    private options: CountBufferOptions,
-    private readonly describe: (rows: Row[]) => Record<string, unknown>,
-  ) {}
+  constructor(label: string, options: CountBufferOptions, describe: (rows: Row[]) => Record<string, unknown>) {
+    this.label = label;
+    this.options = options;
+    this.describe = describe;
+  }
 
   configure(options: Partial<CountBufferOptions>): void {
     this.options = { ...this.options, ...options };

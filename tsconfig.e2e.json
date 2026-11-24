@@ -8,6 +8,7 @@
     // e2e/support/seed-user.ts runs on Node's type stripping, which needs the
     // `.ts` extension in imports; it imports API source, hence workers-types.
     "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
     "types": ["node", "@cloudflare/workers-types"]
   },
   "include": ["e2e/**/*.ts", "playwright.config.ts", "vitest.config.ts"]

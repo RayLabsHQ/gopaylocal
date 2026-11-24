@@ -13,9 +13,9 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate || tsx scripts/migrate.ts",
     "vpn:build-dataset": "node scripts/build-vpn-dataset.ts",
-    "vpn:refresh": "node --experimental-transform-types --disable-warning=ExperimentalWarning --import ./scripts/verify-provider/register-ts-resolve.mjs scripts/refresh-vpn-dataset.ts",
-    "verify:provider": "node --experimental-transform-types --disable-warning=ExperimentalWarning --import ./scripts/verify-provider/register-ts-resolve.mjs scripts/verify-provider.ts",
-    "verify:provider:ci": "node --experimental-transform-types --disable-warning=ExperimentalWarning --import ./scripts/verify-provider/register-ts-resolve.mjs scripts/verify-provider/ci.ts",
+    "vpn:refresh": "node --disable-warning=ExperimentalWarning --import ./scripts/verify-provider/register-ts-resolve.mjs scripts/refresh-vpn-dataset.ts",
+    "verify:provider": "node --disable-warning=ExperimentalWarning --import ./scripts/verify-provider/register-ts-resolve.mjs scripts/verify-provider.ts",
+    "verify:provider:ci": "node --disable-warning=ExperimentalWarning --import ./scripts/verify-provider/register-ts-resolve.mjs scripts/verify-provider/ci.ts",
     "clean": "rm -rf dist"
   },
   "dependencies": {
@@ -32,7 +32,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261117.1",
-    "@types/node": "^24.19.2",
+    "@types/node": "^26.6.6",
     "drizzle-kit": "^0.31.11",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",

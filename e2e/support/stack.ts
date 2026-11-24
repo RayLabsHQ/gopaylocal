@@ -64,7 +64,6 @@ export async function seedAccount(label = "E2E"): Promise<E2EAccount> {
     const child = spawn(
       process.execPath,
       [
-        "--experimental-transform-types",
         "--disable-warning=ExperimentalWarning",
         "--import",
         resolve(REPO_ROOT, "e2e/support/ts-resolve.mjs"),

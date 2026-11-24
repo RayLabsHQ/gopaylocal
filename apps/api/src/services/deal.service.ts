@@ -127,12 +127,12 @@ export async function viewDeal(db: Database, campaign: CampaignRow, deal: DealRo
 
 /** Thrown by createDealCode when the provider refuses; the routes answer 502 with `message`. */
 export class DealCodeError extends Error {
-  constructor(
-    message: string,
-    readonly provider: string,
-  ) {
+  readonly provider: string;
+
+  constructor(message: string, provider: string) {
     super(message);
     this.name = "DealCodeError";
+    this.provider = provider;
   }
 }
 

@@ -1,14 +1,15 @@
 // Lets plain `node` run the API's TypeScript sources directly, with no build
 // step and no extra dependency (tsx is not a dependency of this workspace).
 //
-// Node >= 22.15 strips/transforms TypeScript itself (run with
-// --experimental-transform-types, needed for the parameter properties in
-// providers/types.ts), but it resolves imports the ESM way, which requires file
-// extensions. The API source uses bundler-style extensionless imports
+// Node 22.18 and later strips TypeScript types itself. It only removes them, so
+// the sources it runs must not use syntax that needs rewriting (enums,
+// namespaces, constructor parameter properties): `erasableSyntaxOnly` in the
+// tsconfig files makes the typecheck refuse those. Node resolves imports the ESM
+// way, which requires file extensions. The API source uses bundler-style extensionless imports
 // ('./types', '../db'), so this hook retries a failed relative import with
 // `.ts` and `/index.ts`. Everything else resolves exactly as Node normally does.
 //
-// Used as: node --experimental-transform-types --import ./scripts/verify-provider/register-ts-resolve.mjs <entry.ts>
+// Used as: node --import ./scripts/verify-provider/register-ts-resolve.mjs <entry.ts>
 
 import * as nodeModule from 'node:module';
 import { statSync } from 'node:fs';
@@ -17,9 +18,9 @@ import { fileURLToPath } from 'node:url';
 // A namespace import, so an older Node reaches this friendly message instead of
 // a SyntaxError about a missing named export.
 const { registerHooks } = nodeModule;
-if (typeof registerHooks !== 'function') {
+if (typeof registerHooks !== 'function' || !process.features.typescript) {
   process.stderr.write(
-    `verify:provider needs Node 22.15 or newer (the repo's .nvmrc pins 24); this is ${process.version}.\n`,
+    `verify:provider needs Node 22.18 or newer (the repo's .nvmrc pins 26); this is ${process.version}.\n`,
   );
   process.exit(2);
 }

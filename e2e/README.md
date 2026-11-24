@@ -117,9 +117,9 @@ All commands run from the repository root.
 - The API rate-limits auth POSTs per IP (`RL_AUTH_POST_IP`, 10 per minute in
   `wrangler.toml`). One run makes about five sign-ins, so back-to-back runs can
   hit it. Wait a minute if sign-in starts returning 429.
-- Seeding runs `support/seed-user.ts` with plain Node 22.15+
-  (`--experimental-transform-types` and the resolve hook in
-  `support/ts-resolve.mjs`). It needs no extra dependency.
+- Seeding runs `support/seed-user.ts` with plain Node 22.18+ (Node strips the
+  types itself; the resolve hook is `support/ts-resolve.mjs`). It needs no
+  extra dependency.
 - Status: the fixtures, preflight and seeding were repaired without a running
   stack. The seeding script was run against a local Postgres, and
   `playwright test --list` loads the suite, but the browser flows themselves

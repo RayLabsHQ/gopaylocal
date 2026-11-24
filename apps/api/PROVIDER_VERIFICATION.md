@@ -56,9 +56,9 @@ check that for you.
 
 ## Before you start
 
-- **Node 24.** The repo's `.nvmrc` pins it (`nvm use` from the repo root). The tool
+- **Node 26.** The repo's `.nvmrc` pins it (`nvm use` from the repo root). The tool
   runs on Node's built-in TypeScript support, so there's no build step and no
-  `tsx`. It needs Node 22.15 or newer and says so if your Node is older.
+  `tsx`. It needs Node 22.18 or newer and says so if your Node is older.
 - **Dependencies installed:** `pnpm install` from the repo root.
 - **A sandbox account of your own.** Never use a customer's account or credentials.
 - **Credentials in environment variables only.** The tool never reads

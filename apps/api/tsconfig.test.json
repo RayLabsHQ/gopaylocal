@@ -8,7 +8,7 @@
     "rootDir": ".",
     // Scripts run on Node's type stripping, which needs `.ts` in import paths.
     "allowImportingTsExtensions": true,
-    // Tests and scripts run on Node (vitest, node --experimental-transform-types).
+    // Tests and scripts run on Node (vitest, and plain node for the scripts).
     "types": ["@cloudflare/workers-types", "node"]
   },
   "include": ["src/**/*.ts", "scripts/**/*.ts"],

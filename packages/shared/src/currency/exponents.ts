@@ -69,7 +69,7 @@ export function minorUnitExponent(currency: string | null | undefined): number {
 // also stays the rule for amounts a provider receives or reports (validation,
 // webhooks).
 // The list is fixed here rather than read from Intl, whose defaults differ
-// between ICU versions. Checked against ICU 78.3 (Node 24): exactly these 15
+// between ICU versions. Checked against ICU 78.3 (Node 26): exactly these 15
 // allowlisted currencies have fewer CLDR digits than ISO, and none has more.
 export const WHOLE_UNIT_DISPLAY_CURRENCIES: ReadonlySet<string> = new Set([
   "AFN", "ALL", "COP", "HUF", "IDR", "IQD", "IRR", "KPW", "LAK", "LBP",

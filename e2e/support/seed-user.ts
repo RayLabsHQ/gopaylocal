@@ -7,8 +7,7 @@
  *
  * Spawned by e2e/support/stack.ts (never imported by Playwright). Runs under
  * plain Node with the API's TypeScript resolve hook:
- *   node --experimental-transform-types \
- *     --import ./e2e/support/ts-resolve.mjs \
+ *   node --import ./e2e/support/ts-resolve.mjs \
  *     e2e/support/seed-user.ts
  *
  * Input (environment): E2E_DATABASE_URL (validated loopback by the parent and

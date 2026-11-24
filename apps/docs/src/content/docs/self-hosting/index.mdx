@@ -30,7 +30,7 @@ The server (everything under `apps/`) is licensed AGPL-3.0-only. The SDKs and th
 - **A domain with its DNS on Cloudflare** (recommended). You need one to serve the Workers on your own hostnames: a Custom Domain requires an active Cloudflare zone ([Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)). See [Domains and sign-in cookies](#domains-and-sign-in-cookies).
 - **Postgres 15 or newer**, reachable by Cloudflare Hyperdrive over TLS. The schema needs 15 (it uses a `NULLS NOT DISTINCT` unique constraint); CI tests on 18. See [Database and migrations](/self-hosting/database/).
 - **A Google OAuth client or a GitHub OAuth app**, or both. Public email sign-up is disabled, so OAuth is how people create accounts. See [OAuth setup](/self-hosting/oauth/).
-- **On your computer:** Git; Node.js at a version allowed by the `engines` field of the root `package.json` (22.23.4 or newer on the 22 line, 24.11 or newer on the 24 line, or 26 and later); and pnpm at the version pinned in its `packageManager` field. Running `corepack enable` once makes Corepack fetch and use exactly that version.
+- **On your computer:** Git; Node.js at a version allowed by the `engines` field of the root `package.json` (22.23.4 or newer on the 22 line, 24.11 or newer on the 24 line, or 26 and later); and pnpm at the version pinned in its `packageManager` field. Running `corepack enable` once makes Corepack fetch and use exactly that version (on Node 26, install it first with `npm install -g corepack`).
 
 ## Cloudflare plan
 

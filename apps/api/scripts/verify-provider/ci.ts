@@ -159,7 +159,6 @@ function main(env: Env): number {
   const child = spawnSync(
     process.execPath,
     [
-      '--experimental-transform-types',
       '--disable-warning=ExperimentalWarning',
       '--import',
       './scripts/verify-provider/register-ts-resolve.mjs',

@@ -2,6 +2,10 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "types": ["@cloudflare/workers-types"],
+    // The scripts (verify:provider, vpn:refresh, e2e seeding) run this source on
+    // plain Node, which only removes types: no enums, namespaces or constructor
+    // parameter properties.
+    "erasableSyntaxOnly": true,
     "jsx": "react-jsx",
     "jsxImportSource": "hono/jsx",
     "outDir": "dist",

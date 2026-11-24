@@ -43,7 +43,7 @@ CURRENT="starting"
 compose() { docker compose -f "$HERE/compose.yml" "$@"; }
 wp() { compose run --rm -T cli wp "$@"; }
 node_ts() {
-  (cd "$API_DIR" && node --experimental-transform-types --disable-warning=ExperimentalWarning \
+  (cd "$API_DIR" && node --disable-warning=ExperimentalWarning \
     --import ./scripts/verify-provider/register-ts-resolve.mjs "$@")
 }
 tool() { node_ts scripts/verify-provider.ts "$@"; }
