@@ -477,6 +477,12 @@ export const campaignCountryPrices = pgTable(
     lastSync: t.jsonb("last_sync"),
     /** Changes the last sync left; the scheduled job carries on while above 0. */
     remaining: t.integer("remaining").default(0).notNull(),
+    /**
+     * When the product passed the checks (same price, Dodo's PPP off, no price
+     * rules of its own) and GoPayLocal started writing. Null: nothing was ever
+     * written, so a removal touches nothing at Dodo.
+     */
+    verifiedAt: t.timestamp("verified_at"),
     syncedAt: t.timestamp("synced_at"),
     createdAt: t.timestamp("created_at").defaultNow().notNull(),
     updatedAt: t.timestamp("updated_at").defaultNow().notNull(),

@@ -11,7 +11,7 @@ const row = (country: string, currency: string, minorAmount: number): CountryPri
 /** A Dodo that keeps one product's rules in memory and logs every call. */
 function fakeDodo(opts: { pricingMode?: string | null; rules?: DodoRule[]; refuse?: (method: string, path: string) => boolean } = {}) {
   let rules = [...(opts.rules ?? [])];
-  let pricingMode = opts.pricingMode ?? "by_country";
+  let pricingMode = "pricingMode" in opts ? (opts.pricingMode ?? null) : "by_country";
   let nextId = 1;
   const calls: string[] = [];
   const reply = (status: number, body: unknown = null): DodoReply => ({ ok: status < 300, status, body });
@@ -77,6 +77,43 @@ describe("applyCountryPrices", () => {
     const dodo = fakeDodo({ refuse: (method, path) => method === "GET" && path === "/products/pdt_1" });
     const out = await applyCountryPrices(dodo.request, "pdt_1", [row("IN", "INR", 52900)], { budget: 35, label: "the Pro product" });
     expect(out).toEqual({ ok: false, problem: "Couldn't read the Pro product. Dodo answered 403: INSUFFICIENT_PERMISSION", status: 403 });
+  });
+
+  it("removes only the rules mayArchive allows, and leaves the rest exactly as they are", async () => {
+    const dodo = fakeDodo({
+      rules: [
+        { id: "lp_ours", country_code: "IN", currency: "INR", amount: 52900 },
+        { id: "lp_theirs", country_code: "DE", currency: "EUR", amount: 1599 },
+        { id: "lp_currency", country_code: null, currency: "GBP", amount: 1299 },
+      ],
+    });
+    // A removal: no rows wanted, only India is GoPayLocal's.
+    const out = await applyCountryPrices(dodo.request, "pdt_1", [], {
+      budget: 35,
+      label: "the product",
+      mayArchive: (rule) => rule.country_code === "IN",
+      ensureByCountry: false,
+    });
+    expect(out).toMatchObject({ ok: true, result: { archived: 1, remaining: 0 } });
+    expect(dodo.rules().map((r) => r.id).sort()).toEqual(["lp_currency", "lp_theirs"]);
+    expect(dodo.calls).not.toContain("PATCH /products/pdt_1");
+  });
+
+  it("writes nothing, and doesn't call beforeWrite, when checkRules refuses", async () => {
+    const dodo = fakeDodo({ pricingMode: null, rules: [{ id: "lp_theirs", country_code: "DE", currency: "EUR", amount: 1599 }] });
+    let wrote = false;
+    const out = await applyCountryPrices(dodo.request, "pdt_1", [row("IN", "INR", 52900)], {
+      budget: 35,
+      label: "the product",
+      checkRules: (rules) => (rules.length ? "has rules of its own" : null),
+      beforeWrite: async () => {
+        wrote = true;
+      },
+    });
+    expect(out).toEqual({ ok: false, problem: "has rules of its own" });
+    expect(wrote).toBe(false);
+    expect(dodo.calls).toEqual(["GET /products/pdt_1", "GET /products/pdt_1/localized-prices"]);
+    expect(dodo.pricingMode()).toBeNull();
   });
 
   it("records a refused write per country and keeps going", async () => {

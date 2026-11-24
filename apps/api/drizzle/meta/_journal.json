@@ -57,6 +57,13 @@
       "when": 1795536554533,
       "tag": "0007_provider_country_prices",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795537083016,
+      "tag": "0008_country_prices_verified",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,1 @@
+ALTER TABLE "campaign_country_prices" ADD COLUMN "verified_at" timestamp;

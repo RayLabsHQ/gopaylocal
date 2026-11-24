@@ -99,6 +99,18 @@ export function dodoProductProblem(body: unknown, product: { basePrice: number; 
   return null;
 }
 
+/**
+ * The countries whose rule GoPayLocal wrote: published with the discount it
+ * was written for. A rule listed without one (null) is someone else's.
+ */
+export function ownedCountries(published: Record<string, PublishedPrice> | null | undefined): Set<string> {
+  return new Set(
+    Object.entries(published ?? {})
+      .filter(([, p]) => p.discount !== null)
+      .map(([country]) => country),
+  );
+}
+
 /** On the first sync: the product must have no country prices GoPayLocal didn't write. */
 export function existingRulesProblem(rules: readonly DodoRule[]): string | null {
   if (rules.length === 0) return null;
@@ -303,6 +315,17 @@ export async function syncCountryPriceRow(
     return { outcome: "problem", problem };
   };
 
+  // Never verified means GoPayLocal never wrote a rule on this product: there
+  // is nothing of ours to remove, and whatever is there is the merchant's.
+  if (row.wanted === "none" && !row.verifiedAt) {
+    await db.delete(campaignCountryPrices).where(eq(campaignCountryPrices.id, row.id));
+    return {
+      outcome: "synced",
+      removed: true,
+      record: { at: new Date(now).toISOString(), trigger: opts.trigger, created: 0, updated: 0, archived: 0, failures: [], remaining: 0 },
+    };
+  }
+
   const dodo = await dodoForRow(db, env, row);
   if (!dodo.ok) {
     // Prices to remove with no integration left to remove them with: nothing
@@ -336,12 +359,23 @@ export async function syncCountryPriceRow(
     check = (body) => dodoProductProblem(body, product);
   }
 
-  const firstSync = row.wanted === "prices" && !row.published;
+  // Only rules GoPayLocal wrote may be removed: the countries it published a
+  // discount for. A rule the merchant added later is left alone.
+  const owned = ownedCountries(row.published);
   const applied = await applyCountryPrices(dodo.request, row.providerProductId, rows, {
     budget: opts.budget,
     label: "the Dodo product",
     check,
-    checkRules: firstSync ? existingRulesProblem : undefined,
+    checkRules: row.verifiedAt ? undefined : existingRulesProblem,
+    beforeWrite: row.verifiedAt
+      ? undefined
+      : async () => {
+          await db.update(campaignCountryPrices).set({ verifiedAt: new Date(now) }).where(eq(campaignCountryPrices.id, row.id));
+        },
+    mayArchive: (rule) => {
+      const country = ruleCountry(rule);
+      return !!country && owned.has(country);
+    },
     ensureByCountry: row.wanted === "prices",
   });
   if (!applied.ok) {
@@ -373,8 +407,9 @@ export async function syncCountryPriceRow(
     return { outcome: "synced", record, removed: true };
   }
 
-  const published: Record<string, PublishedPrice> =
-    row.wanted === "prices" ? publishedPrices(result.rulesAfter, rows, row.published ?? null) : {};
+  // A removal still in progress keeps its own rules listed (rows is empty, so
+  // each keeps the discount it was written for) for the next batch to remove.
+  const published: Record<string, PublishedPrice> = publishedPrices(result.rulesAfter, rows, row.published ?? null);
   await db
     .update(campaignCountryPrices)
     .set({

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dodoProductProblem, existingRulesProblem, wantsCountryPrices } from "./campaign-country-prices.service";
+import { dodoProductProblem, existingRulesProblem, ownedCountries, wantsCountryPrices } from "./campaign-country-prices.service";
 
 // GET /products/{id} as Dodo returns it (only the fields the check reads).
 const dodoProduct = (price: Record<string, unknown>) => ({
@@ -30,6 +30,18 @@ describe("dodoProductProblem", () => {
     );
     expect(dodoProductProblem(dodoProduct({ currency: "EUR" }), product)).toMatch(/costs 19 EUR, but the GoPayLocal product costs 19 USD/);
     expect(dodoProductProblem({ product_id: "pdt_FAKE1" }, product)).toBe("Dodo returned the product without a price.");
+  });
+});
+
+describe("ownedCountries", () => {
+  it("is the countries published with the discount GoPayLocal wrote them for", () => {
+    expect(ownedCountries(null)).toEqual(new Set());
+    expect(
+      ownedCountries({
+        IN: { currency: "INR", minorAmount: 52900, discount: 70 },
+        DE: { currency: "EUR", minorAmount: 1599, discount: null },
+      }),
+    ).toEqual(new Set(["IN"]));
   });
 });
 

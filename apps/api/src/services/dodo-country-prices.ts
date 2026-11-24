@@ -292,9 +292,12 @@ export interface ApplyResult {
  * product in problem messages ("the Pro product").
  *
  * `check` sees the product as Dodo returns it and `checkRules` its rules before
- * anything is written; either can stop the batch with a problem. With
- * `ensureByCountry: false` (removing every rule) the product's pricing mode is
- * left as it is.
+ * anything is written; either can stop the batch with a problem. `beforeWrite`
+ * runs once both have passed, before the first change. `mayArchive` limits
+ * which rules may be removed (a rule it refuses is left exactly as it is);
+ * without it every rule outside the table is removed. With
+ * `ensureByCountry: false` (removing rules) the product's pricing mode is left
+ * as it is.
  */
 export async function applyCountryPrices(
   request: DodoRequest,
@@ -305,6 +308,8 @@ export async function applyCountryPrices(
     label: string;
     check?: (product: unknown) => string | null;
     checkRules?: (rules: readonly DodoRule[]) => string | null;
+    beforeWrite?: () => Promise<void>;
+    mayArchive?: (rule: DodoRule) => boolean;
     ensureByCountry?: boolean;
   },
 ): Promise<{ ok: true; result: ApplyResult } | { ok: false; problem: string; status?: number }> {
@@ -315,19 +320,26 @@ export async function applyCountryPrices(
   if (!product.ok) return { ok: false, problem: `Couldn't read ${opts.label}. ${dodoErrorMessage(product)}`, status: product.status };
   const refused = opts.check?.(product.body);
   if (refused) return { ok: false, problem: refused };
+  const listed = await request("GET", `${path}/localized-prices`);
+  calls++;
+  if (!listed.ok) return { ok: false, problem: `Couldn't list ${opts.label}'s prices. ${dodoErrorMessage(listed)}` };
+  const rulesBefore = rulesOf(listed.body);
+  const refusedRules = opts.checkRules?.(rulesBefore);
+  if (refusedRules) return { ok: false, problem: refusedRules };
+
+  await opts.beforeWrite?.();
   if (opts.ensureByCountry !== false && (product.body as { pricing_mode?: unknown } | null)?.pricing_mode !== "by_country") {
     const set = await request("PATCH", path, { pricing_mode: "by_country" });
     calls++;
     if (!set.ok) return { ok: false, problem: `Couldn't switch ${opts.label} to per-country prices. ${dodoErrorMessage(set)}` };
   }
-  const listed = await request("GET", `${path}/localized-prices`);
-  calls++;
-  if (!listed.ok) return { ok: false, problem: `Couldn't list ${opts.label}'s prices. ${dodoErrorMessage(listed)}` };
 
-  const rulesBefore = rulesOf(listed.body);
-  const refusedRules = opts.checkRules?.(rulesBefore);
-  if (refusedRules) return { ok: false, problem: refusedRules };
-  const actions = planDodoSync(rows, rulesBefore);
+  const byId = new Map(rulesBefore.map((r) => [r.id, r]));
+  const actions = planDodoSync(rows, rulesBefore).filter((a) => {
+    if (a.kind !== "archive" || !opts.mayArchive) return true;
+    const rule = byId.get(a.ruleId);
+    return !!rule && opts.mayArchive(rule);
+  });
   const after = new Map<string, DodoRule>();
   for (const rule of rulesBefore) {
     const country = ruleCountry(rule);
