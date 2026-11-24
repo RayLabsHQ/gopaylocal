@@ -22,6 +22,8 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 // published package.
 import { PLACEHOLDERS, render, type BannerData } from '../../../../packages/banner/src/render'
 import { cssColor, formatMoney, type TemplateData } from '../../../../packages/js-sdk/src/core'
+import { ErrorText } from '~/components/ui/status'
+import { btnPrimary, btnSecondary } from '~/components/ui/page'
 
 // Edits a campaign's banner design: GET/PUT /v1/teams/:teamId/banner-configs/:campaignId.
 // Loading needs banners.view; the controls need banners.update. A role without
@@ -221,7 +223,7 @@ function colorWarnings(form: BannerConfig): string[] {
 
 // ── Editor ──────────────────────────────────────────────────────────────────
 
-export function BannerEditor({ teamId, campaignId }: { teamId: string; campaignId: string }) {
+export function BannerEditor({ teamId, campaignId, step }: { teamId: string; campaignId: string; step?: string }) {
   const queryClient = useQueryClient()
   const { can, isPending: rolePending } = usePermissions()
   const canView = can('banners.view')
@@ -411,17 +413,25 @@ export function BannerEditor({ teamId, campaignId }: { teamId: string; campaignI
 
   const readOnly = !canEdit
   const inputClass =
-    'block w-full border border-border bg-bg px-3 py-2 text-sm text-text-primary focus:border-brand focus:outline-none disabled:cursor-not-allowed disabled:text-text-secondary'
+    'block w-full border border-control bg-bg px-3 py-2 text-sm text-text-primary focus:border-brand focus:outline-none disabled:cursor-not-allowed disabled:text-text-secondary'
 
   return (
-    <div className="border border-border">
-      <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-2.5">
-        <span className="text-[13px] font-medium text-text-primary">Banner</span>
-        {readOnly && <span className="text-[13px] text-text-secondary">View only</span>}
+    <section aria-labelledby="banner-title" className="border border-border bg-panel">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-border px-6 py-4">
+        {step && <span className="font-mono text-xs text-brand-text">{step}</span>}
+        <h2 id="banner-title" className="font-display text-lg font-semibold text-text-primary">
+          Banner
+        </h2>
+        <span className="text-[13px] text-text-muted">What a visitor sees on your pricing page.</span>
+        {readOnly && <span className="ml-auto text-[13px] text-text-secondary">View only</span>}
       </div>
 
-      <div className="space-y-5 p-5">
-        <div>
+      {/* Settings on the left, the preview on the right (above the settings on
+          a phone). The preview stays in view while the settings scroll. */}
+      <div className="grid grid-cols-1 gap-px bg-border lg:grid-cols-2">
+        <div className="min-w-0 bg-panel-inset p-6 lg:order-2">
+          <div className="lg:sticky lg:top-6">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-text-muted">Preview</p>
           {sampleCountries.length > 0 && (
             <div className="mb-3">
               <label className="block text-[13px] text-text-secondary">Preview as a visitor from</label>
@@ -457,9 +467,10 @@ export function BannerEditor({ teamId, campaignId }: { teamId: string; campaignI
               )}
             </p>
           )}
+          </div>
         </div>
 
-        <fieldset disabled={readOnly} className="min-w-0 space-y-4">
+        <fieldset disabled={readOnly} className="min-w-0 space-y-4 bg-panel p-6 lg:order-1">
           <div>
             <label className="block text-sm font-medium text-text-primary">Position</label>
             <Select
@@ -480,7 +491,7 @@ export function BannerEditor({ teamId, campaignId }: { teamId: string; campaignI
                 </SelectGroup>
               </SelectContent>
             </Select>
-            {errors.position && <p className="mt-1.5 text-[13px] text-brand-text">{errors.position}</p>}
+            {errors.position && <ErrorText className="mt-1.5">{errors.position}</ErrorText>}
           </div>
 
           <div>
@@ -497,7 +508,7 @@ export function BannerEditor({ teamId, campaignId }: { teamId: string; campaignI
               className={`mt-1 ${inputClass}`}
             />
             {errors.messageTemplate && (
-              <p className="mt-1.5 text-[13px] text-brand-text">{errors.messageTemplate}</p>
+              <ErrorText className="mt-1.5">{errors.messageTemplate}</ErrorText>
             )}
             <p className="mt-1.5 text-[13px] text-text-secondary">
               {readOnly ? 'Placeholders the message can use:' : 'Placeholders (click to insert at the cursor):'}
@@ -533,7 +544,7 @@ export function BannerEditor({ teamId, campaignId }: { teamId: string; campaignI
               className={`mt-1 ${inputClass}`}
             />
             {errors.ctaText ? (
-              <p className="mt-1.5 text-[13px] text-brand-text">{errors.ctaText}</p>
+              <ErrorText className="mt-1.5">{errors.ctaText}</ErrorText>
             ) : (
               <p className="mt-1.5 text-[13px] text-text-secondary">
                 The button copies the coupon code. It only appears when the visitor has a code.
@@ -565,20 +576,20 @@ export function BannerEditor({ teamId, campaignId }: { teamId: string; campaignI
                     className={`font-mono ${inputClass}`}
                   />
                 </div>
-                {errors[field] && <p className="mt-1.5 text-[13px] text-brand-text">{errors[field]}</p>}
+                {errors[field] && <ErrorText className="mt-1.5">{errors[field]}</ErrorText>}
               </div>
             ))}
           </div>
 
           {warnings.length > 0 && (
-            <div className="border border-amber-800 bg-amber-950/30 p-4">
-              <p className="text-sm font-semibold text-amber-200">Check these colors</p>
-              <ul className="mt-1 space-y-1 text-[13px] text-amber-300">
+            <div className="border border-warning-border bg-warning-light p-4">
+              <p className="text-sm font-semibold text-warning">Check these colors</p>
+              <ul className="mt-1 space-y-1 text-[13px] text-text-primary">
                 {warnings.map((w) => (
                   <li key={w}>{w}</li>
                 ))}
               </ul>
-              {!readOnly && <p className="mt-2 text-[13px] text-amber-300">You can still save.</p>}
+              {!readOnly && <p className="mt-2 text-[13px] text-text-primary">You can still save.</p>}
             </div>
           )}
 
@@ -603,35 +614,32 @@ export function BannerEditor({ teamId, campaignId }: { teamId: string; campaignI
             </label>
           </div>
         </fieldset>
-
-        {canEdit ? (
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={!dirty || save.isPending}
-              className="bg-brand px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50"
-            >
-              {save.isPending ? 'Saving...' : 'Save Banner'}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setDraft(null)
-                setErrors({})
-              }}
-              disabled={!dirty || save.isPending}
-              className="border border-border px-4 py-2 text-[13px] font-medium text-text-primary transition-colors hover:bg-surface disabled:opacity-50"
-            >
-              Discard Changes
-            </button>
-            {dirty && <span className="text-[13px] text-text-secondary">Unsaved changes</span>}
-          </div>
-        ) : (
-          <p className="text-[13px] text-text-secondary">Your role can view this banner but not change it.</p>
-        )}
       </div>
-    </div>
+
+      {canEdit ? (
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border px-6 py-3.5">
+          {dirty && <span className="mr-auto text-[13px] text-warning">Unsaved changes</span>}
+          <button
+            type="button"
+            onClick={() => {
+              setDraft(null)
+              setErrors({})
+            }}
+            disabled={!dirty || save.isPending}
+            className={btnSecondary}
+          >
+            Discard changes
+          </button>
+          <button type="button" onClick={handleSave} disabled={!dirty || save.isPending} className={btnPrimary}>
+            {save.isPending ? 'Saving…' : 'Save banner'}
+          </button>
+        </div>
+      ) : (
+        <p className="border-t border-border px-6 py-3.5 text-[13px] text-text-secondary">
+          Your role can view this banner but not change it.
+        </p>
+      )}
+    </section>
   )
 }
 

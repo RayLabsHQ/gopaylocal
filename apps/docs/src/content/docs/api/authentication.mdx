@@ -13,7 +13,7 @@ GoPayLocal accepts three kinds of credentials:
 | **Secret key** | `gpl_sk_` followed by 64 lowercase hex characters | The management API under `/v1/teams/{orgId}/`, and `GET /v1/me` | No |
 | **Dashboard session** | Better Auth session cookie | The management API, from the dashboard | Not applicable |
 
-Keys belong to the workspace and are created under **Settings > API Keys** (see [API Keys](/dashboard/api-keys/)). There are no separate live and test keys: whether something is live or test is set on the product and its campaigns, not on the key.
+Keys belong to the workspace and are created under **Settings > API keys** (see [API Keys](/dashboard/api-keys/)). There are no separate live and test keys: whether something is live or test is set on the product and its campaigns, not on the key.
 
 The keys in these docs are placeholders. A public key looks like `gpl_pk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef`, and a secret key like `gpl_sk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef`.
 
@@ -63,7 +63,7 @@ A secret key calls the management API from your own server. Send it as a Bearer 
 Authorization: Bearer gpl_sk_...
 ```
 
-Every management route is under `/v1/teams/{orgId}/`, where `orgId` is the workspace id. `GET /v1/me` tells a key which workspace it belongs to. The id is also shown under **Settings > API Keys**, with a request to copy.
+Every management route is under `/v1/teams/{orgId}/`, where `orgId` is the workspace id. `GET /v1/me` tells a key which workspace it belongs to. The id is also shown under **Settings > API keys**, with a request to copy.
 
 <Tabs>
   <TabItem label="curl">

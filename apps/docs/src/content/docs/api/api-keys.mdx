@@ -5,7 +5,7 @@ description: API reference for listing, creating and revoking API keys.
 
 import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 
-These are the endpoints behind **Settings > API Keys** in the dashboard. See [API Keys](/dashboard/api-keys/) for the two key types and [Authentication](/api/authentication/) for how each is used.
+These are the endpoints behind **Settings > API keys** in the dashboard. See [API Keys](/dashboard/api-keys/) for the two key types and [Authentication](/api/authentication/) for how each is used.
 
 <Aside type="note">
 These endpoints sit under `/v1/teams/{orgId}/`. Everyone in the workspace can list keys, with the dashboard session or a [secret API key](/api/authentication/#secret-keys). Creating and revoking keys needs the dashboard session of the owner or an admin. A secret key can't create or revoke keys: it gets `403` with `"code": "forbidden_api_key"`.

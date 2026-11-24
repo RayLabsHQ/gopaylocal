@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { workspaceSlug } from '@gopaylocal/shared'
 import { useSession, organization } from '~/lib/auth'
+import { ErrorText } from '~/components/ui/status'
 
 export const Route = createFileRoute('/onboarding')({
   component: OnboardingPage,
@@ -167,12 +168,12 @@ function OnboardingPage() {
                 onKeyDown={(e) => e.key === 'Enter' && handleCreateWorkspace()}
                 placeholder="e.g. Acme Inc"
                 autoFocus
-                className="mt-1.5 w-full border border-border bg-bg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
+                className="mt-1.5 w-full border border-control bg-bg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
               />
             </div>
 
             {error && (
-              <p className="mt-3 text-sm text-brand-text">{error}</p>
+              <ErrorText className="mt-3">{error}</ErrorText>
             )}
 
             <button
@@ -204,7 +205,7 @@ function OnboardingPage() {
                     value={email}
                     onChange={(e) => updateEmail(i, e.target.value)}
                     placeholder="teammate@company.com"
-                    className="flex-1 border border-border bg-bg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
+                    className="flex-1 border border-control bg-bg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
                   />
                   {emails.length > 1 && (
                     <button
@@ -230,7 +231,7 @@ function OnboardingPage() {
             </button>
 
             {inviteError && (
-              <p className="mt-3 text-sm text-brand-text">{inviteError}</p>
+              <ErrorText className="mt-3">{inviteError}</ErrorText>
             )}
 
             <div className="mt-6 flex gap-3">

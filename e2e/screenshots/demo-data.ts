@@ -128,13 +128,13 @@ export function stripeConnected(env: Env, tracking: "active" | "failed") {
   };
 }
 
-const campaign = (id: string, name: string, productId: string, integrationId: string) => ({
+const campaign = (id: string, name: string, productId: string, integrationId: string | null) => ({
   id,
   name,
   productId,
   integrationId,
-  pricingMode: "country",
-  discountDelivery: "coupon",
+  pricingMode: "ppp_factor",
+  discountDelivery: "banner_coupon",
   charmPricingStrategy: "none",
   maxDiscountPercent: 60,
   status: "active",
@@ -148,8 +148,10 @@ const campaign = (id: string, name: string, productId: string, integrationId: st
 
 export const campaigns = [
   campaign("camp_pro", "Pro plan, launch pricing", "prod_pro", dodo.id),
-  campaign("camp_team", "Team plan", "prod_team", dodo.id),
-  campaign("camp_course", "Pricing course", "prod_course", gumroad.id),
+  { ...campaign("camp_pro_b", "Pro plan, 45% max", "prod_pro", dodo.id), maxDiscountPercent: 45 },
+  { ...campaign("camp_team", "Team plan", "prod_team", dodo.id), discountDelivery: "auto_apply" },
+  { ...campaign("camp_course", "Pricing course", "prod_course", gumroad.id), status: "paused" },
+  { ...campaign("camp_templates", "Template pack", "prod_templates", null), status: "draft" },
 ];
 
 const product = (id: string, name: string, basePrice: number) => ({
@@ -168,4 +170,155 @@ export const products = [
   product("prod_team", "Team plan", 79),
   product("prod_course", "Pricing course", 149),
   product("prod_templates", "Template pack", 39),
+];
+
+// ── Overview ─────────────────────────────────────────────────────────────────
+
+const country = (countryCode: string, impressions: number, clicks: number, copies: number, redemptions: number, usd: number) => ({
+  countryCode,
+  impressions,
+  clicks,
+  copies,
+  redemptions,
+  revenueSaved: usd,
+  revenueSavedByCurrency: usd > 0 ? { USD: usd } : {},
+});
+
+export const byCountry = [
+  country("IN", 4_820, 1_210, 642, 58, 1_044.4),
+  country("BR", 2_960, 690, 371, 31, 489.8),
+  country("ID", 2_310, 512, 266, 22, 401.6),
+  country("MX", 1_870, 401, 198, 17, 263.5),
+  country("PL", 1_420, 288, 141, 12, 151.2),
+  country("TR", 1_180, 262, 133, 11, 189.2),
+  country("NG", 990, 241, 118, 9, 165.6),
+  country("PH", 870, 190, 92, 8, 136),
+  country("VN", 760, 170, 81, 6, 104.4),
+  country("EG", 640, 151, 70, 5, 89.5),
+  country("AR", 520, 118, 55, 4, 63.2),
+  country("ZA", 410, 84, 39, 3, 40.5),
+];
+
+const sum = (k: "impressions" | "clicks" | "copies" | "redemptions" | "revenueSaved") =>
+  Math.round(byCountry.reduce((n, r) => n + r[k], 0) * 100) / 100;
+
+export const overview = {
+  totalImpressions: sum("impressions"),
+  totalClicks: sum("clicks"),
+  totalCopies: sum("copies"),
+  totalRedemptions: sum("redemptions"),
+  totalRevenueSaved: sum("revenueSaved"),
+  revenueSavedByCurrency: { USD: sum("revenueSaved") },
+};
+
+// ── Campaign page ────────────────────────────────────────────────────────────
+
+export const bannerConfig = {
+  position: "top",
+  messageTemplate: "Hi {{countryName}}! Use {{code}} for {{discount}}% off: {{localPrice}} instead of {{localOriginalPrice}}.",
+  ctaText: "Copy code",
+  backgroundColor: "#111111",
+  textColor: "#FFFFFF",
+  ctaColor: "#E42313",
+  ctaTextColor: "#FFFFFF",
+  showFlag: true,
+  showCloseBtn: true,
+};
+
+// ── A/B test ─────────────────────────────────────────────────────────────────
+
+const arm = (campaignId: string, impressions: number, clicks: number, copies: number, redemptions: number, usd: number) => ({
+  campaignId,
+  impressions,
+  clicks,
+  copies,
+  redemptions,
+  revenueSavedByCurrency: { USD: usd },
+  clickRate: clicks / impressions,
+  copyRate: copies / impressions,
+  conversionRate: redemptions / impressions,
+  redemptionsPerCopy: redemptions / copies,
+});
+
+export const experiment = {
+  id: "exp_launch",
+  organizationId: ORG_ID,
+  productId: "prod_pro",
+  environment: "live",
+  name: "Launch pricing: 60% or 45% max",
+  status: "running",
+  campaignAId: "camp_pro",
+  campaignBId: "camp_pro_b",
+  campaignAName: "Pro plan, launch pricing",
+  campaignBName: "Pro plan, 45% max",
+  trafficSplitB: 50,
+  winnerCampaignId: null,
+  startedAt: "2026-11-10T00:00:00.000Z",
+  endedAt: null,
+  campaignA: { id: "camp_pro", name: "Pro plan, launch pricing", status: "active" },
+  campaignB: { id: "camp_pro_b", name: "Pro plan, 45% max", status: "active" },
+  ...created("2026-11-10T00:00:00.000Z"),
+};
+
+export const experimentDetail = {
+  ...experiment,
+  results: {
+    granularity: "day",
+    from: "2026-11-10T00:00:00.000Z",
+    to: null,
+    truncatedByRetention: false,
+    a: arm("camp_pro", 5_100, 1_190, 1_428, 204, 3_549.6),
+    b: arm("camp_pro_b", 5_080, 1_240, 1_524, 279, 3_640.95),
+    observedShareB: 0.499,
+  },
+};
+
+// ── Settings ─────────────────────────────────────────────────────────────────
+
+export const billing = {
+  plan: "pro",
+  effectivePlan: "pro",
+  status: "active",
+  currentPeriodEnd: "2026-12-14T00:00:00.000Z",
+  dodoCustId: "cus_demo",
+  dodoSubId: "sub_demo",
+  billingEnabled: true,
+};
+
+export const freeBilling = { ...billing, plan: "free", effectivePlan: "free", status: "active", currentPeriodEnd: null, dodoCustId: null, dodoSubId: null };
+
+export const freeUsage = {
+  plan: "free",
+  billingEnabled: true,
+  maxProducts: 1,
+  currentCount: 1,
+  remaining: 0,
+  meters: {
+    products: { current: 1, max: 1 },
+    apiHits: { current: 8_420, max: 10_000 },
+    teamMembers: { current: 1, max: 1 },
+  },
+};
+
+export const apiKeys = [
+  {
+    id: "key_site",
+    name: "Website banner",
+    keyPrefix: "gpl_pk_live_DEMO",
+    keyType: "public",
+    fullKey: "gpl_pk_live_DEMO_FAKE_KEY_0000",
+    createdAt: "2026-11-12T10:00:00.000Z",
+    lastUsedAt: "2026-11-24T08:30:00.000Z",
+    createdBy: { id: user.id, name: user.name },
+  },
+  {
+    id: "key_server",
+    name: "Server",
+    keyPrefix: "gpl_sk_live_DEMO",
+    keyType: "secret",
+    fullKey: null,
+    createdAt: "2026-11-12T10:05:00.000Z",
+    lastUsedAt: null,
+    createdBy: { id: user.id, name: user.name },
+  },
 ];

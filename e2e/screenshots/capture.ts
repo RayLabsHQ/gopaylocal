@@ -50,6 +50,22 @@ async function submitKey(page: Page) {
 }
 
 const SHOTS: Shot[] = [
+  { name: "overview", path: "/dashboard", viewport: { width: 1440, height: 1240 }, scenario: connected },
+  { name: "campaigns", path: "/dashboard/campaigns", viewport: { width: 1440, height: 860 }, scenario: connected },
+  { name: "campaign-setup", path: "/dashboard/campaigns/camp_pro", viewport: { width: 1440, height: 1500 }, scenario: connected },
+  { name: "ab-test", path: "/dashboard/experiments/exp_launch", viewport: { width: 1440, height: 1240 }, scenario: connected },
+  { name: "ab-tests", path: "/dashboard/experiments", viewport: { width: 1440, height: 640 }, scenario: connected },
+  { name: "products", path: "/dashboard/products", viewport: { width: 1440, height: 760 }, scenario: connected },
+  { name: "settings-billing", path: "/dashboard/settings?tab=billing", viewport: { width: 1440, height: 900 }, scenario: connected },
+  {
+    name: "settings-billing-free",
+    path: "/dashboard/settings?tab=billing",
+    viewport: { width: 1440, height: 1240 },
+    scenario: { ...connected, billing: demo.freeBilling, usage: demo.freeUsage },
+  },
+  { name: "settings-api-keys", path: "/dashboard/settings?tab=api-keys", viewport: { width: 1440, height: 1100 }, scenario: connected },
+  { name: "overview-test-mode", path: "/dashboard", viewport: { width: 1440, height: 700 }, scenario: connected, env: "test" },
+  { name: "overview-phone", path: "/dashboard", viewport: phone, scenario: connected },
   { name: "integrations", path: "/dashboard/integrations", viewport: { width: 1440, height: 1320 }, scenario: connected },
   { name: "integrations-empty", path: "/dashboard/integrations", viewport: { width: 1440, height: 1080 }, scenario: { integrations: [] } },
   {

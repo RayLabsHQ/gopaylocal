@@ -1,183 +1,201 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { useMemo, useState } from 'react'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import {
-  columnVisibilityFeature,
-  createColumnHelper,
-  flexRender,
-  tableFeatures,
-  useTable,
-} from '@tanstack/react-table'
-import { api, PRICING_MODE_LABELS, DISCOUNT_DELIVERY_LABELS, type Campaign } from '~/lib/api'
+import type { CampaignStatus } from '@gopaylocal/shared'
+import { api, PRICING_MODE_LABELS, DISCOUNT_DELIVERY_LABELS } from '~/lib/api'
 import { getActiveTeamId, useSession } from '~/lib/auth'
 import { useEnv } from '~/lib/env'
+import { usePermissions } from '~/lib/permissions'
+import { formatPrice } from '~/lib/format'
+import { providerLogo, providerName } from '~/components/integrations/providers'
+import { btnPrimary, EmptyState, PageHeader, Spinner } from '~/components/ui/page'
+import { ErrorText, LifecycleStatus } from '~/components/ui/status'
 
 export const Route = createFileRoute('/dashboard/campaigns/')({
   component: CampaignsPage,
 })
 
-// Table v9 only includes the features registered here. columnVisibilityFeature
-// provides row.getVisibleCells().
-const features = tableFeatures({ columnVisibilityFeature })
+type Filter = 'all' | CampaignStatus
 
-const columnHelper = createColumnHelper<typeof features, Campaign>()
-
-const columns = columnHelper.columns([
-  columnHelper.accessor('name', {
-    header: 'Name',
-    cell: (info) => (
-      <span className="font-medium text-text-primary transition-colors group-hover:text-brand-text">
-        {info.getValue()}
-      </span>
-    ),
-  }),
-  columnHelper.accessor('pricingMode', {
-    header: 'Pricing Mode',
-    cell: (info) => (
-      <span className="bg-surface px-2 py-0.5 text-xs font-medium text-text-secondary">
-        {PRICING_MODE_LABELS[info.getValue()] ?? info.getValue()}
-      </span>
-    ),
-  }),
-  columnHelper.accessor('discountDelivery', {
-    header: 'Delivery',
-    cell: (info) => DISCOUNT_DELIVERY_LABELS[info.getValue()] ?? info.getValue(),
-  }),
-  columnHelper.accessor('maxDiscountPercent', {
-    header: 'Max Discount',
-    cell: (info) => (
-      <span className="font-mono font-medium tabular-nums text-text-primary">{info.getValue()}%</span>
-    ),
-  }),
-  columnHelper.accessor('status', {
-    header: 'Status',
-    cell: (info) => {
-      const status = info.getValue()
-      const styles: Record<string, string> = {
-        active: 'bg-success-light text-success',
-        paused: 'bg-brand-light text-brand-text',
-        draft: 'bg-surface text-text-secondary',
-      }
-      return (
-        <span className={`px-2 py-0.5 text-xs font-medium capitalize ${styles[status] ?? ''}`}>
-          {status}
-        </span>
-      )
-    },
-  }),
-  columnHelper.accessor('createdAt', {
-    header: 'Created',
-    cell: (info) => (
-      <span className="font-mono tabular-nums">
-        {new Date(info.getValue()).toLocaleDateString()}
-      </span>
-    ),
-  }),
-])
+const STATUS_LABELS: Record<CampaignStatus, string> = { active: 'Active', paused: 'Paused', draft: 'Draft' }
+const FILTERS: Filter[] = ['all', 'active', 'paused', 'draft']
 
 function CampaignsPage() {
   const { data: session } = useSession()
   const teamId = getActiveTeamId(session)
   const { env } = useEnv()
+  const navigate = useNavigate()
+  const canCreate = usePermissions().can('campaigns.create')
+  const [filter, setFilter] = useState<Filter>('all')
 
-  const { data: campaigns = [], isPending, error } = useQuery({
+  const { data: campaigns = [], isPending, error, refetch } = useQuery({
     queryKey: ['campaigns', teamId, env],
     queryFn: () => api.campaigns.list(teamId, env),
     enabled: !!teamId,
   })
-
-  const table = useTable({
-    features,
-    data: campaigns,
-    columns,
+  const { data: products = [] } = useQuery({
+    queryKey: ['products', teamId, env],
+    queryFn: () => api.products.list(teamId, env),
+    enabled: !!teamId,
+  })
+  const { data: integrations = [] } = useQuery({
+    queryKey: ['integrations', teamId],
+    queryFn: () => api.integrations.list(teamId),
+    enabled: !!teamId,
+  })
+  const { data: experiments = [] } = useQuery({
+    queryKey: ['experiments', teamId, env, 'running'],
+    queryFn: () => api.experiments.list(teamId, { environment: env, status: 'running' }),
+    enabled: !!teamId,
   })
 
+  // Which side of a running A/B test each campaign is on.
+  const arms = useMemo(() => {
+    const map = new Map<string, 'A' | 'B'>()
+    for (const e of experiments) {
+      map.set(e.campaignAId, 'A')
+      map.set(e.campaignBId, 'B')
+    }
+    return map
+  }, [experiments])
+
+  const shown = filter === 'all' ? campaigns : campaigns.filter((c) => c.status === filter)
+  const count = (f: Filter) => (f === 'all' ? campaigns.length : campaigns.filter((c) => c.status === f).length)
+
   return (
-    <div>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-4xl font-medium tracking-tight text-text-primary">
-            Campaigns
-          </h1>
-          <p className="mt-1 text-base text-text-secondary">
-            Configure how PPP discounts are calculated and delivered
-          </p>
+    <div className="flex max-w-[1080px] flex-col gap-7">
+      <PageHeader
+        title="Campaigns"
+        description="A campaign decides how much each country gets off, and how the discount reaches the buyer."
+        actions={
+          canCreate && (
+            <Link to="/dashboard/campaigns/new" className={btnPrimary}>
+              New campaign
+            </Link>
+          )
+        }
+      />
+
+      {campaigns.length > 0 && (
+        <div role="group" aria-label="Show" className="flex self-start border border-border">
+          {FILTERS.map((f, i) => (
+            <button
+              key={f}
+              type="button"
+              aria-pressed={filter === f}
+              onClick={() => setFilter(f)}
+              className={`h-9 px-3.5 text-[13px] font-medium transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
+                filter === f ? 'bg-tile text-text-primary' : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              {f === 'all' ? 'All' : STATUS_LABELS[f]} <span className="font-normal text-text-muted">{count(f)}</span>
+            </button>
+          ))}
         </div>
-        <Link
-          to="/dashboard/campaigns/new"
-          className="flex items-center gap-2 bg-brand px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand/90"
-        >
-          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          New Campaign
-        </Link>
-      </div>
+      )}
 
       {/* inline-size containment keeps the table's width inside this box: the
           page's ScrollArea wraps content in a display:table div that otherwise
           grows to the table's minimum width and clips the page on a phone. */}
-      <div className="mt-6 overflow-x-auto border border-border [contain:inline-size]">
+      <div className="overflow-x-auto border border-border bg-panel [contain:inline-size]">
         {isPending ? (
-          <div className="flex h-64 items-center justify-center">
-            <div className="h-6 w-6 animate-spin rounded-full border-4 border-border border-t-brand" />
-          </div>
+          <Spinner className="h-64" />
         ) : error ? (
-          <div className="flex h-64 items-center justify-center px-6 text-center text-sm text-brand-text">
-            Failed to load campaigns. Please try again.
+          <div className="flex flex-col items-center gap-3 px-6 py-14">
+            <ErrorText>Couldn't load the campaigns.</ErrorText>
+            <button type="button" onClick={() => refetch()} className="text-[13px] font-medium text-brand-text hover:underline">
+              Try again
+            </button>
           </div>
         ) : campaigns.length === 0 ? (
-          <div className="flex h-64 flex-col items-center justify-center px-6 text-center">
-            <p className="text-base font-medium text-text-primary">No campaigns yet</p>
-            <p className="mt-1.5 max-w-sm text-sm text-text-secondary">
-              A campaign decides how much each country gets off and how the discount reaches the
-              buyer — a banner with a coupon code, or applied automatically at checkout. You'll need
-              a product first.
-            </p>
-            <Link
-              to="/dashboard/campaigns/new"
-              className="mt-3 text-sm font-medium text-brand-text hover:underline"
-            >
-              Create your first campaign
-            </Link>
-          </div>
+          <EmptyState
+            title="No campaigns yet"
+            action={
+              canCreate && (
+                <Link to="/dashboard/campaigns/new" className={btnPrimary}>
+                  Create your first campaign
+                </Link>
+              )
+            }
+          >
+            A campaign sets each country's discount and shows it in a banner with a code, or applies it at checkout. You
+            need a product first.
+          </EmptyState>
+        ) : shown.length === 0 ? (
+          <EmptyState title={`No ${STATUS_LABELS[filter as CampaignStatus].toLowerCase()} campaigns`} />
         ) : (
-          <table className="min-w-full">
+          <table className="w-full min-w-[880px] text-sm">
             <thead>
-              <tr className="border-b border-border bg-surface">
-                {table.getHeaderGroups().map((headerGroup) =>
-                  headerGroup.headers.map((header) => (
-                    <th
-                      key={header.id}
-                      className="px-5 py-3 text-left text-[13px] font-semibold text-text-secondary"
-                    >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(header.column.columnDef.header, header.getContext())}
-                    </th>
-                  ))
-                )}
+              <tr className="border-b border-border text-left text-xs text-text-muted">
+                <th scope="col" className="px-6 py-3 font-semibold">Campaign</th>
+                <th scope="col" className="px-4 py-3 font-semibold">Codes in</th>
+                <th scope="col" className="px-4 py-3 font-semibold">Delivery</th>
+                <th scope="col" className="px-4 py-3 font-semibold">Pricing</th>
+                <th scope="col" className="px-4 py-3 text-right font-semibold">Max off</th>
+                <th scope="col" className="px-6 py-3 font-semibold">Status</th>
               </tr>
             </thead>
             <tbody>
-              {table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="group cursor-pointer border-b border-border last:border-b-0 transition-colors hover:bg-surface">
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="whitespace-nowrap px-5 py-4 text-sm text-text-secondary">
+              {shown.map((c) => {
+                const product = products.find((p) => p.id === c.productId)
+                const integration = c.integrationId ? integrations.find((i) => i.id === c.integrationId) : undefined
+                const arm = arms.get(c.id)
+                return (
+                  // The row opens the campaign on click; the name is the link for keyboards and screen readers.
+                  <tr
+                    key={c.id}
+                    onClick={() => navigate({ to: '/dashboard/campaigns/$id', params: { id: c.id } })}
+                    className="cursor-pointer border-b border-border transition-colors last:border-b-0 hover:bg-surface"
+                  >
+                    <td className="px-6 py-3.5">
                       <Link
                         to="/dashboard/campaigns/$id"
-                        params={{ id: row.original.id }}
-                        className="block"
+                        params={{ id: c.id }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="font-semibold text-text-primary hover:underline"
                       >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        {c.name}
                       </Link>
+                      <div className="text-[13px] text-text-muted">
+                        {product ? `${product.name} · ${formatPrice(product.basePrice, product.currency)}` : 'Product not found'}
+                      </div>
                     </td>
-                  ))}
-                </tr>
-              ))}
+                    <td className="px-4 py-3.5">
+                      {integration ? (
+                        <span className="inline-flex items-center gap-2 text-text-primary">
+                          <img src={providerLogo(integration.provider)} alt="" className="h-[18px] w-[18px] object-contain" />
+                          {providerName(integration.provider)}
+                        </span>
+                      ) : (
+                        <span className="text-text-muted">No platform</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 text-text-secondary">{DISCOUNT_DELIVERY_LABELS[c.discountDelivery] ?? c.discountDelivery}</td>
+                    <td className="px-4 py-3.5 text-text-secondary">{PRICING_MODE_LABELS[c.pricingMode] ?? c.pricingMode}</td>
+                    <td className="px-4 py-3.5 text-right tabular-nums text-text-primary">{c.maxDiscountPercent}%</td>
+                    <td className="px-6 py-3.5">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <LifecycleStatus state={c.status === 'active' ? 'on' : c.status === 'paused' ? 'paused' : 'draft'}>
+                          {STATUS_LABELS[c.status]}
+                        </LifecycleStatus>
+                        {arm && (
+                          <span className="border border-border-strong px-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-secondary">
+                            A/B {arm}
+                          </span>
+                        )}
+                      </span>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}
       </div>
+
+      <p className="text-[13px] text-text-muted">
+        {env === 'live' ? 'Live mode. Test campaigns are listed when the sidebar is on Test.' : 'Test mode. Live campaigns are listed when the sidebar is on Live.'}
+      </p>
     </div>
   )
 }

@@ -13,6 +13,7 @@ import { PROVIDERS, providerLogo, providerName, type ProviderMeta } from '~/comp
 import { ConnectPanel, type ConnectTarget } from '~/components/integrations/connect-panel'
 import { IntegrationCard, hasKey } from '~/components/integrations/integration-card'
 import { btnPrimary, btnSecondary, LockIcon, LogoTile } from '~/components/integrations/parts'
+import { ErrorText } from '~/components/ui/status'
 
 export const Route = createFileRoute('/dashboard/integrations/')({
   component: IntegrationsPage,
@@ -416,9 +417,9 @@ function IntegrationsPage() {
           </DialogDescription>
         </DialogHeader>
         {disconnectMutation.error && (
-          <p role="alert" className="text-[13px] text-brand-text">
+          <ErrorText>
             {disconnectMutation.error.message || "Couldn't disconnect. Try again."}
-          </p>
+          </ErrorText>
         )}
         <DialogFooter>
           <button
@@ -433,7 +434,7 @@ function IntegrationsPage() {
             type="button"
             onClick={() => disconnectTarget && disconnectMutation.mutate(disconnectTarget.id)}
             disabled={disconnectMutation.isPending}
-            className="inline-flex h-10 items-center justify-center bg-red-600 px-4 text-[13px] font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+            className="inline-flex h-10 items-center justify-center bg-brand px-4 text-[13px] font-semibold text-white transition-colors hover:bg-brand/90 disabled:opacity-50"
           >
             {disconnectMutation.isPending ? 'Disconnecting…' : `Disconnect ${disconnectName}`}
           </button>

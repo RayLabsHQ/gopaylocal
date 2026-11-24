@@ -38,6 +38,7 @@ import type {
   CharmPricingStrategy,
   CampaignStatus,
 } from '@gopaylocal/shared'
+import { ErrorText } from '~/components/ui/status'
 
 export const Route = createFileRoute('/dashboard/campaigns/new')({
   component: NewCampaignPage,
@@ -270,8 +271,8 @@ function NewCampaignPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="font-display text-4xl font-medium tracking-tight text-text-primary">
-          New Campaign
+        <h1 className="font-display text-[32px] font-semibold tracking-tight text-text-primary">
+          New campaign
         </h1>
         <p className="mt-1 text-base text-text-secondary">
           Set up PPP discount rules for a product.
@@ -288,7 +289,7 @@ function NewCampaignPage() {
         <form onSubmit={handleSubmit} className="w-full space-y-5 lg:w-[400px] lg:shrink-0">
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-text-primary">Campaign Name</label>
-            <input id="name" type="text" required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Pro Plan PPP" className="mt-1 block w-full border border-border px-3 py-2 text-sm text-text-primary focus:border-brand focus:outline-none" />
+            <input id="name" type="text" required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Pro Plan PPP" className="mt-1 block w-full border border-control px-3 py-2 text-sm text-text-primary focus:border-brand focus:outline-none" />
           </div>
 
           <div>
@@ -343,7 +344,7 @@ function NewCampaignPage() {
             <label htmlFor="maxDiscount" className="block text-sm font-medium text-text-primary">Max Discount (%)</label>
             <div className="mt-1 flex items-center gap-3">
               <input type="range" min={5} max={90} step={5} value={maxDiscount} onChange={(e) => setMaxDiscount(parseInt(e.target.value, 10))} className="h-1.5 flex-1 appearance-none rounded-full bg-border accent-brand" />
-              <input id="maxDiscount" type="number" min={1} max={90} value={maxDiscount} onChange={(e) => setMaxDiscount(parseInt(e.target.value, 10) || 50)} className="w-16 border border-border px-2 py-1.5 text-center text-sm text-text-primary focus:border-brand focus:outline-none" />
+              <input id="maxDiscount" type="number" min={1} max={90} value={maxDiscount} onChange={(e) => setMaxDiscount(parseInt(e.target.value, 10) || 50)} className="w-16 border border-control px-2 py-1.5 text-center text-sm text-text-primary focus:border-brand focus:outline-none" />
             </div>
           </div>
 
@@ -388,9 +389,9 @@ function NewCampaignPage() {
                 to auto-create coupons at your provider.
               </p>
             ) : autoApplyNeedsIntegration ? (
-              <p className="mt-1.5 text-[13px] text-brand-text">
+              <ErrorText className="mt-1.5">
                 Auto-apply needs a payment integration before the campaign can be active.
-              </p>
+              </ErrorText>
             ) : (
               <p className="mt-1.5 text-[13px] text-text-secondary">
                 Links the campaign to a provider so coupons are created automatically.
@@ -431,20 +432,20 @@ function NewCampaignPage() {
 
           {/* Why the Create button is disabled (mirrors the edit page). */}
           {blockedByAutoApply && (
-            <div className="border border-amber-800 bg-amber-950/30 p-3">
-              <p className="text-[13px] text-amber-300">
+            <div className="border border-warning-border bg-warning-light p-3">
+              <p className="text-[13px] text-text-primary">
                 Auto-apply needs a payment integration — link one above or save as draft.
               </p>
             </div>
           )}
 
           {createCampaign.error && (
-            <p className="text-sm text-brand-text">{createCampaign.error.message || 'Failed to create campaign.'}</p>
+            <ErrorText>{createCampaign.error.message || 'Failed to create campaign.'}</ErrorText>
           )}
 
           <div className="flex items-center gap-3 pt-2">
             <button type="submit" disabled={createCampaign.isPending || !selectedProduct || !name || blockedByAutoApply} className="bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50">
-              {createCampaign.isPending ? 'Creating...' : 'Create Campaign'}
+              {createCampaign.isPending ? 'Creating…' : 'Create campaign'}
             </button>
             <button type="button" onClick={() => navigate({ to: '/dashboard/campaigns' })} className="border border-border px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-surface">
               Cancel
@@ -478,7 +479,7 @@ function NewCampaignPage() {
                 placeholder="Search countries..."
                 value={globalFilter ?? ''}
                 onChange={(e) => setGlobalFilter(e.target.value)}
-                className="w-44 max-sm:min-w-0 border border-border bg-bg px-2.5 py-1.5 text-[13px] text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
+                className="w-44 max-sm:min-w-0 border border-control bg-bg px-2.5 py-1.5 text-[13px] text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
               />
             </div>
           </div>

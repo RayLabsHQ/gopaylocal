@@ -8,6 +8,7 @@ import { getActiveTeamId, useSession } from '~/lib/auth'
 import { useEnv } from '~/lib/env'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
 import { EnvNotice } from '~/components/env-notice'
+import { ErrorText } from '~/components/ui/status'
 
 // ?campaignA=<id> preselects the control (the "Create A/B Test" link on a
 // campaign's Settings tab) and its product.
@@ -104,7 +105,7 @@ function NewExperimentPage() {
 
   return (
     <div>
-      <h1 className="font-display text-4xl font-medium tracking-tight text-text-primary">New A/B Test</h1>
+      <h1 className="font-display text-[32px] font-semibold tracking-tight text-text-primary">New A/B test</h1>
       <p className="mt-1 text-base text-text-secondary">
         Split a product's visitors between two active campaigns.
       </p>
@@ -116,7 +117,7 @@ function NewExperimentPage() {
 
       <form onSubmit={handleSubmit} className="mt-8 max-w-lg space-y-6">
         <div>
-          <label htmlFor="name" className="block text-sm font-medium text-text-primary">Test Name</label>
+          <label htmlFor="name" className="block text-sm font-medium text-text-primary">Test name</label>
           <input
             id="name"
             type="text"
@@ -125,7 +126,7 @@ function NewExperimentPage() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. India 30% vs 45%"
-            className="mt-1 block w-full border border-border px-3 py-2 text-sm text-text-primary focus:border-brand focus:outline-none"
+            className="mt-1 block w-full border border-control px-3 py-2 text-sm text-text-primary focus:border-brand focus:outline-none"
           />
         </div>
 
@@ -175,7 +176,7 @@ function NewExperimentPage() {
             </SelectContent>
           </Select>
           {productId && !campaignsPending && activeCampaigns.length < 2 && (
-            <p className="mt-1.5 text-[13px] text-brand-text">
+            <ErrorText className="mt-1.5">
               An A/B test needs two active campaigns for this product
               {inactiveCount > 0 ? ` (${inactiveCount} more ${inactiveCount === 1 ? 'is' : 'are'} paused or draft — activate ${inactiveCount === 1 ? 'it' : 'them'} first)` : ''}.{' '}
               <button
@@ -185,7 +186,7 @@ function NewExperimentPage() {
               >
                 Create a campaign
               </button>
-            </p>
+            </ErrorText>
           )}
         </div>
 
@@ -208,7 +209,7 @@ function NewExperimentPage() {
               max={99}
               value={splitB}
               onChange={(e) => setSplitB(Math.min(99, Math.max(1, parseInt(e.target.value, 10) || DEFAULT_EXPERIMENT_TRAFFIC_SPLIT_B)))}
-              className="w-16 border border-border bg-bg px-2 py-1.5 text-center font-mono text-sm tabular-nums text-text-primary focus:border-brand focus:outline-none"
+              className="w-16 border border-control bg-bg px-2 py-1.5 text-center font-mono text-sm tabular-nums text-text-primary focus:border-brand focus:outline-none"
             />
           </div>
           <p className="mt-1.5 text-[13px] text-text-secondary">
@@ -219,7 +220,7 @@ function NewExperimentPage() {
         </div>
 
         {createExperiment.error && (
-          <p className="text-sm text-brand-text">{createExperiment.error.message || 'Failed to start A/B test.'}</p>
+          <ErrorText>{createExperiment.error.message || 'Failed to start A/B test.'}</ErrorText>
         )}
 
         <div className="flex items-center gap-3">
@@ -228,7 +229,7 @@ function NewExperimentPage() {
             disabled={createExperiment.isPending || !canSubmit}
             className="bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50"
           >
-            {createExperiment.isPending ? 'Starting...' : 'Start Test'}
+            {createExperiment.isPending ? 'Starting…' : 'Start test'}
           </button>
           <button
             type="button"

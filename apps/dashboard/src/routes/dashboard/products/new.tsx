@@ -10,6 +10,7 @@ import { EnvNotice } from '~/components/env-notice'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
 import { basePriceProblem, CURRENCY_SYMBOLS } from '@gopaylocal/shared'
 import { minorUnitExponent, SUPPORTED_CURRENCY_CODES } from '@gopaylocal/shared/currency'
+import { ErrorText } from '~/components/ui/status'
 
 /** The basePrice message from a 400 { details: { fieldErrors: { basePrice } } }, if any. */
 function serverPriceError(err: Error | null): string | null {
@@ -94,7 +95,7 @@ function NewProductPage() {
 
   return (
     <div>
-      <h1 className="font-display text-4xl font-medium tracking-tight text-text-primary">New Product</h1>
+      <h1 className="font-display text-[32px] font-semibold tracking-tight text-text-primary">New product</h1>
       <p className="mt-1 text-base text-text-secondary">
         Add a product to configure PPP pricing for.
       </p>
@@ -105,21 +106,21 @@ function NewProductPage() {
       </EnvNotice>
 
       {isAtLimit && usage && (
-        <div className="mt-6 flex max-w-lg items-center gap-3 border border-amber-800 bg-amber-950/50 px-4 py-3">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-900">
-            <svg className="h-4 w-4 text-amber-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+        <div className="mt-6 flex max-w-lg items-center gap-3 border border-warning-border bg-warning-light px-4 py-3">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center bg-warning-border">
+            <svg className="h-4 w-4 text-warning" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
             </svg>
           </div>
           <div className="flex-1">
-            <p className="text-sm font-semibold text-amber-200">Product limit reached</p>
-            <p className="mt-0.5 text-[13px] text-amber-300">
+            <p className="text-sm font-semibold text-warning">Product limit reached</p>
+            <p className="mt-0.5 text-[13px] text-text-primary">
               Your {usage.plan} plan allows {usage.maxProducts} product{usage.maxProducts === 1 ? '' : 's'} ({usage.currentCount}/{usage.maxProducts} used).{' '}
               {canUpgrade && (
                 <button
                   type="button"
                   onClick={() => navigate({ to: '/dashboard/settings', search: { tab: 'billing' } })}
-                  className="font-medium underline hover:text-amber-100"
+                  className="font-medium underline hover:no-underline"
                 >
                   Upgrade to Pro for unlimited products
                 </button>
@@ -148,7 +149,7 @@ function NewProductPage() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Pro Plan"
-            className="mt-1 block w-full border border-border px-3 py-2 text-sm text-text-primary focus:border-brand focus:outline-none"
+            className="mt-1 block w-full border border-control px-3 py-2 text-sm text-text-primary focus:border-brand focus:outline-none"
           />
         </div>
 
@@ -164,7 +165,7 @@ function NewProductPage() {
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://example.com/pricing"
-            className="mt-1 block w-full border border-border px-3 py-2 text-sm text-text-primary focus:border-brand focus:outline-none"
+            className="mt-1 block w-full border border-control px-3 py-2 text-sm text-text-primary focus:border-brand focus:outline-none"
           />
         </div>
 
@@ -219,21 +220,21 @@ function NewProductPage() {
               aria-invalid={priceError ? true : undefined}
               aria-describedby={priceError ? 'basePrice-error' : undefined}
               placeholder={(49).toFixed(exponent)}
-              className="block w-full border border-border bg-bg py-2 pl-10 pr-3 font-mono text-sm tabular-nums text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
+              className="block w-full border border-control bg-bg py-2 pl-10 pr-3 font-mono text-sm tabular-nums text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
             />
           </div>
           {priceError && (
-            <p id="basePrice-error" className="mt-1.5 text-[13px] text-brand-text">
+            <ErrorText id="basePrice-error" className="mt-1.5">
               {priceError}
-            </p>
+            </ErrorText>
           )}
         </div>
 
         {/* Error */}
         {createProduct.error && !serverPriceError(createProduct.error) && (
-          <p className="text-sm text-brand-text">
+          <ErrorText>
             {createProduct.error.message || 'Failed to create product.'}
-          </p>
+          </ErrorText>
         )}
 
         {/* Actions */}
@@ -243,7 +244,7 @@ function NewProductPage() {
             disabled={createProduct.isPending || cannotCreate}
             className="bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50"
           >
-            {createProduct.isPending ? 'Creating...' : 'Create Product'}
+            {createProduct.isPending ? 'Creating…' : 'Create product'}
           </button>
           <button
             type="button"

@@ -59,13 +59,13 @@ With PPP Factor pricing, a country whose PPP factor implies more than the cap ge
 
 From the campaign you want as the control:
 
-1. Go to **Campaigns > Campaign A > Settings > A/B Testing**
-2. Click **Create A/B Test** (Campaign A is preselected as the control)
+1. Go to **Campaigns > Campaign A > Settings > A/B testing**
+2. Click **Create A/B test** (Campaign A is preselected as the control)
 3. Give the test a name and select **Campaign B** as the variant
 4. Set the traffic to B (default: 50%, so a 50/50 split)
-5. Click **Start Test**
+5. Click **Start test**
 
-You can also start from **A/B Tests > New A/B Test** and pick the product and both campaigns there.
+You can also start from **A/B Tests > New A/B test** and pick the product and both campaigns there.
 
 ### 3. How visitors are assigned
 
@@ -77,26 +77,28 @@ A visitor always gets their own arm's campaign. If that campaign has no discount
 
 ### 4. Monitor results
 
-Open **A/B Tests** and select the test. The results table shows both campaigns side by side:
+Open **A/B Tests** and select the test. The page shows the split, then a results table with A and B side by side:
 
 | Metric | What it is |
 |---|---|
-| Impressions | Offers served (not unique visitors; see [Impressions](/banner/events/#impressions)) |
+| Banner views | Impressions: offers served (not unique visitors; see [Impressions](/banner/events/#impressions)) |
 | Clicks | `click` events (see [Banner events](/banner/events/)) |
-| Copies | Coupon codes copied from the banner |
+| Codes copied | Coupon codes copied from the banner |
 | Redemptions | Purchases with the campaign's discount that GoPayLocal tracked |
-| Revenue saved | Discount given on those redemptions, one total per currency (the same figure the Overview page reports as Revenue Impact). Amounts in different currencies are never added together. |
-| Click rate, Copy rate, Conversion rate | Clicks, copies and redemptions divided by impressions |
+| Discount given | Discount given on those redemptions, one total per currency (the same figure as **Discount given** on the Overview page). Amounts in different currencies are never added together. |
+| Click rate, Copy rate, Conversion rate | Clicks, copies and redemptions divided by banner views |
 | Redemptions per copy | Redemptions divided by copies |
 
-A rate shows `—` until its denominator is above zero. **Export** downloads the table as CSV.
+The **B compared with A** column gives the difference for the rates only, in percentage points (`+1.5 points` when B's rate is 1.5 points higher). Counts aren't compared, because they depend on the split. The difference is never coloured as better or worse: a higher conversion rate at a deeper discount can still earn less.
+
+A rate shows `—` until its denominator is above zero. **Export CSV** downloads the table.
 
 Example:
 
 | Metric | Campaign A (max 30%) | Campaign B (max 45%) |
 |---|---|---|
-| Impressions | 5,100 | 5,080 |
-| Copies | 1,428 | 1,524 |
+| Banner views | 5,100 | 5,080 |
+| Codes copied | 1,428 | 1,524 |
 | Redemptions | 204 | 279 |
 | Conversion rate | 4.0% | 5.5% |
 
@@ -104,7 +106,7 @@ Example:
 Results are **daily totals in UTC**. A test counts whole days: from the start of the UTC day it started to the end of the UTC day it ended (or today, while it runs). Traffic a campaign received earlier on the start day, before the test began, and later on the end day, after it ended, is included. Results only cover the analytics history your plan keeps; the page says when the start of a test is older than that.
 </Aside>
 
-The page also shows the share of impressions that went to B next to the configured split. Expect some gap: impressions count offers served rather than unique visitors, so a few visitors who come back many times can tilt one arm, and the whole-day counting above includes start-day traffic from before the test began.
+Under the table, the page shows the share of banner views that went to B next to the split you set. Expect some gap: impressions count offers served rather than unique visitors, so a few visitors who come back many times can tilt one arm, and the whole-day counting above includes start-day traffic from before the test began.
 
 The dashboard shows raw counts and rates only. Before you pick a winner:
 
@@ -131,9 +133,9 @@ If one of the campaigns is not active anyway, the banner serves the other campai
 When you're ready to end a test:
 
 1. Open the test from **A/B Tests**
-2. Click **End Test**
+2. Click **End test…**
 3. Select the winning campaign
-4. Click **End Test** to confirm
+4. Click **End test** to confirm
 
 The winning campaign is left as it is (active), and the other campaign is paused. Ended tests stay in the list with their results.
 

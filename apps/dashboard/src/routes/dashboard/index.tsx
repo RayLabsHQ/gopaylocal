@@ -1,10 +1,15 @@
 import { useState } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { api, type AnalyticsRangeDays, type BillingInfo, type CountryAnalytics } from '~/lib/api'
+import { PPP_MULTIPLIERS } from '@gopaylocal/shared'
+import { api, PROVIDER_LABELS, type AnalyticsRangeDays, type CountryAnalytics } from '~/lib/api'
 import { getActiveTeamId, useSession } from '~/lib/auth'
 import { useEnv } from '~/lib/env'
+import { usePermissions } from '~/lib/permissions'
+import { countryName, flagEmoji } from '~/lib/countries'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
+import { btnPrimary, btnSecondary, EmptyState, PageHeader, SectionTitle, Spinner } from '~/components/ui/page'
+import { ToneIcon } from '~/components/ui/status'
 
 export const Route = createFileRoute('/dashboard/')({
   component: OverviewPage,
@@ -18,11 +23,21 @@ const RANGE_OPTIONS: { value: AnalyticsRangeDays; label: string }[] = [
   { value: 365, label: 'Last 365 days' },
 ]
 
+/** Countries with a PPP factor in the built-in table. */
+const PPP_COUNTRY_COUNT = Object.keys(PPP_MULTIPLIERS).length
+
+/** Rows shown before "Show all". */
+const TOP_ROWS = 10
+
 function OverviewPage() {
   const { data: session } = useSession()
   const teamId = getActiveTeamId(session)
   const { env } = useEnv()
+  const { can } = usePermissions()
+  // The checklist is for whoever sets the workspace up; members can't add products.
+  const canSetUp = can('products.create')
   const [rangeDays, setRangeDays] = useState<AnalyticsRangeDays>(7)
+  const [showAll, setShowAll] = useState(false)
 
   const { data: stats, isPending } = useQuery({
     queryKey: ['overview', teamId, env, rangeDays],
@@ -42,171 +57,246 @@ function OverviewPage() {
     enabled: !!teamId,
   })
 
-  const { data: billing } = useQuery({
-    queryKey: ['billing', teamId],
-    queryFn: () => api.billing.get(teamId),
-    enabled: !!teamId,
+  const { data: integrations = [], isPending: isIntegrationsPending } = useQuery({
+    queryKey: ['integrations', teamId],
+    queryFn: () => api.integrations.list(teamId),
+    enabled: !!teamId && canSetUp,
+  })
+
+  const { data: campaigns = [], isPending: isCampaignsPending } = useQuery({
+    queryKey: ['campaigns', teamId, env],
+    queryFn: () => api.campaigns.list(teamId, env),
+    enabled: !!teamId && canSetUp,
   })
 
   const isOverviewPending = isPending || isProductsPending || isCountriesPending
+  const impressions = stats?.totalImpressions ?? 0
+  const redemptions = stats?.totalRedemptions ?? 0
+  const shownCountries = showAll ? topCountries : topCountries.slice(0, TOP_ROWS)
+  const maxImpressions = topCountries[0]?.impressions ?? 0
+
+  // Setup steps, all from data the workspace already has.
+  const connected = integrations.filter((i) => (env === 'live' ? i.hasLiveCredentials : i.hasTestCredentials))
+  const activeCampaigns = campaigns.filter((c) => c.status === 'active')
+  const steps: SetupStep[] = [
+    {
+      title: 'Connect your payment platform',
+      done: connected.length > 0,
+      doneNote: connected[0] ? PROVIDER_LABELS[connected[0].provider] : undefined,
+      action: { to: '/dashboard/integrations', label: 'Choose a platform' },
+    },
+    {
+      title: 'Add a product',
+      done: products.length > 0,
+      doneNote: products[0]?.name,
+      action: { to: '/dashboard/products/new', label: 'Add product' },
+    },
+    {
+      title: 'Create a campaign',
+      done: activeCampaigns.length > 0,
+      doneNote: activeCampaigns[0]?.name,
+      todoNote: campaigns.length > 0 ? 'You have a campaign; activate it to start.' : undefined,
+      action: { to: campaigns.length > 0 ? '/dashboard/campaigns' : '/dashboard/campaigns/new', label: campaigns.length > 0 ? 'Open campaigns' : 'New campaign' },
+    },
+    {
+      title: 'Paste the snippet on your pricing page',
+      done: impressions > 0,
+      doneNote: 'Banner views are arriving',
+      todoNote: 'Done when the first banner view arrives. The snippet is on the campaign page.',
+    },
+  ]
+  const setupPending = isOverviewPending || isIntegrationsPending || isCampaignsPending
+  const showSetup = canSetUp && !setupPending && steps.some((s) => !s.done)
 
   return (
-    <div>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-4xl font-medium tracking-tight text-text-primary">
-            Overview
-          </h1>
-          <p className="mt-1 text-base text-text-secondary">
-            Monitor your PPP discounts and banner traffic
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="w-[140px]">
-            <Select
-              value={String(rangeDays)}
-              onValueChange={(v) => setRangeDays(Number(v) as AnalyticsRangeDays)}
-            >
-              <SelectTrigger aria-label="Date range">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent position="item-aligned">
-                <SelectGroup>
-                  {RANGE_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={String(option.value)}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
-          <button
-            type="button"
-            onClick={() => downloadCountriesCsv(topCountries, rangeDays)}
-            disabled={topCountries.length === 0}
-            className="flex h-9 items-center gap-2 border border-border px-4 text-[13px] font-medium text-text-primary disabled:opacity-50"
-          >
-            <svg className="h-3.5 w-3.5 text-text-secondary" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-            </svg>
-            Export
-          </button>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Banner impressions in the selected range, not metered API calls
-            (those are per calendar month, on the Billing page). */}
-        <StatCard
-          title="Impressions"
-          value={isOverviewPending ? '--' : formatNumber(stats?.totalImpressions ?? 0)}
-          subtitle={isOverviewPending ? undefined : `${formatNumber(stats?.totalRedemptions ?? 0)} redemptions`}
-        />
-        <StatCard
-          title="Active Products"
-          value={isOverviewPending ? '--' : String(products.length)}
-          badge={planBadge(billing)}
-        />
-        <StatCard
-          title="Revenue Impact"
-          value={isOverviewPending ? '--' : formatRevenueByCurrency(stats?.revenueSavedByCurrency)}
-          subtitle={isOverviewPending ? undefined : `${formatNumber(stats?.totalRedemptions ?? 0)} discounts applied`}
-        />
-        <StatCard
-          title="Countries Reached"
-          value={isOverviewPending ? '--' : String(topCountries.length)}
-          subtitle="75 with PPP factors"
-        />
-      </div>
-
-      {/* Top Countries */}
-      <div className="mt-8">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold text-text-primary">Top Countries</h2>
-        </div>
-        <div className="mt-4 overflow-x-auto border border-border">
-          {isOverviewPending ? (
-            <div className="flex h-48 items-center justify-center">
-              <div className="h-6 w-6 animate-spin rounded-full border-4 border-border border-t-brand" />
+    <div className="flex max-w-[1080px] flex-col gap-8">
+      <PageHeader
+        title="Overview"
+        description="What visitors saw on your site and what they used."
+        actions={
+          <>
+            <div className="w-[150px]">
+              <Select value={String(rangeDays)} onValueChange={(v) => setRangeDays(Number(v) as AnalyticsRangeDays)}>
+                <SelectTrigger aria-label="Date range" className="h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent position="item-aligned">
+                  <SelectGroup>
+                    {RANGE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={String(option.value)}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
             </div>
+            <button
+              type="button"
+              onClick={() => downloadCountriesCsv(topCountries, rangeDays)}
+              disabled={topCountries.length === 0}
+              className={btnSecondary}
+            >
+              Export CSV
+            </button>
+          </>
+        }
+      />
+
+      {showSetup && <SetupChecklist steps={steps} />}
+
+      {/* Banner views in the selected range, not metered API calls (those are
+          per calendar month, on the Billing page). */}
+      <section aria-label="Totals" className="grid grid-cols-1 gap-px border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
+        <Stat label="Banner views" value={isOverviewPending ? '--' : formatNumber(impressions)} note={isOverviewPending ? undefined : `${formatNumber(redemptions)} redemptions`} />
+        <Stat label="Products" value={isOverviewPending ? '--' : String(products.length)} note={`in ${env} mode`} />
+        <Stat
+          label="Discount given"
+          value={isOverviewPending ? '--' : formatRevenueByCurrency(stats?.revenueSavedByCurrency)}
+          note={isOverviewPending ? undefined : `${formatNumber(redemptions)} codes used`}
+        />
+        <Stat
+          label="Countries reached"
+          value={isOverviewPending ? '--' : String(topCountries.length)}
+          note={`${PPP_COUNTRY_COUNT} countries have a PPP factor`}
+        />
+      </section>
+
+      <section aria-labelledby="countries-title" className="flex flex-col gap-3.5">
+        <SectionTitle id="countries-title" aside={`By banner views, ${rangeLabel(rangeDays)}`}>
+          Top countries
+        </SectionTitle>
+        <div className="overflow-x-auto border border-border bg-panel">
+          {isOverviewPending ? (
+            <Spinner />
           ) : topCountries.length > 0 ? (
-            <table className="min-w-full">
+            <table className="w-full min-w-[760px] text-sm">
               <thead>
-                <tr className="border-b border-border bg-surface">
-                  <th className="px-5 py-3 text-left text-[13px] font-semibold text-text-secondary">
-                    Country
-                  </th>
-                  <th className="px-5 py-3 text-right text-[13px] font-semibold text-text-secondary">
-                    Hits
-                  </th>
+                <tr className="border-b border-border text-xs text-text-muted">
+                  <th scope="col" className="px-6 py-3 text-left font-semibold">Country</th>
+                  <th scope="col" className="w-[240px] px-4 py-3 text-left font-semibold">Banner views</th>
+                  <th scope="col" className="px-4 py-3 text-right font-semibold">Clicks</th>
+                  <th scope="col" className="px-4 py-3 text-right font-semibold">Codes copied</th>
+                  <th scope="col" className="px-4 py-3 text-right font-semibold">Redemptions</th>
+                  <th scope="col" className="px-6 py-3 text-right font-semibold">Discount given</th>
                 </tr>
               </thead>
-              <tbody>
-                {topCountries.map((entry, index) => (
+              <tbody className="tabular-nums">
+                {shownCountries.map((entry, index) => (
                   <tr key={`${entry.countryCode ?? 'unknown'}-${index}`} className="border-b border-border last:border-b-0">
-                    <td className="whitespace-nowrap px-5 py-3.5 font-mono text-sm font-medium text-text-primary">
-                      {entry.countryCode ?? 'Unknown'}
+                    <td className="whitespace-nowrap px-6 py-3 text-text-primary">
+                      <span className="inline-flex items-center gap-2.5">
+                        <span aria-hidden="true">{flagEmoji(entry.countryCode)}</span>
+                        {countryName(entry.countryCode)}
+                      </span>
                     </td>
-                    <td className="whitespace-nowrap px-5 py-3.5 text-right font-mono text-sm font-medium tabular-nums text-text-primary">
-                      {formatNumber(entry.impressions)}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-14 text-right text-text-primary">{formatNumber(entry.impressions)}</span>
+                        <span aria-hidden="true" className="h-1.5 flex-1 bg-tile">
+                          <span
+                            className="block h-1.5 bg-brand"
+                            style={{ width: `${maxImpressions > 0 ? Math.max(2, Math.round((entry.impressions / maxImpressions) * 100)) : 0}%` }}
+                          />
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right text-text-secondary">{formatNumber(entry.clicks)}</td>
+                    <td className="px-4 py-3 text-right text-text-secondary">{formatNumber(entry.copies)}</td>
+                    <td className="px-4 py-3 text-right text-text-primary">{formatNumber(entry.redemptions)}</td>
+                    <td className="whitespace-nowrap px-6 py-3 text-right text-text-secondary">
+                      {revenueEntries(entry.revenueSavedByCurrency).length > 0 ? formatRevenueByCurrency(entry.revenueSavedByCurrency) : '—'}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           ) : (
-            <div className="flex h-48 flex-col items-center justify-center px-6 text-center">
-              <p className="text-base font-medium text-text-primary">No traffic yet</p>
-              <p className="mt-1.5 max-w-sm text-sm text-text-secondary">
-                Countries appear here once your embed snippet starts serving discounts. Create a
-                product, then a campaign, then paste the snippet on your pricing page.
-              </p>
-            </div>
+            <EmptyState title="No banner views yet">
+              Countries appear here once the snippet on your pricing page starts showing discounts.
+            </EmptyState>
           )}
         </div>
-      </div>
-    </div>
-  )
-}
+        {topCountries.length > TOP_ROWS && (
+          <div>
+            <button type="button" onClick={() => setShowAll((v) => !v)} className="text-[13px] font-medium text-brand-text hover:underline">
+              {showAll ? 'Show the top 10' : `Show all ${topCountries.length} countries`}
+            </button>
+          </div>
+        )}
+      </section>
 
-function StatCard({
-  title,
-  value,
-  badge,
-  subtitle,
-}: {
-  title: string
-  value: string
-  badge?: string
-  subtitle?: string
-}) {
-  return (
-    <div className="border border-border p-7">
-      <p className="text-sm font-medium text-text-secondary">{title}</p>
-      <p className="mt-3 font-display text-4xl font-semibold tabular-nums tracking-tight text-text-primary">
-        {value}
+      <p className="text-[13px] text-text-muted">
+        Discount given is what visitors saved with your codes, per currency; amounts in different currencies are never
+        added together. Banner views count both live and test traffic.
       </p>
-      {badge && (
-        <div className="mt-3">
-          <span className="bg-brand-light px-2 py-0.5 text-xs font-medium text-brand-text">
-            {badge}
-          </span>
-        </div>
-      )}
-      {subtitle && (
-        <p className="mt-3 text-[13px] text-text-secondary">{subtitle}</p>
-      )}
     </div>
   )
 }
 
-// "Free plan" / "Pro plan" from the effective plan; self-hosted has no plans.
-function planBadge(billing: BillingInfo | undefined): string | undefined {
-  if (!billing || billing.selfHosted) return undefined
-  const plan = billing.effectivePlan ?? billing.plan
-  return plan === 'pro' ? 'Pro plan' : 'Free plan'
+type SetupStep = {
+  title: string
+  done: boolean
+  doneNote?: string
+  todoNote?: string
+  action?: { to: string; label: string }
+}
+
+function SetupChecklist({ steps }: { steps: SetupStep[] }) {
+  const done = steps.filter((s) => s.done).length
+  // The first open step gets the red button; the others wait their turn.
+  const next = steps.findIndex((s) => !s.done)
+  return (
+    <section aria-labelledby="setup-title" className="border border-border bg-panel">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border px-6 py-4">
+        <h2 id="setup-title" className="font-display text-lg font-semibold text-text-primary">
+          Get the banner on your site
+        </h2>
+        <span className="text-[13px] text-text-muted">
+          {done} of {steps.length} done
+        </span>
+      </div>
+      <ol className="grid grid-cols-1 gap-px bg-border sm:grid-cols-2 lg:grid-cols-4">
+        {steps.map((step, i) => (
+          <li key={step.title} className="flex flex-col gap-1.5 bg-panel px-6 py-4">
+            {step.done ? (
+              <span className="inline-flex items-center gap-2 text-[13px] text-success">
+                <ToneIcon tone="ok" className="h-3.5 w-3.5" />
+                Done
+              </span>
+            ) : (
+              <span className={`font-mono text-xs ${i === next ? 'text-brand-text' : 'text-text-muted'}`}>0{i + 1}</span>
+            )}
+            <span className="font-semibold text-text-primary">{step.title}</span>
+            {step.done
+              ? step.doneNote && <span className="truncate text-[13px] text-text-muted">{step.doneNote}</span>
+              : step.todoNote && <span className="text-[13px] text-text-muted">{step.todoNote}</span>}
+            {!step.done && step.action && (
+              <div className="mt-1.5">
+                <Link to={step.action.to} className={i === next ? `${btnPrimary} h-9` : `${btnSecondary} h-9`}>
+                  {step.action.label}
+                </Link>
+              </div>
+            )}
+          </li>
+        ))}
+      </ol>
+    </section>
+  )
+}
+
+function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
+  return (
+    <div className="flex flex-col gap-1.5 bg-panel px-6 py-5">
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text-muted">{label}</p>
+      <p className="font-display text-[30px] font-semibold tabular-nums tracking-tight text-text-primary">{value}</p>
+      {note && <p className="text-[13px] text-text-secondary">{note}</p>}
+    </div>
+  )
+}
+
+function rangeLabel(days: AnalyticsRangeDays): string {
+  return RANGE_OPTIONS.find((o) => o.value === days)?.label.toLowerCase() ?? `last ${days} days`
 }
 
 function downloadCountriesCsv(rows: CountryAnalytics[], days: AnalyticsRangeDays) {
@@ -242,14 +332,15 @@ function revenueEntries(byCurrency: Record<string, number> | undefined): [string
     .sort(([a], [b]) => a.localeCompare(b))
 }
 
+/** "$489.80" below 10,000, "$31.4K" from there; same locale as formatPrice. */
 function formatCurrencyCompact(amount: number, currency: string): string {
   try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency,
-      notation: 'compact',
-      maximumFractionDigits: 1,
-    }).format(amount)
+    return new Intl.NumberFormat(
+      'en-US',
+      amount >= 10_000
+        ? { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 1 }
+        : { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 },
+    ).format(amount)
   } catch {
     return `${currency} ${formatNumber(Math.round(amount))}`
   }

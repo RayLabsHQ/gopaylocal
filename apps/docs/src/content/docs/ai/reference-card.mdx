@@ -94,7 +94,7 @@ What exists:
 - Arms are sticky. The API hashes the test id with the visitor key (the `vid`, or IP address plus user agent when there is none) and compares the result with the split. A visitor stays in their arm while the test and its split are unchanged. Changing the split moves only the visitors between the old and the new value.
 - The assigned arm always answers. If its campaign gives the visitor's country no discount, or the domain is not allowed, the answer is `show: false` with `experimentId` and `variant`. The visitor is not moved to the other arm.
 - Results, in the dashboard, are raw counts and rates per arm: impressions, clicks, copies, redemptions, revenue saved per currency, click, copy and conversion rates, and redemptions per copy. They come from daily rollups (whole UTC days) and only reach back as far as the account's analytics history.
-- **End Test**: the human picks the winner. The winner stays active and the other campaign is paused. After that the product is served the normal way, by its newest servable campaign.
+- **End test**: the human picks the winner. The winner stays active and the other campaign is paused. After that the product is served the normal way, by its newest servable campaign.
 - While a test runs, its campaigns cannot be paused, set back to draft, moved to another product or environment, or deleted (`409`).
 
 What does not exist: per-country tests or per-country results (a test splits every visitor of the product, even though the two campaigns can set different per-country discounts), a significance or lift figure, and a no-discount control arm (a campaign with 0% for a country serves nothing there, so it collects no data).

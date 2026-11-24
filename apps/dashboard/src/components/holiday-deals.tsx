@@ -21,6 +21,7 @@ import {
 } from '@gopaylocal/shared'
 import { api, type CreateDealInput, type Deal, type UpdateDealInput } from '~/lib/api'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
+import { ErrorText } from '~/components/ui/status'
 
 // A campaign's holiday deals: GET/POST/PATCH/DELETE
 // /v1/teams/:teamId/campaigns/:campaignId/deals. Listing needs campaigns.view,
@@ -31,7 +32,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 // banner says. The API itself takes any two instants.
 
 const inputClass =
-  'block w-full border border-border bg-bg px-3 py-2 text-sm text-text-primary focus:border-brand focus:outline-none disabled:cursor-not-allowed disabled:text-text-secondary'
+  'block w-full border border-control bg-bg px-3 py-2 text-sm text-text-primary focus:border-brand focus:outline-none disabled:cursor-not-allowed disabled:text-text-secondary'
 
 /** Sentinel for "no holiday picked" (Radix can't use an empty value). */
 const CUSTOM = 'custom'
@@ -133,7 +134,7 @@ export function HolidayDeals({ teamId, campaignId, providerLabel, canEdit, inRun
             discount are offered the deal.
           </p>
           {inRunningTest && (
-            <p className="text-amber-300">
+            <p className="text-text-primary">
               This campaign is in a running A/B test. A deal added here is offered only to the visitors who get this
               campaign.
             </p>
@@ -145,7 +146,7 @@ export function HolidayDeals({ teamId, campaignId, providerLabel, canEdit, inRun
             <div className="h-5 w-5 animate-spin rounded-full border-4 border-border border-t-brand" />
           </div>
         ) : error ? (
-          <p className="text-[13px] text-brand-text">Couldn't load the deals: {error.message}</p>
+          <ErrorText>Couldn't load the deals: {error.message}</ErrorText>
         ) : (
           <>
             {deals.length === 0 && !showForm && (
@@ -244,7 +245,7 @@ export function HolidayDeals({ teamId, campaignId, providerLabel, canEdit, inRun
 
 const PHASE_LABEL = { live: 'Live', scheduled: 'Scheduled', ended: 'Ended' } as const
 const PHASE_STYLE = {
-  live: 'bg-success/15 text-success',
+  live: 'bg-success-light text-success',
   scheduled: 'bg-surface text-text-primary',
   ended: 'bg-surface text-text-secondary',
 } as const
@@ -306,7 +307,7 @@ function DealRow({
                 Edit
               </button>
             )}
-            <button type="button" onClick={onAskDelete} className="text-red-400 transition-colors hover:text-red-300">
+            <button type="button" onClick={onAskDelete} className="text-text-secondary transition-colors hover:text-text-primary">
               Delete
             </button>
           </div>
@@ -327,7 +328,7 @@ function DealRow({
             <span className="text-text-secondary">No code: the banner shows the deal and its percentage.</span>
           ) : (
             <div className="flex flex-wrap items-center gap-3">
-              <span className="text-amber-300">
+              <span className="text-text-primary">
                 This deal has no working code, so it is not offered.
                 {!hasProvider && ' Link a payment integration in Settings and its code is created there.'}
               </span>
@@ -347,8 +348,8 @@ function DealRow({
       )}
 
       {confirming && (
-        <div className="border-t border-red-800 bg-red-950/30 px-4 py-3">
-          <p className="text-[13px] text-red-200">
+        <div className="border-t border-error-border bg-error-light px-4 py-3">
+          <p className="text-[13px] text-text-primary">
             Delete "{deal.name}"?
             {deal.codeSource === 'provider' && !ended && ' Its code is removed from your payment platform and stops working.'}
           </p>
@@ -357,7 +358,7 @@ function DealRow({
               type="button"
               onClick={onDelete}
               disabled={deleting}
-              className="bg-red-600 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              className="bg-brand px-3 py-1.5 text-[13px] font-medium text-white hover:bg-brand/90 disabled:opacity-50"
             >
               {deleting ? 'Deleting...' : 'Yes, delete'}
             </button>
@@ -701,7 +702,7 @@ function NewDealForm({
         )}
       />
 
-      {formError && <p className="text-[13px] text-brand-text">{formError}</p>}
+      {formError && <ErrorText>{formError}</ErrorText>}
 
       <div className="flex flex-wrap items-center gap-3">
         <button
@@ -831,7 +832,7 @@ function EditDealForm({
         The percentage and the code stay as they are. For another percentage, delete this deal and create a new one.
       </p>
 
-      {formError && <p className="text-[13px] text-brand-text">{formError}</p>}
+      {formError && <ErrorText>{formError}</ErrorText>}
 
       <div className="flex flex-wrap items-center gap-3">
         <button

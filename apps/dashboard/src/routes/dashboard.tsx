@@ -4,6 +4,7 @@ import { signOut, useSession, getActiveTeamId, organization } from '~/lib/auth'
 import { BrandMark } from '~/components/brand-mark'
 import { EnvProvider, useEnv, type Env } from '~/lib/env'
 import { ScrollArea } from '~/components/ui/scroll-area'
+import { ToneIcon } from '~/components/ui/status'
 
 export const Route = createFileRoute('/dashboard')({
   component: DashboardLayout,
@@ -98,7 +99,7 @@ function DashboardShell({ teamId, session, onSignOut }: { teamId: string; sessio
                 to={item.to}
                 activeOptions={{ exact: item.to === '/dashboard' }}
                 onClick={() => setMobileNavOpen(false)}
-                className="flex items-center gap-3 px-3 py-2.5 text-sm text-text-secondary transition-colors hover:text-text-primary [&.active]:bg-brand-light [&.active]:text-brand-text [&.active]:font-medium [&.active]:font-display"
+                className="flex items-center gap-3 px-3 py-2.5 text-sm text-text-secondary transition-colors hover:text-text-primary [&.active]:bg-tile [&.active]:font-semibold [&.active]:text-text-primary [&.active]:shadow-[inset_2px_0_0_var(--brand)]"
               >
                 <item.icon className="h-[18px] w-[18px] shrink-0" />
                 {item.name}
@@ -155,6 +156,8 @@ function DashboardShell({ teamId, session, onSignOut }: { teamId: string; sessio
             <span className="font-display text-base font-semibold text-text-primary">GoPayLocal</span>
           </div>
         </div>
+
+        {env === 'test' && <TestModeStrip />}
 
         {/* Main Content */}
         <ScrollArea className="flex-1 bg-bg">
@@ -217,7 +220,7 @@ function OrgSwitcher({ activeOrgId }: { activeOrgId: string }) {
         className="flex w-full items-center justify-between gap-2 border border-border px-3 py-2 text-left transition-colors hover:bg-surface"
       >
         <div className="flex items-center gap-2 truncate">
-          <div className="flex h-5 w-5 shrink-0 items-center justify-center bg-brand/15 text-[11px] font-bold text-brand-text">
+          <div className="flex h-5 w-5 shrink-0 items-center justify-center bg-tile text-[11px] font-bold text-text-primary">
             {(activeOrgName ?? 'W').charAt(0).toUpperCase()}
           </div>
           <span className="truncate text-[13px] font-medium text-text-primary">
@@ -250,13 +253,13 @@ function OrgSwitcher({ activeOrgId }: { activeOrgId: string }) {
               className="flex w-full items-center justify-between px-3 py-2 text-left text-[13px] transition-colors hover:bg-surface"
             >
               <div className="flex items-center gap-2 truncate">
-                <div className="flex h-5 w-5 shrink-0 items-center justify-center bg-brand/15 text-[11px] font-bold text-brand-text">
+                <div className="flex h-5 w-5 shrink-0 items-center justify-center bg-tile text-[11px] font-bold text-text-primary">
                   {org.name.charAt(0).toUpperCase()}
                 </div>
                 <span className="truncate text-text-primary">{org.name}</span>
               </div>
               {org.id === activeOrgId && (
-                <svg className="h-4 w-4 shrink-0 text-brand-text" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <svg className="h-4 w-4 shrink-0 text-text-primary" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                 </svg>
               )}
@@ -271,30 +274,38 @@ function OrgSwitcher({ activeOrgId }: { activeOrgId: string }) {
 // ── Environment Toggle ──────────────────────────────────────────────────────
 
 function EnvToggle({ env, setEnv }: { env: Env; setEnv: (e: Env) => void }) {
+  // Both modes look the same when selected: green would say "safe", and Live is
+  // the mode that touches real customers. The strip above the page says Test.
+  const option = (value: Env, label: string, extra = '') => (
+    <button
+      type="button"
+      aria-pressed={env === value}
+      onClick={() => setEnv(value)}
+      className={`flex-1 px-3 py-1.5 text-center text-[12px] transition-colors ${extra} ${
+        env === value
+          ? 'bg-border font-semibold text-text-primary shadow-[inset_0_-2px_0_var(--text-1)]'
+          : 'font-medium text-text-secondary hover:text-text-primary'
+      }`}
+    >
+      {label}
+    </button>
+  )
   return (
-    <div className="mx-3 mb-3 flex overflow-hidden border border-border">
-      <button
-        type="button"
-        onClick={() => setEnv('live')}
-        className={`flex-1 px-3 py-1.5 text-center text-[12px] font-medium transition-colors ${
-          env === 'live'
-            ? 'bg-success/15 text-success'
-            : 'text-text-secondary hover:text-text-primary'
-        }`}
-      >
-        Live
-      </button>
-      <button
-        type="button"
-        onClick={() => setEnv('test')}
-        className={`flex-1 border-l border-border px-3 py-1.5 text-center text-[12px] font-medium transition-colors ${
-          env === 'test'
-            ? 'bg-amber-500/15 text-amber-400'
-            : 'text-text-secondary hover:text-text-primary'
-        }`}
-      >
-        Test
-      </button>
+    <div role="group" aria-label="Environment" className="mx-3 mb-3 flex overflow-hidden border border-border">
+      {option('live', 'Live')}
+      {option('test', 'Test', 'border-l border-border')}
+    </div>
+  )
+}
+
+function TestModeStrip() {
+  return (
+    <div role="status" className="flex items-center gap-2.5 border-b border-warning-border bg-warning-light px-4 py-2 text-[13px] text-text-primary md:px-12">
+      <ToneIcon tone="warn" className="h-3.5 w-3.5" />
+      <p>
+        <span className="font-semibold text-warning">Test mode.</span> You're looking at test keys, products and
+        campaigns. Nothing here reaches a real customer.
+      </p>
     </div>
   )
 }

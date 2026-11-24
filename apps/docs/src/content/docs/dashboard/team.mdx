@@ -118,7 +118,7 @@ The last column is a [secret API key](#secret-api-keys) (`gpl_sk_`) calling the 
 A secret key belongs to the workspace, not to the person who created it.
 
 - It works on every product in the workspace. Members' product access does not apply to it.
-- It keeps working after its creator leaves the workspace or is removed. When someone leaves, revoke the keys they had access to. **Settings > API Keys** lists every key with who created it ("Unknown" for keys created before that was recorded, or whose creator's account has been deleted), and owners and admins can revoke a key there.
+- It keeps working after its creator leaves the workspace or is removed. When someone leaves, revoke the keys they had access to. **Settings > API keys** lists every key with who created it ("Unknown" for keys created before that was recorded, or whose creator's account has been deleted), and owners and admins can revoke a key there.
 - It stops working when it is revoked or the workspace is deleted.
 - It is refused while any owner of the workspace is suspended, and while the person who created it is suspended.
 - It can't manage people, billing, API keys or the workspace itself.
@@ -139,12 +139,12 @@ Product access applies only to members, because owners and admins always work on
 Only the owner can invite people.
 
 1. Go to [app.gopaylocal.com](https://app.gopaylocal.com) > **Settings > Team**
-2. Click **Invite Member**
+2. Click **Invite member**
 3. Enter their email address
 4. Select a role (Member or Admin)
-5. Click **Send Invite**
+5. Click **Send invite**
 
-The invited person receives an email with a link to accept. You can also copy the link from the **Pending Invitations** list, which only the owner sees. They must sign in with the email address you invited.
+The invited person receives an email with a link to accept. You can also copy the link from the **Pending invitations** list, which only the owner sees. They must sign in with the email address you invited.
 
 <Aside type="note">
 Invitations expire after 48 hours. Pending invitations count toward your plan's seat limit.
@@ -195,7 +195,7 @@ GoPayLocal also tries to remove the webhooks it registered with your payment pro
 
 ### Workspaces on Pro
 
-Deleting a workspace does not cancel its Pro subscription, so the delete is refused while the subscription is still set to renew. Cancel it first under **Settings > Billing > Manage Billing**, then delete the workspace. Either kind of cancellation works:
+Deleting a workspace does not cancel its Pro subscription, so the delete is refused while the subscription is still set to renew. Cancel it first under **Settings > Billing > Manage billing**, then delete the workspace. Either kind of cancellation works:
 
 - cancelled now;
 - set to end at the end of the billing period.

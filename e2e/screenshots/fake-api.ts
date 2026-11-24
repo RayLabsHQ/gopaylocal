@@ -12,6 +12,9 @@ export const API_ORIGIN = "http://api.demo.invalid";
 
 export type Scenario = {
   integrations: Array<Record<string, unknown>>;
+  /** Billing and usage answers; the Pro demo workspace when left out. */
+  billing?: unknown;
+  usage?: unknown;
   /** What POST /integrations answers. */
   connect?: { status: number; body: unknown };
 };
@@ -57,9 +60,27 @@ async function answer(
   if (path === "/api/auth/organization/list") return json(demo.organizations);
   if (path === "/api/auth/organization/set-active") return json(demo.organizations[0]);
   if (path === `${team}/members`) return json({ data: demo.members });
-  if (path === `${team}/billing/usage`) return json({ data: demo.usage });
+  if (path === `${team}/billing/usage`) return json({ data: scenario.usage ?? demo.usage });
+  if (path === `${team}/billing`) return json({ data: scenario.billing ?? demo.billing });
   if (path === `${team}/campaigns` && method === "GET") return json({ data: demo.campaigns });
   if (path === `${team}/products` && method === "GET") return json({ data: demo.products });
+  if (path === `${team}/analytics/overview`) return json({ data: demo.overview });
+  if (path === `${team}/analytics/by-country`) return json({ data: demo.byCountry });
+  if (path === `${team}/api-keys` && method === "GET") return json({ data: demo.apiKeys });
+  if (path === `${team}/experiments` && method === "GET") {
+    const campaignId = url.searchParams.get("campaignId");
+    const list = [demo.experiment].filter((e) => !campaignId || e.campaignAId === campaignId || e.campaignBId === campaignId);
+    return json({ data: list });
+  }
+  if (path === `${team}/experiments/${demo.experiment.id}`) return json({ data: demo.experimentDetail });
+  const campaignMatch = path.match(new RegExp(`^${team}/(campaigns|banner-configs)/([^/]+)(/deals)?$`));
+  if (campaignMatch && method === "GET") {
+    const [, kind, id, deals] = campaignMatch;
+    const found = demo.campaigns.find((c) => c.id === id);
+    if (!found) return json({ error: "Not found" }, 404);
+    if (deals) return json({ data: [] });
+    return json({ data: kind === "campaigns" ? found : demo.bannerConfig });
+  }
   if (path === `${team}/integrations` && method === "GET") return json({ data: state.integrations });
   if (path === `${team}/integrations` && method === "POST" && scenario.connect) {
     const { status, body } = scenario.connect;

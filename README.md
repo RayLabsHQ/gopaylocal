@@ -74,7 +74,7 @@ from `PLAN_LIMITS` in
 
 1. Sign in at [app.gopaylocal.com](https://app.gopaylocal.com) with Google or GitHub.
 2. Add a product, then connect your payment platform under **Integrations**.
-3. Create a public API key under **Settings > API Keys**.
+3. Create a public API key under **Settings > API keys**.
 4. Create a campaign for the product and set it to active.
 5. Copy the snippet from the campaign page (it fills in your public key and product id)
    into your site's `<head>` or before `</body>`.

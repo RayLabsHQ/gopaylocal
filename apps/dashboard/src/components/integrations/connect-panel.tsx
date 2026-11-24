@@ -12,6 +12,7 @@ import {
 import { SidePanel, SidePanelBody, SidePanelFooter } from '~/components/ui/side-panel'
 import { inSentence, providerLogo, providerMeta, withArticle } from './providers'
 import { btnPrimary, btnSecondary, EnvBadge, ExternalIcon, LockIcon, LogoTile, ResultMark } from './parts'
+import { ErrorText, ToneIcon } from '~/components/ui/status'
 
 export type ConnectTarget = {
   provider: IntegrationProvider
@@ -191,7 +192,7 @@ export function ConnectPanel({
                           <code className="font-mono text-[12.5px] text-text-primary">{resource}</code>
                           {level && (
                             <span
-                              className={`text-[11px] font-semibold uppercase tracking-[0.06em] ${level === 'Write' ? 'text-brand-text' : 'text-text-secondary'}`}
+                              className={`text-[11px] font-semibold uppercase tracking-[0.06em] ${level === 'Write' ? 'text-text-primary' : 'text-text-secondary'}`}
                             >
                               {level}
                             </span>
@@ -219,7 +220,7 @@ export function ConnectPanel({
                   placeholder={meta.placeholder[env]}
                   aria-describedby={meta.keyHelp ? `${keyId}-help` : undefined}
                   aria-invalid={rejected || undefined}
-                  className="h-11 w-full border border-border-strong bg-bg px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
+                  className="h-11 w-full border border-control bg-bg px-3 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
                 />
                 {meta.keyHelp && (
                   <p id={`${keyId}-help`} className="text-xs text-text-secondary">{meta.keyHelp}</p>
@@ -239,7 +240,7 @@ export function ConnectPanel({
                       onChange={(e) => setAccountId(e.target.value)}
                       placeholder={meta.accountId.placeholder}
                       aria-describedby={`${accountIdId}-help`}
-                      className="h-11 w-full border border-border-strong bg-bg px-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
+                      className="h-11 w-full border border-control bg-bg px-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
                     />
                     <p id={`${accountIdId}-help`} className="text-xs text-text-secondary">{meta.accountId.help}</p>
                   </>
@@ -252,14 +253,17 @@ export function ConnectPanel({
             </div>
 
             {connect.error && (
-              <div role="alert" className="mt-7 border border-brand/40 bg-brand-light px-4 py-3 text-[13px] text-text-primary">
-                <p className="font-semibold">{rejected ? `${meta.name} didn't accept the key` : "Couldn't connect"}</p>
-                <p className="mt-1 text-text-secondary">{connect.error.message}</p>
-                {rejected && (
-                  <p className="mt-1 text-text-secondary">
-                    Check that it is a {env} key and has the permissions listed. Nothing was saved.
-                  </p>
-                )}
+              <div role="alert" className="mt-7 flex gap-3 border border-error-border bg-error-light px-4 py-3 text-[13px] text-text-primary">
+                <ToneIcon tone="error" className="mt-[3px] h-3.5 w-3.5" />
+                <div>
+                  <p className="font-semibold text-error">{rejected ? `${meta.name} didn't accept the key` : "Couldn't connect"}</p>
+                  <p className="mt-1 text-text-secondary">{connect.error.message}</p>
+                  {rejected && (
+                    <p className="mt-1 text-text-secondary">
+                      Check that it is a {env} key and has the permissions listed. Nothing was saved.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </SidePanelBody>
@@ -326,7 +330,7 @@ export function ConnectPanel({
                             {retryTracking.isPending ? 'Trying again…' : 'Try again'}
                           </button>
                           {retryTracking.error && (
-                            <p role="alert" className="mt-2 text-[13px] text-brand-text">{retryTracking.error.message}</p>
+                            <ErrorText className="mt-2">{retryTracking.error.message}</ErrorText>
                           )}
                         </div>
                       </div>

@@ -119,7 +119,7 @@ function LoginPage() {
           </h2>
 
           {error && (
-            <div className="mb-4 border border-red-500/40 bg-red-950/40 p-3 text-sm text-red-200">
+            <div className="mb-4 border border-error-border bg-error-light p-3 text-sm text-text-primary">
               {error}
             </div>
           )}

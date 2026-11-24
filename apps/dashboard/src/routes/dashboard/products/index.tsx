@@ -1,175 +1,173 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import {
-  columnVisibilityFeature,
-  createColumnHelper,
-  flexRender,
-  tableFeatures,
-  useTable,
-} from '@tanstack/react-table'
-import { api, type Product } from '~/lib/api'
+import { PLAN_PRICES_USD } from '@gopaylocal/shared'
+import { api } from '~/lib/api'
 import { getActiveTeamId, useSession } from '~/lib/auth'
 import { useEnv } from '~/lib/env'
 import { usePermissions } from '~/lib/permissions'
-import { CURRENCY_SYMBOLS } from '@gopaylocal/shared'
+import { formatDate, formatPrice } from '~/lib/format'
+import { btnPrimary, btnSecondary, EmptyState, PageHeader, Spinner } from '~/components/ui/page'
+import { ErrorText, ToneIcon } from '~/components/ui/status'
 
 export const Route = createFileRoute('/dashboard/products/')({
   component: ProductsPage,
 })
-
-// Table v9 only includes the features registered here. columnVisibilityFeature
-// provides row.getVisibleCells().
-const features = tableFeatures({ columnVisibilityFeature })
-
-const columnHelper = createColumnHelper<typeof features, Product>()
-
-const columns = columnHelper.columns([
-  columnHelper.accessor('name', {
-    header: 'Product Name',
-    cell: (info) => (
-      <div className="max-w-xs">
-        <span className="font-medium text-text-primary">{info.getValue()}</span>
-        {info.row.original.url && (
-          <p className="mt-0.5 truncate text-[13px] text-text-secondary">{info.row.original.url}</p>
-        )}
-      </div>
-    ),
-  }),
-  columnHelper.accessor('currency', {
-    header: 'Currency',
-    cell: (info) => (
-      <span className="font-mono text-sm text-text-primary">{info.getValue()}</span>
-    ),
-  }),
-  columnHelper.accessor('basePrice', {
-    header: 'Base Price',
-    cell: (info) => {
-      const currency = info.row.original.currency
-      const symbol = CURRENCY_SYMBOLS[currency] ?? currency
-      return (
-        <span className="font-mono text-sm font-medium tabular-nums text-text-primary">
-          {symbol}{info.getValue().toFixed(2)}
-        </span>
-      )
-    },
-  }),
-  columnHelper.accessor('createdAt', {
-    header: 'Created',
-    cell: (info) => (
-      <span className="font-mono text-sm tabular-nums text-text-secondary">
-        {new Date(info.getValue()).toLocaleDateString()}
-      </span>
-    ),
-  }),
-])
 
 function ProductsPage() {
   const { data: session } = useSession()
   const teamId = getActiveTeamId(session)
   const { env } = useEnv()
   // Adding products is products.create (owner and admin).
-  const canCreate = usePermissions().can('products.create')
+  const { can } = usePermissions()
+  const canCreate = can('products.create')
+  const canCreateCampaign = can('campaigns.create')
 
-  const { data: products = [], isPending, error } = useQuery({
+  const { data: products = [], isPending, error, refetch } = useQuery({
     queryKey: ['products', teamId, env],
     queryFn: () => api.products.list(teamId, env),
     enabled: !!teamId,
   })
-
-  const table = useTable({
-    features,
-    data: products,
-    columns,
+  const { data: campaigns = [] } = useQuery({
+    queryKey: ['campaigns', teamId, env],
+    queryFn: () => api.campaigns.list(teamId, env),
+    enabled: !!teamId,
   })
+  const { data: usage } = useQuery({
+    queryKey: ['billing-usage', teamId],
+    queryFn: () => api.billing.usage(teamId),
+    enabled: !!teamId && canCreate,
+  })
+  // remaining is null when unlimited (Pro, self-hosted): never at the limit.
+  const atLimit = usage?.remaining != null && usage.remaining <= 0
+  const canUpgrade = usage?.billingEnabled !== false && usage?.selfHosted !== true
 
   return (
-    <div>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-4xl font-medium tracking-tight text-text-primary">
-            Products
-          </h1>
-          <p className="mt-1 text-base text-text-secondary">
-            Manage your products and PPP discount rules
+    <div className="flex max-w-[1080px] flex-col gap-6">
+      <PageHeader
+        title="Products"
+        description="What you sell and its full price. Campaigns work out each country's price from it."
+        actions={
+          canCreate && (
+            <>
+              <Link to="/dashboard/integrations" className={btnSecondary}>
+                Import from a platform
+              </Link>
+              {atLimit ? (
+                <button type="button" disabled className={btnPrimary}>
+                  Add product
+                </button>
+              ) : (
+                <Link to="/dashboard/products/new" className={btnPrimary}>
+                  Add product
+                </Link>
+              )}
+            </>
+          )
+        }
+      />
+
+      {canCreate && atLimit && usage && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border border-warning-border bg-warning-light px-4 py-3">
+          <p className="flex items-start gap-2.5 text-[13px] text-text-primary">
+            <ToneIcon tone="warn" className="mt-0.5 h-3.5 w-3.5" />
+            <span>
+              You're using {usage.currentCount} of {usage.maxProducts} {usage.maxProducts === 1 ? 'product' : 'products'} on the Free plan.
+              {canUpgrade && ` Pro has unlimited products for $${PLAN_PRICES_USD.pro.month} a month.`}
+            </span>
           </p>
+          {canUpgrade && (
+            <Link to="/dashboard/settings" search={{ tab: 'billing' }} className="text-[13px] font-semibold text-warning hover:underline">
+              See plans
+            </Link>
+          )}
         </div>
-        {canCreate && (
-          <Link
-            to="/dashboard/products/new"
-            className="flex items-center gap-2 bg-brand px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand/90"
-          >
-            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            Add Product
-          </Link>
-        )}
-      </div>
+      )}
 
       {/* inline-size containment keeps the table's width inside this box: the
           page's ScrollArea wraps content in a display:table div that otherwise
           grows to the table's minimum width and clips the page on a phone. */}
-      <div className="mt-6 overflow-x-auto border border-border [contain:inline-size]">
+      <div className="overflow-x-auto border border-border bg-panel [contain:inline-size]">
         {isPending ? (
-          <div className="flex h-64 items-center justify-center">
-            <div className="h-6 w-6 animate-spin rounded-full border-4 border-border border-t-brand" />
-          </div>
+          <Spinner className="h-64" />
         ) : error ? (
-          <div className="flex h-64 items-center justify-center px-6 text-center text-sm text-brand-text">
-            Failed to load products. Please try again.
+          <div className="flex flex-col items-center gap-3 px-6 py-14">
+            <ErrorText>Couldn't load the products.</ErrorText>
+            <button type="button" onClick={() => refetch()} className="text-[13px] font-medium text-brand-text hover:underline">
+              Try again
+            </button>
           </div>
         ) : products.length === 0 ? (
-          <div className="flex h-64 flex-col items-center justify-center px-6 text-center">
-            <svg className="h-7 w-7 text-text-secondary" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="m21 7.5-9-5.25L3 7.5m18 0-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
-            </svg>
-            <p className="mt-3 text-base font-medium text-text-primary">No products yet</p>
-            <p className="mt-1.5 max-w-sm text-sm text-text-secondary">
-              {canCreate
-                ? 'A product is the thing you sell — its name, currency, and full price. Add one, then build a campaign on top of it to set PPP discounts.'
-                : "You don't have access to any products yet. The workspace owner chooses which products you can work on."}
-            </p>
-            {canCreate && (
-              <Link
-                to="/dashboard/products/new"
-                className="mt-3 text-sm font-medium text-brand-text hover:underline"
-              >
-                Create your first product
-              </Link>
-            )}
-          </div>
+          <EmptyState
+            title="No products yet"
+            action={
+              canCreate && (
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Link to="/dashboard/products/new" className={btnPrimary}>
+                    Add your first product
+                  </Link>
+                  <Link to="/dashboard/integrations" className={btnSecondary}>
+                    Import from a platform
+                  </Link>
+                </div>
+              )
+            }
+          >
+            {canCreate
+              ? 'A product is what you sell: its name, currency and full price. Add one, or import it from your payment platform, then build a campaign on it.'
+              : "You don't have access to any products yet. The workspace owner chooses which products you can work on."}
+          </EmptyState>
         ) : (
-          <table className="min-w-full">
+          <table className="w-full min-w-[720px] text-sm">
             <thead>
-              <tr className="border-b border-border bg-surface">
-                {table.getHeaderGroups().map((headerGroup) =>
-                  headerGroup.headers.map((header) => (
-                    <th
-                      key={header.id}
-                      className="px-5 py-3 text-left text-[13px] font-semibold text-text-secondary"
-                    >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(header.column.columnDef.header, header.getContext())}
-                    </th>
-                  ))
-                )}
+              <tr className="border-b border-border text-left text-xs text-text-muted">
+                <th scope="col" className="px-6 py-3 font-semibold">Product</th>
+                <th scope="col" className="px-4 py-3 text-right font-semibold">Full price</th>
+                <th scope="col" className="px-4 py-3 font-semibold">Campaigns</th>
+                <th scope="col" className="px-6 py-3 font-semibold">Added</th>
               </tr>
             </thead>
             <tbody>
-              {table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="border-b border-border last:border-b-0 transition-colors hover:bg-surface">
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="whitespace-nowrap px-5 py-4 text-sm text-text-secondary">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              {products.map((p) => {
+                const own = campaigns.filter((c) => c.productId === p.id)
+                const active = own.filter((c) => c.status === 'active').length
+                return (
+                  <tr key={p.id} className="border-b border-border last:border-b-0">
+                    <td className="px-6 py-3.5">
+                      <p className="font-semibold text-text-primary">{p.name}</p>
+                      {p.url && <p className="max-w-[360px] truncate text-[13px] text-text-muted">{p.url.replace(/^https?:\/\//, '')}</p>}
                     </td>
-                  ))}
-                </tr>
-              ))}
+                    <td className="whitespace-nowrap px-4 py-3.5 text-right tabular-nums text-text-primary">
+                      {formatPrice(p.basePrice, p.currency)} <span className="text-xs text-text-muted">{p.currency}</span>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      {own.length > 0 ? (
+                        <Link to="/dashboard/campaigns" className="hover:underline">
+                          <span className="text-text-primary">{own.length}</span>{' '}
+                          <span className="text-[13px] text-text-muted">
+                            {active === own.length ? (own.length === 1 ? 'active' : 'all active') : active === 0 ? 'none active' : `${active} active`}
+                          </span>
+                        </Link>
+                      ) : (
+                        canCreateCampaign && (
+                          <Link to="/dashboard/campaigns/new" className="text-[13px] font-medium text-brand-text hover:underline">
+                            Create a campaign
+                          </Link>
+                        )
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-3.5 tabular-nums text-text-secondary">{formatDate(p.createdAt)}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}
       </div>
+
+      <p className="text-[13px] text-text-muted">
+        {env === 'live' ? 'Live mode' : 'Test mode'}. A product belongs to the mode it was added in; {env === 'live' ? 'test' : 'live'} products are
+        listed when the sidebar is on {env === 'live' ? 'Test' : 'Live'}.
+      </p>
     </div>
   )
 }

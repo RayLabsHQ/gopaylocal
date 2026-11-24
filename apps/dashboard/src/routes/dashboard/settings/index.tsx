@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
@@ -15,6 +15,8 @@ import {
   resolveRole,
   type Limit,
 } from '@gopaylocal/shared'
+import { ErrorText, ToneIcon } from '~/components/ui/status'
+import { btnPrimary, btnSecondary, PageHeader } from '~/components/ui/page'
 
 type Tab = 'team' | 'billing' | 'api-keys'
 
@@ -25,8 +27,11 @@ function isValidTab(value: unknown): value is Tab {
 }
 
 export const Route = createFileRoute('/dashboard/settings/')({
-  validateSearch: (search: Record<string, unknown>) =>
-    isValidTab(search.tab) ? { tab: search.tab } : {},
+  // success=true is where Dodo Payments sends the buyer back after checkout.
+  validateSearch: (search: Record<string, unknown>): { tab?: Tab; success?: true } => ({
+    ...(isValidTab(search.tab) ? { tab: search.tab } : {}),
+    ...(search.success === true || search.success === 'true' ? { success: true as const } : {}),
+  }),
   component: SettingsPage,
 })
 
@@ -57,30 +62,27 @@ function SettingsPage() {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'team', label: 'Team' },
+    { id: 'api-keys', label: 'API keys' },
     ...(selfHosted ? [] : [{ id: 'billing' as const, label: 'Billing' }]),
-    { id: 'api-keys', label: 'API Keys' },
   ]
 
   return (
-    <div>
-      <h1 className="font-display text-4xl font-medium tracking-tight text-text-primary">
-        Settings
-      </h1>
-      <p className="mt-1 text-base text-text-secondary">
-        Manage your account, API keys and team
-      </p>
+    <div className="flex max-w-[1080px] flex-col gap-7">
+      <PageHeader title="Settings" description="Your team, your API keys and your plan." />
 
-      {/* Tabs */}
-      <div className="mt-6 border-b border-border">
-        <nav className="-mb-px flex gap-6">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+        {/* A row of tabs on a phone, a side menu from lg up; the selected one
+            has the same red bar as the sidebar. */}
+        <nav aria-label="Settings" className="flex shrink-0 overflow-x-auto border-b border-border lg:w-[200px] lg:flex-col lg:border-b-0">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
+              aria-current={activeTab === tab.id ? 'page' : undefined}
               onClick={() => setActiveTab(tab.id)}
-              className={`whitespace-nowrap border-b-2 pb-3 text-sm font-medium transition-colors ${
+              className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2.5 text-left text-sm transition-colors lg:mb-0 lg:border-b-0 lg:border-l-2 ${
                 activeTab === tab.id
-                  ? 'border-brand font-display text-brand-text'
+                  ? 'border-brand bg-tile font-semibold text-text-primary'
                   : 'border-transparent text-text-secondary hover:text-text-primary'
               }`}
             >
@@ -88,13 +90,12 @@ function SettingsPage() {
             </button>
           ))}
         </nav>
-      </div>
 
-      {/* Tab Content */}
-      <div className="mt-6">
-        {activeTab === 'team' && <TeamTab onGoToBilling={() => setActiveTab('billing')} />}
-        {activeTab === 'billing' && !selfHosted && <BillingTab />}
-        {activeTab === 'api-keys' && <ApiKeysTab />}
+        <div className="min-w-0 flex-1">
+          {activeTab === 'team' && <TeamTab onGoToBilling={() => setActiveTab('billing')} />}
+          {activeTab === 'billing' && !selfHosted && <BillingTab returnedFromCheckout={search.success === true} />}
+          {activeTab === 'api-keys' && <ApiKeysTab />}
+        </div>
       </div>
     </div>
   )
@@ -199,7 +200,7 @@ function TeamTab({ onGoToBilling }: { onGoToBilling: () => void }) {
   return (
     <div className="space-y-6">
       {/* Team Members */}
-      <div className="border border-border">
+      <div className="border border-border bg-panel">
         <div className="flex items-center justify-between border-b border-border px-6 py-5">
           <div>
             <h2 className="font-display text-lg font-semibold text-text-primary">Team</h2>
@@ -218,9 +219,9 @@ function TeamTab({ onGoToBilling }: { onGoToBilling: () => void }) {
               onClick={() => setShowInvite(!showInvite)}
               disabled={atSeatCap && !showInvite}
               title={atSeatCap ? `Seat limit reached on the ${plan} plan` : undefined}
-              className="bg-brand px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50"
+              className={btnPrimary}
             >
-              Invite Member
+              Invite member
             </button>
           )}
         </div>
@@ -259,7 +260,7 @@ function TeamTab({ onGoToBilling }: { onGoToBilling: () => void }) {
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
                   placeholder="teammate@company.com"
-                  className="mt-1 block w-full border border-border px-3 py-1.5 text-sm text-text-primary focus:border-brand focus:outline-none"
+                  className="mt-1 block w-full border border-control px-3 py-1.5 text-sm text-text-primary focus:border-brand focus:outline-none"
                   onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
                 />
               </div>
@@ -283,20 +284,20 @@ function TeamTab({ onGoToBilling }: { onGoToBilling: () => void }) {
                 type="button"
                 onClick={handleInvite}
                 disabled={inviteStatus === 'sending' || !inviteEmail.trim()}
-                className="bg-brand px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50"
+                className={btnPrimary}
               >
-                {inviteStatus === 'sending' ? 'Sending...' : inviteStatus === 'sent' ? 'Sent!' : 'Send Invite'}
+                {inviteStatus === 'sending' ? 'Sending…' : inviteStatus === 'sent' ? 'Sent' : 'Send invite'}
               </button>
               <button
                 type="button"
                 onClick={() => { setShowInvite(false); setInviteEmail(''); setInviteStatus('idle') }}
-                className="border border-border px-4 py-1.5 text-sm font-medium text-text-primary hover:bg-surface"
+                className={btnSecondary}
               >
                 Cancel
               </button>
             </div>
             {inviteStatus === 'error' && (
-              <p className="mt-2 text-[13px] text-brand-text">{inviteError}</p>
+              <ErrorText className="mt-2">{inviteError}</ErrorText>
             )}
             {inviteStatus === 'sent' && (
               <div className="mt-2">
@@ -311,7 +312,7 @@ function TeamTab({ onGoToBilling }: { onGoToBilling: () => void }) {
                       onClick={() => copyLink(lastInviteId)}
                       className="shrink-0 border border-border px-2 py-1 text-[13px] font-medium text-text-primary hover:bg-surface"
                     >
-                      {copiedId === lastInviteId ? 'Copied!' : 'Copy Link'}
+                      {copiedId === lastInviteId ? 'Copied' : 'Copy link'}
                     </button>
                   </div>
                 )}
@@ -349,9 +350,9 @@ function TeamTab({ onGoToBilling }: { onGoToBilling: () => void }) {
 
       {/* Pending Invitations */}
       {canSeeInvitations && pendingInvites.length > 0 && (
-        <div className="border border-border">
+        <div className="border border-border bg-panel">
           <div className="border-b border-border px-6 py-5">
-            <h2 className="font-display text-lg font-semibold text-text-primary">Pending Invitations</h2>
+            <h2 className="font-display text-lg font-semibold text-text-primary">Pending invitations</h2>
             <p className="mt-1 text-[13px] text-text-secondary">
               {pendingInvites.length} pending invite{pendingInvites.length !== 1 ? 's' : ''}
             </p>
@@ -373,7 +374,7 @@ function TeamTab({ onGoToBilling }: { onGoToBilling: () => void }) {
                   onClick={() => copyLink(inv.id)}
                   className="border border-border px-2.5 py-1 text-[13px] font-medium text-text-primary transition-colors hover:bg-surface"
                 >
-                  {copiedId === inv.id ? 'Copied!' : 'Copy Link'}
+                  {copiedId === inv.id ? 'Copied' : 'Copy link'}
                 </button>
               </li>
             ))}
@@ -407,8 +408,8 @@ function DangerZone({ teamId, onPro }: { teamId: string; onPro: boolean }) {
   })
 
   return (
-    <div className="border border-red-500/40">
-      <div className="border-b border-red-500/40 px-6 py-5">
+    <div className="border border-error-border">
+      <div className="border-b border-error-border px-6 py-5">
         <h2 className="font-display text-lg font-semibold text-text-primary">Danger zone</h2>
         <p className="mt-1 max-w-2xl text-sm text-text-secondary">
           Permanently delete this workspace and everything in it — products, campaigns,
@@ -421,7 +422,7 @@ function DangerZone({ teamId, onPro }: { teamId: string; onPro: boolean }) {
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="border border-red-500 px-4 py-2 text-[13px] font-medium text-red-500 transition-colors hover:bg-red-500/10"
+            className="border border-error-border px-4 py-2 text-[13px] font-medium text-error transition-colors hover:bg-error-light"
           >
             Delete workspace
           </button>
@@ -435,13 +436,13 @@ function DangerZone({ teamId, onPro }: { teamId: string; onPro: boolean }) {
                 value={confirmText}
                 onChange={(e) => setConfirmText(e.target.value)}
                 placeholder="DELETE"
-                className="border border-border bg-bg px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-red-500 focus:outline-none"
+                className="border border-control bg-bg px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-error focus:outline-none"
               />
               <button
                 type="button"
                 disabled={confirmText !== 'DELETE' || deleteOrg.isPending}
                 onClick={() => deleteOrg.mutate()}
-                className="bg-red-600 px-4 py-2 text-[13px] font-medium text-white disabled:opacity-50"
+                className={btnPrimary}
               >
                 {deleteOrg.isPending ? 'Deleting…' : 'Permanently delete'}
               </button>
@@ -451,7 +452,7 @@ function DangerZone({ teamId, onPro }: { teamId: string; onPro: boolean }) {
                   setOpen(false)
                   setConfirmText('')
                 }}
-                className="border border-border px-4 py-2 text-[13px] font-medium text-text-primary"
+                className={btnSecondary}
               >
                 Cancel
               </button>
@@ -638,14 +639,14 @@ function MemberAccessEditor({
               type="button"
               onClick={() => save.mutate()}
               disabled={save.isPending}
-              className="bg-brand px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50"
+              className={btnPrimary}
             >
-              {save.isPending ? 'Saving...' : 'Save access'}
+              {save.isPending ? 'Saving…' : 'Save access'}
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="border border-border px-4 py-1.5 text-sm font-medium text-text-primary hover:bg-bg"
+              className={btnSecondary}
             >
               Cancel
             </button>
@@ -677,16 +678,28 @@ const PLAN_METADATA = {
   },
 } as const
 
-function BillingTab() {
+/** How long the page keeps checking for Pro after the buyer comes back from checkout. */
+const CONFIRM_WINDOW_MS = 120_000
+
+function BillingTab({ returnedFromCheckout }: { returnedFromCheckout: boolean }) {
   const { data: session } = useSession()
   const teamId = getActiveTeamId(session)
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
   // Everyone sees the plan and usage; only billing.manage (the owner) changes it.
   const canManageBilling = usePermissions().can('billing.manage')
+
+  // Pro is granted by Dodo's webhook, not by the redirect, so the buyer can be
+  // back before it lands. Until then, check again every 3 seconds for 2 minutes.
+  const [confirmStartedAt] = useState(() => Date.now())
+  const [confirmTimedOut, setConfirmTimedOut] = useState(false)
+  const confirming = returnedFromCheckout && !confirmTimedOut
 
   const { data: billing, isPending, error } = useQuery({
     queryKey: ['billing', teamId],
     queryFn: () => api.billing.get(teamId),
     enabled: !!teamId,
+    refetchInterval: (query) => (confirming && query.state.data?.effectivePlan !== 'pro' ? 3000 : false),
   })
 
   const { data: usage } = useQuery({
@@ -694,6 +707,25 @@ function BillingTab() {
     queryFn: () => api.billing.usage(teamId),
     enabled: !!teamId,
   })
+
+  const confirmedPro = billing?.effectivePlan === 'pro'
+  useEffect(() => {
+    if (!returnedFromCheckout) return
+    if (confirmedPro) {
+      toast.success("You're on Pro", { description: 'Thanks for subscribing. Your limits are lifted.' })
+      // Every limit and the banner branding change with the plan.
+      queryClient.invalidateQueries({ queryKey: ['billing-usage', teamId] })
+      navigate({ to: '/dashboard/settings', search: { tab: 'billing' }, replace: true })
+      return
+    }
+    const left = CONFIRM_WINDOW_MS - (Date.now() - confirmStartedAt)
+    if (left <= 0) {
+      setConfirmTimedOut(true)
+      return
+    }
+    const timer = setTimeout(() => setConfirmTimedOut(true), left)
+    return () => clearTimeout(timer)
+  }, [returnedFromCheckout, confirmedPro, confirmStartedAt, navigate, queryClient, teamId])
 
   const createCheckout = useMutation({
     mutationFn: () => api.billing.createCheckout(teamId),
@@ -732,104 +764,151 @@ function BillingTab() {
     teamMembers: { current: 0, max: fallback.teamMembers },
   }
 
-  return (
-    <div className="border border-border">
-      <div className="border-b border-border px-6 py-5">
-        <h2 className="font-display text-lg font-semibold text-text-primary">Billing & Plan</h2>
-        <p className="mt-1 text-[13px] text-text-secondary">
-          Manage your subscription and payment method.
-        </p>
-      </div>
+  const now = new Date()
+  const monthLabel = `1 to ${now.getUTCDate()} ${now.toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' })}`
 
-      <div className="border-b border-border bg-surface px-6 py-5">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium text-text-primary">Current Plan</p>
-            <p className="mt-1 font-display text-2xl font-semibold text-text-primary">{planData.name}</p>
-            <p className="mt-1.5 text-[13px] text-text-secondary">
-              {planData.description}
-            </p>
-            {!isPending && billing?.status && (
-              <p className="mt-2 text-[13px] capitalize text-text-secondary">
-                Status: {billing.status}
-              </p>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {canManageBilling && !isPro && (
-              <button
-                type="button"
-                onClick={() => createCheckout.mutate()}
-                disabled={createCheckout.isPending || !teamId}
-                className="bg-brand px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50"
-              >
-                Upgrade to Pro · ${PRO_MONTHLY}/mo
-              </button>
-            )}
-            {canManageBilling && (isPro || hasBillingAccount) && (
-              <button
-                type="button"
-                onClick={() => openPortal.mutate()}
-                disabled={openPortal.isPending || !teamId}
-                className={
-                  isPro
-                    ? 'bg-brand px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50'
-                    : 'border border-border px-4 py-2 text-[13px] font-medium text-text-primary transition-colors hover:bg-bg disabled:opacity-50'
-                }
-              >
-                Manage Billing
-              </button>
-            )}
-          </div>
+  return (
+    <div className="flex flex-col gap-6">
+      {returnedFromCheckout && !confirmedPro && (
+        <div role="status" className="flex items-start gap-3 border border-border bg-panel px-4 py-3">
+          {confirming ? (
+            <span aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-border border-t-text-primary" />
+          ) : (
+            <ToneIcon tone="warn" className="mt-0.5 h-4 w-4" />
+          )}
+          <p className="text-[13px] text-text-primary">
+            {confirming
+              ? 'Payment received. Waiting for Dodo Payments to confirm it; this page updates on its own, usually within a minute.'
+              : "Dodo Payments hasn't confirmed the payment yet. Refresh this page in a few minutes. If you still see Free, contact us and include the email you paid with."}
+          </p>
         </div>
-        {error && (
-          <p className="mt-3 text-sm text-brand-text">
-            Failed to load billing info. Please refresh and try again.
+      )}
+
+      <section aria-labelledby="plan-title" className="border border-border bg-panel">
+        <div className="flex flex-wrap items-start justify-between gap-4 px-6 py-5">
+          <div className="flex max-w-[600px] flex-col gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text-muted">Current plan</span>
+            <div className="flex flex-wrap items-baseline gap-3">
+              <h2 id="plan-title" className="font-display text-[28px] font-semibold text-text-primary">
+                {planData.name}
+              </h2>
+              <span className="text-sm text-text-secondary">{isPro ? `$${PRO_MONTHLY} a month` : '$0'}</span>
+              {!isPending && billing?.status && isPro && (
+                <span className="inline-flex items-center gap-1.5 text-[13px] capitalize text-text-secondary">
+                  <ToneIcon tone={billing.status === 'active' ? 'ok' : 'warn'} />
+                  {billing.status}
+                </span>
+              )}
+            </div>
+            <p className="text-[13px] text-text-secondary">{planData.description}</p>
+          </div>
+          {canManageBilling && (isPro || hasBillingAccount) && (
+            <button type="button" onClick={() => openPortal.mutate()} disabled={openPortal.isPending || !teamId} className={btnSecondary}>
+              Manage billing
+            </button>
+          )}
+        </div>
+        {isPro && (
+          <p className="border-t border-border px-6 py-3 text-[13px] text-text-muted">
+            Billed monthly through Dodo Payments. Manage billing opens their billing portal, where you change or cancel
+            the subscription.
           </p>
         )}
-      </div>
+        {error && (
+          <div className="border-t border-border px-6 py-3">
+            <ErrorText>Couldn't load the billing details. Refresh the page to try again.</ErrorText>
+          </div>
+        )}
+      </section>
 
-      <div className="px-6 py-5">
-        <h3 className="font-display text-base font-semibold text-text-primary">Usage this month</h3>
-        <div className="mt-4 space-y-4">
-          <UsageMeter label="Products" current={meters.products.current} max={meters.products.max} />
+      <section aria-labelledby="usage-title" className="border border-border bg-panel">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border px-6 py-3.5">
+          <h2 id="usage-title" className="text-xs font-semibold uppercase tracking-[0.08em] text-text-secondary">
+            Usage this month
+          </h2>
+          <span className="text-[13px] text-text-muted">{monthLabel}</span>
+        </div>
+        <div className="grid grid-cols-1 gap-px bg-border md:grid-cols-3">
+          <UsageMeter
+            label="Products"
+            current={meters.products.current}
+            max={meters.products.max}
+            note={meters.products.max === null ? 'No limit on Pro.' : 'Pro has unlimited products.'}
+          />
           <UsageMeter
             label="API calls"
             current={meters.apiHits.current}
             max={meters.apiHits.max}
             included={isPro ? PRO_FAIR_USE_API_HITS_PER_MONTH : undefined}
+            note={
+              isPro
+                ? `Need more than ${PRO_FAIR_USE_API_HITS_PER_MONTH / 1_000_000} million a month? Contact us.`
+                : meters.apiHits.max !== null
+                  ? `Live calls only. At ${formatLimit(meters.apiHits.max)} the banner shows nothing until the 1st (UTC).`
+                  : undefined
+            }
           />
           <UsageMeter
             label="Team members"
             current={meters.teamMembers.current}
             max={meters.teamMembers.max}
+            note={meters.teamMembers.max === null ? 'No limit on Pro.' : 'Pro has unlimited members.'}
+            // A solo workspace sits at 1 of 1 from the start: not a warning.
+            warnAtLimit={false}
           />
         </div>
+      </section>
 
-        {/* Upgrade nudge — a Free org that has maxed out a consumption cap
-            (products or monthly API hits) is the moment to convert. Team seats
-            are excluded: a solo user sits at 1/1 by default, which isn't a
-            meaningful "hit a limit" signal (the Team tab nudges on that). */}
-        {usage && !isPro && atConsumptionLimit(usage) && (
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border border-brand/30 bg-brand-light px-4 py-3">
-            <p className="text-sm text-text-primary">
-              You've hit a Free plan limit. Pro lifts it: unlimited products and team
-              members and {PRO_FAIR_USE_API_HITS_PER_MONTH / 1_000_000} million API calls a
-              month, for ${PRO_MONTHLY}/month.
-            </p>
+      {!isPro && (
+        <section aria-labelledby="compare-title" className="border border-border bg-panel">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-3.5">
+            <h2 id="compare-title" className="text-xs font-semibold uppercase tracking-[0.08em] text-text-secondary">
+              Free and Pro
+            </h2>
             {canManageBilling && (
-              <button
-                type="button"
-                onClick={() => createCheckout.mutate()}
-                disabled={createCheckout.isPending || !teamId}
-                className="shrink-0 bg-brand px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50"
-              >
-                Upgrade to Pro
+              <button type="button" onClick={() => createCheckout.mutate()} disabled={createCheckout.isPending || !teamId} className={btnPrimary}>
+                Upgrade to Pro · ${PRO_MONTHLY}/mo
               </button>
             )}
           </div>
-        )}
-      </div>
+          {/* A Free workspace that used up products or this month's API calls
+              hears it here first. Team seats are left out: a solo user sits at
+              1 of 1, which isn't a limit worth calling out. */}
+          {usage && atConsumptionLimit(usage) && (
+            <p className="flex items-start gap-2.5 border-b border-border bg-warning-light px-6 py-3 text-[13px] text-text-primary">
+              <ToneIcon tone="warn" className="mt-0.5 h-3.5 w-3.5" />
+              You've reached a Free plan limit. Pro lifts it.
+            </p>
+          )}
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs text-text-muted">
+                <th scope="col" className="px-6 py-2.5 font-semibold">
+                  <span className="sr-only">Limit</span>
+                </th>
+                <th scope="col" className="px-4 py-2.5 font-semibold">Free</th>
+                <th scope="col" className="px-6 py-2.5 font-semibold text-text-primary">Pro</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ['Products', formatLimit(FREE.products), 'Unlimited'],
+                ['API calls a month', formatLimit(FREE.apiHitsPerMonth), `${PRO_FAIR_USE_API_HITS_PER_MONTH / 1_000_000} million, contact us for more`],
+                ['Team members', formatLimit(FREE.teamMembers), 'Unlimited'],
+                ['Analytics history', `${FREE.analyticsRetentionDays} days`, `${PLAN_LIMITS.pro.analyticsRetentionDays} days`],
+                ['GoPayLocal link on the banner', 'Shown', 'Removed'],
+              ].map(([label, free, pro]) => (
+                <tr key={label} className="border-b border-border">
+                  <th scope="row" className="px-6 py-2.5 text-left font-normal text-text-secondary">{label}</th>
+                  <td className="px-4 py-2.5 text-text-primary">{free}</td>
+                  <td className="px-6 py-2.5 text-text-primary">{pro}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="px-6 py-3 text-[13px] text-text-muted">Every feature is on both plans. Pro is billed monthly; cancel any time.</p>
+        </section>
+      )}
     </div>
   )
 }
@@ -849,6 +928,8 @@ function UsageMeter({
   current,
   max: cap,
   included,
+  note,
+  warnAtLimit = true,
 }: {
   label: string
   current: number
@@ -858,42 +939,32 @@ function UsageMeter({
    * API calls). Shown like a cap; reaching it blocks nothing.
    */
   included?: number
+  note?: string
+  warnAtLimit?: boolean
 }) {
   const max = cap ?? included ?? null
-  // Unlimited: show the count and "Unlimited", no bar (there is no ratio).
-  if (max === null) {
-    return (
-      <div>
-        <div className="flex justify-between text-[13px] text-text-secondary">
-          <span>{label}</span>
-          <span className="font-mono tabular-nums text-text-primary">
-            {current.toLocaleString()} <span className="text-text-secondary">/ Unlimited</span>
-          </span>
-        </div>
-      </div>
-    )
-  }
-
-  const percentage = max > 0 ? Math.min((current / max) * 100, 100) : 100
+  const percentage = max === null ? 0 : max > 0 ? Math.min((current / max) * 100, 100) : 100
+  // Amber once a real cap is nearly used up; an allowance that blocks nothing stays green.
+  const bar = warnAtLimit && cap !== null && percentage >= 80 ? 'bg-warning' : 'bg-success'
+  const of = max === null ? 'unlimited' : included !== undefined && cap === null ? `of ${formatAllowance(max)} included` : `of ${formatLimit(max)}`
 
   return (
-    <div>
-      <div className="flex justify-between text-[13px] text-text-secondary">
-        <span>{label}</span>
-        <span className="font-mono tabular-nums text-text-primary">
-          {current.toLocaleString()} / {formatLimit(max)}
-        </span>
-      </div>
-      <div className="mt-1 h-1.5 overflow-hidden bg-border">
-        <div
-          className={`h-1.5 transition-all ${
-            percentage > 80 ? 'bg-brand' : 'bg-text-primary'
-          }`}
-          style={{ width: `${percentage}%` }}
-        />
-      </div>
+    <div className="flex flex-col gap-2 bg-panel px-6 py-4">
+      <span className="text-[13px] text-text-secondary">{label}</span>
+      <span className="font-display text-2xl font-semibold tabular-nums text-text-primary">
+        {current.toLocaleString()} <span className="font-body text-[13px] font-normal text-text-muted">{of}</span>
+      </span>
+      <span aria-hidden="true" className="block h-1.5 bg-tile">
+        {max !== null && <span className={`block h-1.5 ${bar}`} style={{ width: `${Math.max(percentage, current > 0 ? 1 : 0)}%` }} />}
+      </span>
+      {note && <span className="text-xs text-text-muted">{note}</span>}
     </div>
   )
+}
+
+/** "20 million" rather than "20,000,000". */
+function formatAllowance(n: number): string {
+  return n >= 1_000_000 && n % 1_000_000 === 0 ? `${n / 1_000_000} million` : n.toLocaleString()
 }
 
 // ── API Keys Tab ─────────────────────────────────────────────────────────────
@@ -974,10 +1045,10 @@ function ApiKeysTab() {
         </div>
       )}
 
-      <div className="border border-border">
+      <div className="border border-border bg-panel">
         <div className="flex items-center justify-between border-b border-border px-6 py-5">
           <div>
-            <h2 className="font-display text-lg font-semibold text-text-primary">API Keys</h2>
+            <h2 className="font-display text-lg font-semibold text-text-primary">API keys</h2>
             <p className="mt-1 text-[13px] text-text-secondary">
               Use these keys to authenticate API requests.
             </p>
@@ -986,9 +1057,9 @@ function ApiKeysTab() {
             <button
               type="button"
               onClick={() => setShowCreate(true)}
-              className="bg-brand px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-brand/90"
+              className={btnPrimary}
             >
-              Create Key
+              Create key
             </button>
           )}
         </div>
@@ -1007,7 +1078,7 @@ function ApiKeysTab() {
                   value={keyName}
                   onChange={(e) => setKeyName(e.target.value)}
                   placeholder="e.g. Production"
-                  className="mt-1 block w-full border border-border px-3 py-1.5 text-sm text-text-primary focus:border-brand focus:outline-none"
+                  className="mt-1 block w-full border border-control px-3 py-1.5 text-sm text-text-primary focus:border-brand focus:outline-none"
                 />
               </div>
               <div>
@@ -1030,9 +1101,9 @@ function ApiKeysTab() {
                 type="button"
                 onClick={() => createKey.mutate()}
                 disabled={!keyName || createKey.isPending}
-                className="bg-brand px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50"
+                className={btnPrimary}
               >
-                {createKey.isPending ? 'Creating...' : 'Create'}
+                {createKey.isPending ? 'Creating…' : 'Create'}
               </button>
               <button
                 type="button"
@@ -1040,7 +1111,7 @@ function ApiKeysTab() {
                   setShowCreate(false)
                   setKeyName('')
                 }}
-                className="border border-border px-4 py-1.5 text-sm font-medium text-text-primary hover:bg-surface"
+                className={btnSecondary}
               >
                 Cancel
               </button>
@@ -1060,7 +1131,7 @@ function ApiKeysTab() {
               You need a public key for the browser embed snippet, and a secret key for
               server-to-server calls.{' '}
               {canManageKeys
-                ? 'Create one with "Create Key" above — the secret is shown only once.'
+                ? 'Create one with "Create key" above — the secret is shown only once.'
                 : 'Ask the workspace owner or an admin to create one.'}
             </p>
           </div>
@@ -1072,8 +1143,8 @@ function ApiKeysTab() {
                 <th className="px-6 py-3 text-left text-[13px] font-semibold text-text-secondary">Key</th>
                 <th className="px-6 py-3 text-left text-[13px] font-semibold text-text-secondary">Type</th>
                 <th className="px-6 py-3 text-left text-[13px] font-semibold text-text-secondary">Created</th>
-                <th className="px-6 py-3 text-left text-[13px] font-semibold text-text-secondary">Created By</th>
-                <th className="px-6 py-3 text-left text-[13px] font-semibold text-text-secondary">Last Used</th>
+                <th className="px-6 py-3 text-left text-[13px] font-semibold text-text-secondary">Created by</th>
+                <th className="px-6 py-3 text-left text-[13px] font-semibold text-text-secondary">Last used</th>
                 <th className="px-6 py-3" />
               </tr>
             </thead>
@@ -1091,7 +1162,7 @@ function ApiKeysTab() {
                     <span
                       className={`px-2 py-0.5 text-xs font-medium ${
                         key.keyType === 'secret'
-                          ? 'bg-brand-light text-brand-text'
+                          ? 'border border-control text-text-primary'
                           : 'bg-surface text-text-secondary'
                       }`}
                     >
@@ -1154,7 +1225,7 @@ function SecretKeyUsage({ teamId }: { teamId: string }) {
   }
 
   return (
-    <div className="border border-border">
+    <div className="border border-border bg-panel">
       <div className="border-b border-border px-6 py-5">
         <h2 className="font-display text-lg font-semibold text-text-primary">Calling the API from your server</h2>
         <p className="mt-1 text-[13px] text-text-secondary">
@@ -1173,9 +1244,9 @@ function SecretKeyUsage({ teamId }: { teamId: string }) {
             <button
               type="button"
               onClick={() => copy('id', teamId)}
-              className="shrink-0 border border-border px-3 py-1.5 text-[13px] font-medium text-text-primary hover:bg-surface"
+              className={`${btnSecondary} h-9 shrink-0`}
             >
-              {copied === 'id' ? 'Copied!' : 'Copy'}
+              {copied === 'id' ? 'Copied' : 'Copy'}
             </button>
           </div>
         </div>
@@ -1188,9 +1259,9 @@ function SecretKeyUsage({ teamId }: { teamId: string }) {
             <button
               type="button"
               onClick={() => copy('curl', curlExample)}
-              className="shrink-0 border border-border px-3 py-1.5 text-[13px] font-medium text-text-primary hover:bg-surface"
+              className={`${btnSecondary} h-9 shrink-0`}
             >
-              {copied === 'curl' ? 'Copied!' : 'Copy'}
+              {copied === 'curl' ? 'Copied' : 'Copy'}
             </button>
           </div>
         </div>
