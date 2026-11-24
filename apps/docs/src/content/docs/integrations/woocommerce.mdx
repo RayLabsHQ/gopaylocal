@@ -44,7 +44,7 @@ To show the banner on the site itself, add the script as described in [WordPress
    - **API Key:** the consumer key, a colon, then the consumer secret, as `ck_…:cs_…`.
    - **Store URL:** your store's address, for example `https://shop.example.com`.
 
-   Click **Test** on the WooCommerce card to check the key.
+   GoPayLocal checks the key with your store before saving it. **Test connection** on the WooCommerce card checks it again later.
 
 3. **Use it in a campaign**
 
@@ -112,5 +112,5 @@ Refunds and cancellations after payment are not subtracted.
 - **Redirects aren't followed.** GoPayLocal never sends your key to another address. If your store redirects (for example from `shop.example.com` to `www.shop.example.com`), connect with the address it redirects to; the error message names it.
 - **Firewalls and security plugins** can block API requests from GoPayLocal. Allow requests to `/wp-json/wc/v3/` on your store.
 - **The key is sent only in the `Authorization` header.** Some servers (often FastCGI setups) drop that header, and WooCommerce then rejects a correct key. WooCommerce's [fallback](https://developer.woocommerce.com/docs/apis/rest-api/) of putting the key in the URL isn't used, because URLs end up in logs. Your host has to pass the header through.
-- **Large coupon lists.** The **Test** button and coupon sync read all of your store's coupons, 100 at a time. They stop with an error in a store with more than 5,000 coupons.
+- **Large coupon lists.** The key check when you connect, **Test connection** and coupon sync read all of your store's coupons, 100 at a time. They stop with an error in a store with more than 5,000 coupons, so such a store can't be connected.
 - **Timeouts.** Each request to your store must finish within 15 seconds.

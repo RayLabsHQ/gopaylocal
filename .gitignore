@@ -23,6 +23,7 @@ dist/
 .playwright-mcp/
 test-results/
 playwright-report/
+e2e/screenshots/out/
 
 # Internal working docs — never publish
 /ACTION_REQUIRED.md

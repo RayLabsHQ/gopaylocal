@@ -1,4 +1,9 @@
 import * as React from 'react'
+import { useModalFocus } from '~/lib/use-modal-focus'
+
+// DialogTitle takes its id from here, so every dialog is named by its title
+// (aria-labelledby) without each caller wiring ids.
+const DialogTitleId = React.createContext<string | undefined>(undefined)
 
 function Dialog({
   open,
@@ -11,40 +16,27 @@ function Dialog({
   children: React.ReactNode
   size?: 'md' | 'lg'
 }) {
-  React.useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
-    }
-    return () => {
-      document.body.style.overflow = ''
-    }
-  }, [open])
-
-  React.useEffect(() => {
-    if (!open) return
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onOpenChange(false)
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [open, onOpenChange])
+  const titleId = React.useId()
+  const panelRef = React.useRef<HTMLDivElement>(null)
+  useModalFocus(panelRef, open, () => onOpenChange(false))
 
   if (!open) return null
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className="fixed inset-0 bg-black/70"
         onClick={() => onOpenChange(false)}
       />
-      <div className={`relative z-[51] max-h-[calc(100dvh-2rem)] w-full overflow-y-auto border border-border bg-bg p-6 shadow-lg ${size === 'lg' ? 'max-w-lg' : 'max-w-md'}`}>
-        {children}
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className={`relative z-[51] max-h-[calc(100dvh-2rem)] w-full overflow-y-auto border border-border bg-bg p-6 shadow-lg outline-none ${size === 'lg' ? 'max-w-lg' : 'max-w-md'}`}
+      >
+        <DialogTitleId.Provider value={titleId}>{children}</DialogTitleId.Provider>
       </div>
     </div>
   )
@@ -55,8 +47,9 @@ function DialogHeader({ children }: { children: React.ReactNode }) {
 }
 
 function DialogTitle({ children }: { children: React.ReactNode }) {
+  const id = React.useContext(DialogTitleId)
   return (
-    <h2 className="font-display text-lg font-semibold text-text-primary">{children}</h2>
+    <h2 id={id} className="font-display text-lg font-semibold text-text-primary">{children}</h2>
   )
 }
 

@@ -191,8 +191,8 @@ describe("POST /integrations: webhook provisioning", () => {
 
     expect(res.status).toBe(200);
     expect(state.recorder.queries[1]!.sql).toMatch(/"webhook_endpoint_id" = \$\d+, "webhook_secret_enc" = \$\d+/);
-    // Old endpoint removed with the OLD key, new one created with the new key.
-    expect(configs.map((c) => c.config.apiKey)).toEqual(["sk_live_old", "sk_live_new"]);
+    // New key checked first, old endpoint removed with the OLD key, new one created with the new key.
+    expect(configs.map((c) => c.config.apiKey)).toEqual(["sk_live_new", "sk_live_old", "sk_live_new"]);
     expect(providers.live.deleteWebhook).toHaveBeenCalledWith("we_live_old");
     expect(providers.live.provisionWebhook).toHaveBeenCalledOnce();
   });
@@ -205,7 +205,10 @@ describe("POST /integrations: webhook provisioning", () => {
 
     expect(res.status).toBe(200);
     expect(state.recorder.queries[1]!.sql.split(" where ")[0]).not.toContain("webhook_endpoint_id");
-    expect(state.create).not.toHaveBeenCalled();
+    // Only the key check talks to Stripe; the endpoint is neither removed nor re-created.
+    expect(configs.map((c) => c.config.apiKey)).toEqual(["sk_live"]);
+    expect(providers.live.deleteWebhook).not.toHaveBeenCalled();
+    expect(providers.live.provisionWebhook).not.toHaveBeenCalled();
     expect(((await res.json()) as any).data.webhookSetup).toEqual({ status: "active", environment: "live" });
   });
 
@@ -268,6 +271,68 @@ describe("POST /integrations: webhook provisioning", () => {
     expect(res.status).toBe(201);
     expect(providers.live.deleteWebhook).toHaveBeenCalledWith("we_live_new");
     expect(((await res.json()) as any).data.webhookSetup.status).toBe("failed");
+  });
+});
+
+describe("POST /integrations: the key is checked before it is saved", () => {
+  it("lists discounts with the new key, in the chosen environment, before writing anything", async () => {
+    state.recorder = createSqlRecorder([[], [row()], [row({ webhookEndpointId: "we_live_new" })]]);
+
+    const res = await client().request(BASE, { method: "POST", json: { provider: "stripe", accessToken: "sk_live" } });
+
+    expect(res.status).toBe(201);
+    expect(configs[0]!.config).toMatchObject({ apiKey: "sk_live", environment: "live" });
+    expect(providers.live.listDiscounts).toHaveBeenCalledOnce();
+  });
+
+  it("refuses a key the platform rejects with a 400 that passes on the platform's reason, and saves nothing", async () => {
+    providers.live.listDiscounts.mockRejectedValueOnce(
+      new ProviderAuthError("stripe", "The provided key does not have the required permissions"),
+    );
+    state.recorder = createSqlRecorder([[]]);
+
+    const res = await client().request(BASE, { method: "POST", json: { provider: "stripe", accessToken: "rk_live_x" } });
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string; code: string };
+    expect(body.code).toBe("key_rejected");
+    expect(body.error).toContain("does not have the required permissions");
+    // Only the lookup of an existing integration ran: no insert, no update.
+    expect(state.recorder.queries).toHaveLength(1);
+    expect(providers.live.provisionWebhook).not.toHaveBeenCalled();
+  });
+
+  it("leaves the saved key in place when a replacement is rejected", async () => {
+    providers.live.listDiscounts.mockRejectedValueOnce(new ProviderAuthError("stripe", "Invalid API Key provided"));
+    state.recorder = createSqlRecorder([[row({ webhookEndpointId: "we_live" })]]);
+
+    const res = await client().request(BASE, { method: "POST", json: { provider: "stripe", accessToken: "sk_live_typo" } });
+
+    expect(res.status).toBe(400);
+    expect(state.recorder.queries).toHaveLength(1);
+    expect(providers.live.deleteWebhook).not.toHaveBeenCalled();
+  });
+
+  it("answers 502 and saves nothing when the platform can't be asked", async () => {
+    providers.live.listDiscounts.mockRejectedValueOnce(new ProviderError("stripe", "listDiscounts", "Service unavailable", 503));
+    state.recorder = createSqlRecorder([[]]);
+
+    const res = await client().request(BASE, { method: "POST", json: { provider: "stripe", accessToken: "sk_live" } });
+
+    expect(res.status).toBe(502);
+    expect(await res.json()).toMatchObject({ code: "key_unchecked" });
+    expect(state.recorder.queries).toHaveLength(1);
+  });
+
+  it("checks the key with the normalized account id it will be saved with", async () => {
+    state.recorder = createSqlRecorder([[], [row({ provider: "chargebee", providerAccountId: "acme" })], [row()]]);
+
+    await client().request(BASE, {
+      method: "POST",
+      json: { provider: "chargebee", accessToken: "k", providerAccountId: "https://Acme.chargebee.com/" },
+    });
+
+    expect(configs[0]!.config).toMatchObject({ apiKey: "k", siteId: "acme" });
   });
 });
 

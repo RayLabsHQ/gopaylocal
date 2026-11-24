@@ -79,7 +79,7 @@ GET /v1/teams/:orgId/integrations
 
 ## Connect Integration
 
-Creates the integration, or updates the credentials of one environment of an existing one. GoPayLocal then registers the redemption webhook at the provider for that environment.
+Creates the integration, or updates the credentials of one environment of an existing one. GoPayLocal first checks the key with the provider (it lists discounts, as [Test Connection](#test-connection) does) and saves nothing if that fails. It then registers the redemption webhook at the provider for that environment.
 
 ```
 POST /v1/teams/:orgId/integrations
@@ -141,7 +141,7 @@ POST /v1/teams/:orgId/integrations
 
 `webhookSetup.status` is `active`, `failed` (with an `error` message; the credentials are still saved, and the failure is also recorded in `health`), or `unsupported` (the provider has no API to register webhooks). The other environment's webhook is never touched. If you change the key or account of an environment, its old webhook is removed and a new one registered.
 
-Errors: `400` with `details` when validation fails (for example a missing Chargebee site or Whop account id); `error` carries the reason when there is a specific one, otherwise `"Validation failed"`.
+Errors: `400` with `details` when validation fails (for example a missing Chargebee site or Whop account id); `error` carries the reason when there is a specific one, otherwise `"Validation failed"`. `400` with `"code": "key_rejected"` when the provider refuses the key (wrong, revoked, for the other environment, or missing a permission), and `502` with `"code": "key_unchecked"` when the provider couldn't be asked; `error` carries the provider's message. In both cases nothing is saved, and an existing key for that environment stays in place.
 
 ## Re-create Webhook
 

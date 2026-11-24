@@ -27,11 +27,11 @@ GoPayLocal creates percentage discount codes in your Dodo Payments account and c
 
    In the GoPayLocal dashboard, go to **Integrations**, set the environment switch to **Live** or **Test**, and click **Connect** on the **Dodo Payments** card. Paste the key for that mode.
 
-   GoPayLocal checks the key and sets up redemption tracking. **Test** on the card checks the key again later.
+   GoPayLocal checks the key with Dodo before saving it, then sets up redemption tracking. **Test connection** on the card checks the key again later.
 
 3. **Import products (optional)**
 
-   Click **Import** on the card to bring your Dodo products into GoPayLocal.
+   Open **Manage** on the card and click **Import live products** (or **Import test products**) to bring your Dodo products into GoPayLocal.
 
 4. **Create a campaign**
 
@@ -76,7 +76,7 @@ Static payment links (`checkout.dodopayments.com/buy/...`) take no discount code
 
 ## Test Mode
 
-Connect a test-mode key while the dashboard is on **Test**. Test campaigns then create their codes in your Dodo test mode. A test key sent as a live key (or the other way round) is refused, and the card shows Dodo's error message.
+Connect a test-mode key while the dashboard is on **Test**. Test campaigns then create their codes in your Dodo test mode. A test key sent as a live key (or the other way round) is refused when you connect, and the Connect panel shows Dodo's error message.
 
 ## Redemption Tracking
 

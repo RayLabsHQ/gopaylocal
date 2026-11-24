@@ -30,7 +30,8 @@
     "db:test:migrate": "DATABASE_URL=postgresql://gopaylocal_test:gopaylocal_test@localhost:5434/gopaylocal_test pnpm --filter @gopaylocal/api db:migrate",
     "clean": "pnpm -r clean",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "screenshots": "node e2e/screenshots/capture.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261117.1",

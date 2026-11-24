@@ -10,7 +10,7 @@ browser.
 | File | What it covers | Needs |
 |---|---|---|
 | `auth.test.ts` | Password test login at `/login?pw=1` lands on the dashboard; a wrong password shows an error | Local stack |
-| `integrations.test.ts` | Connect Dodo Payments in test mode, then "Test" the connection | Local stack + `DODO_TEST_API_KEY` (skipped without it) |
+| `integrations.test.ts` | Connect Dodo Payments in test mode, then "Test connection" | Local stack + `DODO_TEST_API_KEY` (skipped without it) |
 
 ## How accounts are created
 

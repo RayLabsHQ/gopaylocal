@@ -33,9 +33,9 @@ The Creem integration is implemented and covered by automated tests against Cree
 
 2. **Connect in GoPayLocal**
 
-   In the GoPayLocal dashboard, pick **Live** or **Test** in the sidebar switch, open **Integrations**, find **Creem** and click **Connect**. Paste the key for that mode. A live key goes in **Live** and a `creem_test_` key goes in **Test**. A test key saved as live doesn't work: every call with it fails with an error that says so.
+   In the GoPayLocal dashboard, pick **Live** or **Test** in the sidebar switch, open **Integrations**, find **Creem** and click **Connect**. Paste the key for that mode. A live key goes in **Live** and a `creem_test_` key goes in **Test**. A test key entered as live is refused when you connect, with Creem's error.
 
-   Click **Test** on the Creem card to check the key.
+   GoPayLocal checks the key with Creem before saving it. **Test connection** on the Creem card checks it again later.
 
 3. **Use it in a campaign**
 

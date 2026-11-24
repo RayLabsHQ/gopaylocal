@@ -72,15 +72,15 @@ You can connect several providers at once, one connection per provider. Each cam
 
 1. Go to **Integrations** in the [dashboard](https://app.gopaylocal.com).
 2. Set the environment switch to **Live** or **Test**.
-3. Click **Connect** on the provider's card.
+3. Click **Connect** next to the provider. A panel opens with the steps for that provider.
 4. Enter the API key for that environment. Chargebee also needs your site name, Whop your account ID (`biz_...`) and WooCommerce your store URL.
-5. Click **Connect**. To add the other environment's key later, switch environments and click **Add test key** or **Add live key**.
+5. Click **Verify and connect**. To add the other environment's key later, open **Manage** on the provider's card and click **Add test key** or **Add live key**.
 
-The Connect dialog lists the permissions the key needs, and so does each provider's page. Where the provider lets you, create a key with only those.
+The Connect panel lists the permissions the key needs, and so does each provider's page. Where the provider lets you, create a key with only those.
 
 GoPayLocal encrypts each key (AES-256-GCM) before storing it. Only GoPayLocal's server uses it, to call your provider, and neither the dashboard nor the API ever shows it again.
 
-When you connect, GoPayLocal checks the key and sets up redemption tracking: it creates a webhook in your provider account that points back to GoPayLocal. If that step fails, the provider is still connected and its card says so; you can retry from the card. **Test** checks the key again at any time.
+When you connect, GoPayLocal first checks the key with the provider, using the same call as **Test connection**. A key the provider refuses is not saved, and the panel shows the provider's reason; a replacement key that is refused leaves the saved key in place. Then GoPayLocal sets up redemption tracking: it creates a webhook in your provider account that points back to GoPayLocal. If that step fails, the provider is still connected and its card says so, with a button to try again. **Test connection** on the card checks the saved keys again at any time.
 
 Only the workspace owner and admins can connect and disconnect providers. See [Team](/dashboard/team/).
 

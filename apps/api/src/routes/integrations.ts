@@ -5,6 +5,7 @@ import type { AppEnv } from "../bindings";
 import { createDb, type Database } from "../db";
 import { campaigns, coupons, integrations, products } from "../db/schema";
 import { createIntegrationSchema, normalizeProviderAccountId } from "@gopaylocal/shared/validation";
+import type { IntegrationProvider } from "@gopaylocal/shared";
 import { supportedCurrency } from "@gopaylocal/shared/currency";
 import { encrypt, decrypt, tokenEncryptionSecret } from "../lib/crypto";
 import {
@@ -18,6 +19,7 @@ import {
   webhookSlotColumns,
   webhookSlotFor,
   type PaymentProvider,
+  type ProviderConfig,
 } from "../services/providers";
 import { getProductLimitInfo } from "../lib/limits";
 import { errorSummary, logBannerPushFailure } from "../lib/log";
@@ -109,6 +111,31 @@ async function providerForIntegration(
   if (!enc) throw new Error(`No ${environment} credentials stored`);
   const apiKey = await decrypt(enc, tokenEncryptionSecret(c.env));
   return createProvider(integration.provider, providerConfigFor(integration, environment, apiKey));
+}
+
+type KeyCheck = { ok: true } | { ok: false; status: 400 | 502; code: string; message: string };
+
+/**
+ * Asks the platform to list discounts with a key before the key is stored:
+ * the same call as the Test button, with the same permissions. A key the
+ * platform refuses (wrong, revoked, or missing a permission that listing
+ * needs) is reported and nothing is saved. The platform's own message is
+ * passed on, because it usually names what is missing.
+ */
+async function checkKey(provider: IntegrationProvider, config: ProviderConfig): Promise<KeyCheck> {
+  try {
+    await createProvider(provider, config).listDiscounts();
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof ProviderAuthError) {
+      return { ok: false, status: 400, code: "key_rejected", message: `The key was rejected: ${err.message}` };
+    }
+    if (err instanceof ProviderError) {
+      return { ok: false, status: 502, code: "key_unchecked", message: `Couldn't check the key: ${err.message}` };
+    }
+    console.error(`[integrations] key check failed for ${provider}:`, describeError(err));
+    return { ok: false, status: 502, code: "key_unchecked", message: "Couldn't check the key with the platform. Try again." };
+  }
 }
 
 function isNotFound(err: unknown): boolean {
@@ -279,11 +306,6 @@ app.post("/v1/teams/:orgId/integrations", requirePermission("integrations.manage
     const account = normalizeProviderAccountId(parsed.data.provider, parsed.data.providerAccountId, env);
     const providerAccountId = account.ok ? account.value : undefined;
 
-    const accessTokenEnc = await encrypt(parsed.data.accessToken, encryptionSecret);
-    const refreshTokenEnc = parsed.data.refreshToken
-      ? await encrypt(parsed.data.refreshToken, encryptionSecret)
-      : null;
-
     // Check for existing integration for this provider
     const [existing] = await db
       .select()
@@ -295,6 +317,22 @@ app.post("/v1/teams/:orgId/integrations", requirePermission("integrations.manage
         ),
       )
       .limit(1);
+
+    // Nothing is stored until the platform accepts the key, checked with the
+    // account id it will be saved with.
+    const check = await checkKey(parsed.data.provider, {
+      apiKey: parsed.data.accessToken,
+      environment: env,
+      siteId: providerAccountId,
+    });
+    if (!check.ok) {
+      return c.json({ error: check.message, code: check.code }, check.status);
+    }
+
+    const accessTokenEnc = await encrypt(parsed.data.accessToken, encryptionSecret);
+    const refreshTokenEnc = parsed.data.refreshToken
+      ? await encrypt(parsed.data.refreshToken, encryptionSecret)
+      : null;
 
     if (existing) {
       // Each environment has its own account id (test falls back to the live

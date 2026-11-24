@@ -20,7 +20,7 @@ https://api.gopaylocal.com/v1/webhooks/:provider/:integrationId/test   (test mod
 
 ## Automatic Setup
 
-When you connect a provider (or add credentials for the other environment), GoPayLocal registers the webhook URL at the provider through its API and stores the signing secret encrypted. You don't copy URLs or secrets by hand. The integration's `webhooks` field shows the state per environment, and **Re-create** in the dashboard (or [`POST .../webhook`](/api/integrations/#re-create-webhook)) replaces an endpoint, for example after fixing the API key's permissions.
+When you connect a provider (or add credentials for the other environment), GoPayLocal registers the webhook URL at the provider through its API and stores the signing secret encrypted. You don't copy URLs or secrets by hand. The integration's `webhooks` field shows the state per environment, and **Re-create webhook** in the dashboard (or [`POST .../webhook`](/api/integrations/#re-create-webhook)) replaces an endpoint, for example after fixing the API key's permissions.
 
 If registration fails, the integration still connects; the error is shown on the integration card and in its `health`, and no redemptions are counted in that environment until the webhook exists. Which events each provider sends, and the API key permissions registration needs, are on each provider's page under **Integrations**.
 

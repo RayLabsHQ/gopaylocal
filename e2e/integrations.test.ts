@@ -21,18 +21,20 @@ test.describe("Integrations — Dodo Payments (test mode)", () => {
   });
 
   async function connectDodo(page: import("@playwright/test").Page) {
-    const card = page.getByRole("heading", { name: "Dodo Payments", exact: true }).locator("..");
-    await card.getByRole("button", { name: "Connect", exact: true }).click();
+    await page.getByRole("button", { name: "Connect Dodo Payments" }).click();
 
-    const dialog = page.getByRole("dialog");
-    await expect(dialog.getByText("Connect Dodo Payments")).toBeVisible();
-    await expect(dialog.getByText(/saved for\s+test\s+mode/)).toBeVisible();
-    await dialog.getByLabel("API Key").fill(DODO_TEST_API_KEY!);
-    await dialog.getByRole("button", { name: "Connect", exact: true }).click();
+    const panel = page.getByRole("dialog", { name: "Connect Dodo Payments" });
+    await expect(panel.getByText(/Saved for test campaigns/)).toBeVisible();
+    await panel.getByLabel("API key").fill(DODO_TEST_API_KEY!);
+    await panel.getByRole("button", { name: "Verify and connect" }).click();
 
-    await expect(dialog).toBeHidden({ timeout: 15_000 });
-    await expect(page.getByText("Dodo Payments connected")).toBeVisible();
-    await expect(card.getByRole("button", { name: "Connected", exact: true })).toBeVisible();
+    // The API checks the key with Dodo before saving it.
+    await expect(panel.getByText("Key accepted")).toBeVisible({ timeout: 20_000 });
+    await panel.getByRole("button", { name: "Done" }).click();
+    await expect(panel).toBeHidden();
+
+    const card = page.getByRole("article", { name: "Dodo Payments" });
+    await expect(card.getByRole("button", { name: "Test connection" })).toBeVisible();
     return card;
   }
 
@@ -47,7 +49,7 @@ test.describe("Integrations — Dodo Payments (test mode)", () => {
     await page.goto("/dashboard/integrations");
     const card = await connectDodo(page);
 
-    await card.getByRole("button", { name: "Test", exact: true }).click();
-    await expect(page.getByText("Dodo Payments verified")).toBeVisible({ timeout: 15_000 });
+    await card.getByRole("button", { name: "Test connection" }).click();
+    await expect(page.getByText("Dodo Payments test key works")).toBeVisible({ timeout: 15_000 });
   });
 });

@@ -1,174 +1,65 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import {
-  api,
-  type Integration,
-  type IntegrationEnvironment,
-  type IntegrationHealthIssue,
-  type ProviderProduct,
-} from '~/lib/api'
+import { api, type Integration, type IntegrationEnvironment } from '~/lib/api'
 import { getActiveTeamId, useSession } from '~/lib/auth'
 import { useEnv } from '~/lib/env'
 import { usePermissions } from '~/lib/permissions'
 import type { IntegrationProvider } from '@gopaylocal/shared'
-import { CURRENCY_SYMBOLS, PROVIDER_KEY_ACCESS, providerCanImportProducts, providerHasTestMode } from '@gopaylocal/shared'
-import {
-  Dialog,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '~/components/ui/dialog'
+import { CURRENCY_SYMBOLS, providerHasTestMode } from '@gopaylocal/shared'
+import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '~/components/ui/dialog'
+import { PROVIDERS, providerLogo, providerName, type ProviderMeta } from '~/components/integrations/providers'
+import { ConnectPanel, type ConnectTarget } from '~/components/integrations/connect-panel'
+import { IntegrationCard, hasKey } from '~/components/integrations/integration-card'
+import { btnPrimary, btnSecondary, LockIcon, LogoTile } from '~/components/integrations/parts'
 
 export const Route = createFileRoute('/dashboard/integrations/')({
   component: IntegrationsPage,
 })
 
-// Providers whose API needs an account identifier besides the key. Must match
-// PROVIDERS_REQUIRING_ACCOUNT_ID in @gopaylocal/shared/validation, which also
-// normalizes what is typed here (e.g. a pasted Chargebee URL).
-type AccountIdField = { label: string; placeholder: string; help: string }
+type ImportTarget = { integrationId: string; environment: IntegrationEnvironment }
 
-const PROVIDERS: {
-  id: IntegrationProvider
-  name: string
-  description: string
-  placeholder: { live: string; test: string }
-  docsUrl: string
-  accountId?: AccountIdField
-}[] = [
-  {
-    id: 'stripe',
-    name: 'Stripe',
-    description: 'Creates PPP promotion codes in Stripe and records their redemptions.',
-    placeholder: { live: 'rk_live_...', test: 'rk_test_...' },
-    docsUrl: 'https://docs.stripe.com/keys/restricted-api-keys',
-  },
-  {
-    id: 'paddle',
-    name: 'Paddle',
-    description: 'Creates PPP discount codes in Paddle and records their redemptions.',
-    placeholder: { live: 'pdl_live_apikey_...', test: 'pdl_sdbx_apikey_...' },
-    docsUrl: 'https://developer.paddle.com/api-reference/about/api-keys',
-  },
-  {
-    id: 'gumroad',
-    name: 'Gumroad',
-    description: 'Creates PPP offer codes on your Gumroad products and records their redemptions.',
-    placeholder: { live: 'xxxxxxxx-xxxx-xxxx-xxxx...', test: 'xxxxxxxx-xxxx-xxxx-xxxx...' },
-    docsUrl: 'https://gumroad.com/api',
-  },
-  {
-    id: 'dodopayments',
-    name: 'Dodo Payments',
-    description: 'Creates PPP discount codes in Dodo Payments and records their redemptions.',
-    placeholder: { live: 'dodo_live_...', test: 'dodo_test_...' },
-    docsUrl: 'https://docs.dodopayments.com/api-reference/introduction',
-  },
-  {
-    id: 'chargebee',
-    name: 'Chargebee',
-    description: 'Creates PPP coupons in Chargebee and records their redemptions.',
-    placeholder: { live: 'live_...', test: 'test_...' },
-    docsUrl: 'https://www.chargebee.com/docs/billing/2.0/site-configuration/api_keys',
-    accountId: {
-      label: 'Site name',
-      placeholder: 'acme',
-      help: 'The name in {site}.chargebee.com. Use the same name for test mode; GoPayLocal adds -test itself.',
-    },
-  },
-  {
-    id: 'whop',
-    name: 'Whop',
-    description: 'Creates PPP promo codes in Whop and records their redemptions.',
-    placeholder: { live: 'whop_...', test: 'whop_...' },
-    docsUrl: 'https://docs.whop.com/api-reference/overview',
-    accountId: {
-      label: 'Whop account ID',
-      placeholder: 'biz_...',
-      help: 'The ID of your Whop account. It starts with biz_.',
-    },
-  },
-  {
-    id: 'polar',
-    name: 'Polar',
-    description: 'Creates PPP discount codes in Polar and records their redemptions.',
-    placeholder: { live: 'polar_oat_...', test: 'polar_oat_...' },
-    docsUrl: 'https://polar.sh/docs/integrate/oat',
-  },
-  {
-    id: 'creem',
-    name: 'Creem',
-    description: 'Creates PPP discount codes on your Creem products and records their redemptions.',
-    placeholder: { live: 'creem_...', test: 'creem_test_...' },
-    docsUrl: 'https://docs.creem.io/api-reference/introduction',
-  },
-  {
-    id: 'woocommerce',
-    name: 'WooCommerce',
-    description: 'Creates PPP coupons in your own WooCommerce store, entered by customers at cart or checkout, and records their redemptions.',
-    // No test mode (PROVIDERS_WITHOUT_TEST_MODE): in Test the card shows "Live only".
-    placeholder: { live: 'ck_...:cs_...', test: 'ck_...:cs_...' },
-    docsUrl: 'https://developer.woocommerce.com/docs/apis/rest-api/#generate-keys',
-    accountId: {
-      label: 'Store URL',
-      placeholder: 'https://shop.example.com',
-      help: "Your store's https:// address. Paste the key as ck_...:cs_... (consumer key, a colon, consumer secret). WooCommerce has no test mode, so connect it in Live.",
-    },
-  },
-]
-
-const HEALTH_AREA_LABELS: Record<IntegrationHealthIssue['area'], string> = {
-  coupon_sync: 'Discount codes',
-  webhook_setup: 'Redemption tracking',
-  webhook_delivery: 'Redemption tracking',
-  credentials: 'API key',
+function SectionTitle({ id, children, count }: { id: string; children: React.ReactNode; count?: number }) {
+  return (
+    <div className="flex items-baseline gap-2.5">
+      <h2 id={id} className="text-xs font-semibold uppercase tracking-[0.08em] text-text-secondary">
+        {children}
+      </h2>
+      {count !== undefined && <span className="text-xs text-text-muted">{count}</span>}
+    </div>
+  )
 }
 
-/** "Redemption tracking" line on a connected card. */
-function WebhookStatusLine({
-  integration,
-  environment,
-  onSetup,
-  pending,
+function ProviderTile({
+  provider,
+  env,
+  canManage,
+  onConnect,
 }: {
-  integration: Integration
-  /** The environment selected in the dashboard; each one has its own webhook. */
-  environment: IntegrationEnvironment
-  /** Omitted for roles without integrations.manage: the status shows, the button doesn't. */
-  onSetup?: () => void
-  pending: boolean
+  provider: ProviderMeta
+  env: IntegrationEnvironment
+  canManage: boolean
+  onConnect: () => void
 }) {
-  // Optional chaining: an API deployed before these fields existed omits them.
-  const status = integration.webhooks?.[environment]?.status
-  if (!status) return null
-  const label =
-    status === 'active'
-      ? `Tracking ${environment} redemptions`
-      : status === 'needs_attention'
-        ? 'Redemption tracking needs attention'
-        : 'Redemption tracking not set up'
-  const tone = status === 'active' ? 'text-text-secondary' : 'text-amber-400'
-  // Deliveries failing verification (or a provider that disabled the endpoint)
-  // are fixed by re-creating it, so offer that even when it looks active.
-  const deliveryTrouble = (integration.health ?? []).some(
-    (h) => h.area === 'webhook_delivery' && (h.environment ?? environment) === environment,
-  )
+  const liveOnly = env === 'test' && !providerHasTestMode(provider.id)
   return (
-    <div className="mt-2 flex items-center justify-between gap-2">
-      <span className={`text-xs font-medium ${tone}`}>{label}</span>
-      {onSetup && (status !== 'active' || deliveryTrouble) && (
-        <button
-          type="button"
-          onClick={onSetup}
-          disabled={pending}
-          className="border border-border px-2 py-0.5 text-xs font-medium text-text-primary transition-colors hover:bg-surface disabled:opacity-50"
-        >
-          {pending ? 'Setting up...' : status === 'missing' ? 'Set up' : 'Re-create'}
-        </button>
-      )}
+    <div className="flex items-center gap-3.5 border border-border bg-panel px-4 py-3.5">
+      <LogoTile src={providerLogo(provider.id)} />
+      <div className="min-w-0 flex-1">
+        <p className="font-display text-[15px] font-semibold text-text-primary">{provider.name}</p>
+        <p className="text-[13px] text-text-muted">{provider.summary}</p>
+      </div>
+      {canManage &&
+        (liveOnly ? (
+          <span className="text-[13px] text-text-muted" title={`${provider.name} has no test mode. Switch to Live to connect it.`}>
+            Live only
+          </span>
+        ) : (
+          <button type="button" onClick={onConnect} aria-label={`Connect ${provider.name}`} className={btnSecondary}>
+            Connect
+          </button>
+        ))}
     </div>
   )
 }
@@ -179,24 +70,28 @@ function IntegrationsPage() {
   const { data: session } = useSession()
   const teamId = getActiveTeamId(session)
   const { env } = useEnv()
-  // Everyone sees what is connected; connecting, testing, importing and
-  // disconnecting is integrations.manage (owner and admin).
-  const canManage = usePermissions().can('integrations.manage')
+  const permissions = usePermissions()
+  // Everyone sees what is connected; connecting, testing and disconnecting is
+  // integrations.manage, importing is integrations.import (owner and admin).
+  const canManage = permissions.can('integrations.manage')
+  const canImport = permissions.can('integrations.import')
 
-  const [connectProvider, setConnectProvider] = useState<IntegrationProvider | null>(null)
-  const [apiKey, setApiKey] = useState('')
-  const [accountId, setAccountId] = useState('')
+  const [connectTarget, setConnectTarget] = useState<ConnectTarget | null>(null)
+  const [importTarget, setImportTarget] = useState<ImportTarget | null>(null)
+  const [disconnectTarget, setDisconnectTarget] = useState<Integration | null>(null)
   const [testingId, setTestingId] = useState<string | null>(null)
-  const [webhookSetupId, setWebhookSetupId] = useState<string | null>(null)
-  const [confirmDisconnectId, setConfirmDisconnectId] = useState<string | null>(null)
-  const [importIntegrationId, setImportIntegrationId] = useState<string | null>(null)
+  const [webhookPending, setWebhookPending] = useState<{ id: string; env: IntegrationEnvironment } | null>(null)
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set())
 
-  const { data: integrations = [], isPending } = useQuery({
+  const integrationsQuery = useQuery({
     queryKey: ['integrations', teamId],
     queryFn: () => api.integrations.list(teamId),
     enabled: !!teamId,
   })
+  const connected = useMemo(
+    () => (integrationsQuery.data ?? []).filter((i) => i.status === 'active'),
+    [integrationsQuery.data],
+  )
 
   const { data: usage } = useQuery({
     queryKey: ['billing-usage', teamId],
@@ -204,50 +99,26 @@ function IntegrationsPage() {
     enabled: !!teamId,
   })
 
-  const connectMutation = useMutation({
-    mutationFn: ({
-      provider,
-      accessToken,
-      providerAccountId,
-    }: {
-      provider: IntegrationProvider
-      accessToken: string
-      providerAccountId?: string
-    }) =>
-      api.integrations.connect(teamId, provider, {
-        accessToken,
-        providerAccountId,
-        environment: env,
-      }),
-    onSuccess: (data) => {
-      const label = PROVIDERS.find((p) => p.id === connectProvider)?.name ?? connectProvider
-      queryClient.invalidateQueries({ queryKey: ['integrations', teamId] })
-      closeDialog()
-      if (data.webhookSetup?.status === 'failed') {
-        // The key is saved, but without the webhook no redemption is counted.
-        toast.warning(`${label} connected, but redemption tracking isn't set up`, {
-          description: data.webhookSetup.error || 'Use "Set up" on the integration card to try again.',
-        })
-        return
-      }
-      toast.success(`${label} connected`, {
-        description: `${env === 'live' ? 'Live' : 'Test'} API connection saved successfully.`,
-      })
-    },
-    onError: (err) => {
-      toast.error('Connection failed', {
-        description: err.message || 'Check your credentials and try again.',
-      })
-    },
+  // "Used by N campaigns" and the "Next" step. Members see only some campaigns,
+  // so the counts are shown to the roles that see them all.
+  const { data: campaigns } = useQuery({
+    queryKey: ['campaigns', teamId, 'all'],
+    queryFn: () => api.campaigns.list(teamId),
+    enabled: !!teamId && canManage && connected.length > 0,
+  })
+  const { data: products } = useQuery({
+    queryKey: ['products', teamId, env],
+    queryFn: () => api.products.list(teamId, env),
+    enabled: !!teamId && canImport && connected.length > 0,
   })
 
   const disconnectMutation = useMutation({
-    mutationFn: (integrationId: string) =>
-      api.integrations.disconnect(teamId, integrationId),
+    mutationFn: (integrationId: string) => api.integrations.disconnect(teamId, integrationId),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['integrations', teamId] })
       queryClient.invalidateQueries({ queryKey: ['campaigns', teamId] })
-      setConfirmDisconnectId(null)
+      const name = disconnectTarget ? providerName(disconnectTarget.provider) : 'Integration'
+      setDisconnectTarget(null)
       const notes: string[] = []
       if (data.pausedCampaigns > 0) {
         notes.push(
@@ -256,84 +127,76 @@ function IntegrationsPage() {
       }
       if (data.codesLeftAtProvider > 0) {
         notes.push(
-          `${data.codesLeftAtProvider} discount code${data.codesLeftAtProvider === 1 ? ' is' : 's are'} still active at the provider; delete them there if you no longer want them honored.`,
+          `${data.codesLeftAtProvider} discount code${data.codesLeftAtProvider === 1 ? ' is' : 's are'} still active in ${name}; delete them there if you no longer want them honored.`,
         )
       }
-      toast.success('Integration disconnected', notes.length ? { description: notes.join(' ') } : undefined)
-    },
-    onError: (err) => {
-      toast.error('Failed to disconnect', {
-        description: err.message || 'Please try again.',
-      })
+      toast.success(`${name} disconnected`, notes.length ? { description: notes.join(' ') } : undefined)
     },
   })
 
   const webhookMutation = useMutation({
-    mutationFn: (integrationId: string) => api.integrations.setupWebhook(teamId, integrationId, env),
+    mutationFn: ({ id, env: e }: { id: string; env: IntegrationEnvironment }) => api.integrations.setupWebhook(teamId, id, e),
+    onMutate: (vars) => setWebhookPending(vars),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['integrations', teamId] })
-      const label = PROVIDERS.find((p) => p.id === data.provider)?.name ?? data.provider
+      const name = providerName(data.provider)
       if (data.webhookSetup.status === 'active') {
-        toast.success(`${label} redemption tracking set up`)
+        toast.success(`${name} redemption tracking set up`)
       } else if (data.webhookSetup.status === 'unsupported') {
-        toast.info(`Automatic redemption tracking isn't available for ${label}`)
+        toast.info(`Automatic redemption tracking isn't available for ${name}`)
       } else {
-        toast.error(`${label} redemption tracking isn't set up`, {
-          description: data.webhookSetup.error || 'Check the API key permissions and try again.',
+        toast.error(`${name} redemption tracking isn't set up`, {
+          description: data.webhookSetup.error || 'Check the key permissions and try again.',
         })
       }
     },
     onError: (err) => {
-      toast.error("Couldn't set up redemption tracking", {
-        description: err.message || 'Please try again.',
-      })
+      toast.error("Couldn't set up redemption tracking", { description: err.message || 'Please try again.' })
     },
-    onSettled: () => {
-      setWebhookSetupId(null)
-    },
+    onSettled: () => setWebhookPending(null),
   })
 
+  // Tests every saved key: the card shows both environments.
   const testMutation = useMutation({
-    mutationFn: (integrationId: string) => api.integrations.test(teamId, integrationId, env),
-    onSuccess: (data, integrationId) => {
-      const integration = integrations.find((i) => i.id === integrationId)
-      const label = integration ? PROVIDERS.find((p) => p.id === integration.provider)?.name ?? integration.provider : 'Integration'
-      if (data.ok) {
-        toast.success(`${label} verified`, {
-          description: `${env === 'live' ? 'Live' : 'Test'} API connection verified successfully.`,
-        })
-      } else {
-        toast.error(`${label} test failed`, {
-          description: data.message || 'Authentication failed — check your API key.',
-        })
+    mutationFn: async (integration: Integration) => {
+      const envs = (['live', 'test'] as const).filter((e) => hasKey(integration, e))
+      const results = await Promise.all(
+        envs.map((e) =>
+          api.integrations
+            .test(teamId, integration.id, e)
+            .catch((err: Error) => ({ ok: false, message: err.message || 'Connection test failed.' })),
+        ),
+      )
+      return envs.map((e, i) => ({ env: e, ...results[i]! }))
+    },
+    onMutate: (integration) => setTestingId(integration.id),
+    onSuccess: (results, integration) => {
+      const name = providerName(integration.provider)
+      for (const r of results) {
+        if (r.ok) toast.success(`${name} ${r.env} key works`)
+        else toast.error(`${name} ${r.env} key failed`, { description: r.message || 'Check the key and try again.' })
       }
+      // A failure is recorded on the integration; a success clears it.
+      queryClient.invalidateQueries({ queryKey: ['integrations', teamId] })
     },
-    onError: (_err, integrationId) => {
-      const integration = integrations.find((i) => i.id === integrationId)
-      const label = integration ? PROVIDERS.find((p) => p.id === integration.provider)?.name ?? integration.provider : 'Integration'
-      toast.error(`${label} test failed`, {
-        description: 'Connection test failed.',
-      })
-    },
-    onSettled: () => {
-      setTestingId(null)
-    },
+    onSettled: () => setTestingId(null),
   })
 
+  const importEnv = importTarget?.environment ?? env
   const { data: providerProducts = [], isFetching: isFetchingProducts } = useQuery({
-    queryKey: ['providerProducts', teamId, importIntegrationId, env],
-    queryFn: () => api.integrations.listProducts(teamId, importIntegrationId!, env),
-    enabled: !!teamId && !!importIntegrationId,
+    queryKey: ['providerProducts', teamId, importTarget?.integrationId, importEnv],
+    queryFn: () => api.integrations.listProducts(teamId, importTarget!.integrationId, importEnv),
+    enabled: !!teamId && !!importTarget,
   })
 
   const importMutation = useMutation({
     mutationFn: (productIds: string[]) =>
-      api.integrations.importProducts(teamId, importIntegrationId!, productIds, env),
+      api.integrations.importProducts(teamId, importTarget!.integrationId, productIds, importEnv),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['products', teamId] })
       queryClient.invalidateQueries({ queryKey: ['billing-usage', teamId] })
       const skipped = data.skipped?.length ?? 0
-      const from = `From ${importingProviderLabel} into your ${env} environment.`
+      const from = `From ${importingName} into your ${importEnv} environment.`
       toast.success(`${data.imported} product${data.imported === 1 ? '' : 's'} imported`, {
         description: skipped > 0 ? `${from} ${skipped} skipped: priced in an unsupported currency.` : from,
       })
@@ -341,62 +204,34 @@ function IntegrationsPage() {
     },
     onError: (err) => {
       if (err.message.includes('limit')) {
-        toast.error('Product limit reached', {
-          description: 'Upgrade to Pro for unlimited products.',
-        })
+        toast.error('Product limit reached', { description: 'Upgrade to Pro for unlimited products.' })
       } else {
-        toast.error('Import failed', {
-          description: err.message || 'Failed to import products.',
-        })
+        toast.error('Import failed', { description: err.message || 'Failed to import products.' })
       }
     },
   })
 
-  const getIntegration = (provider: IntegrationProvider): Integration | undefined =>
-    integrations.find((i) => i.provider === provider)
+  const openConnect = (provider: IntegrationProvider) =>
+    setConnectTarget({ provider, environment: env, mode: 'connect', fromList: true, accountId: '' })
 
-  const closeDialog = () => {
-    setConnectProvider(null)
-    setApiKey('')
-    setAccountId('')
-    connectMutation.reset()
-  }
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!connectProvider || !apiKey.trim()) return
-    connectMutation.mutate({
-      provider: connectProvider,
-      accessToken: apiKey.trim(),
-      providerAccountId: accountId.trim() || undefined,
+  // Test mode can use its own account (e.g. a sandbox company); without one it
+  // uses the live account, so start from whichever applies.
+  const openKey = (integration: Integration, e: IntegrationEnvironment) =>
+    setConnectTarget({
+      provider: integration.provider,
+      environment: e,
+      mode: hasKey(integration, e) ? 'replace' : 'add',
+      fromList: false,
+      accountId: (e === 'test' ? integration.testProviderAccountId : null) ?? integration.providerAccountId ?? '',
     })
-  }
-
-  const handleTest = (integrationId: string) => {
-    setTestingId(integrationId)
-    testMutation.mutate(integrationId)
-  }
-
-  const handleWebhookSetup = (integrationId: string) => {
-    setWebhookSetupId(integrationId)
-    webhookMutation.mutate(integrationId)
-  }
-
-  // Test mode can use its own account (e.g. a sandbox company); without one
-  // it uses the live account, so start from whichever applies.
-  const openConnect = (provider: IntegrationProvider) => {
-    const existing = getIntegration(provider)
-    setAccountId(
-      (env === 'test' ? existing?.testProviderAccountId : null) ?? existing?.providerAccountId ?? '',
-    )
-    setConnectProvider(provider)
-  }
 
   const closeImportDialog = () => {
-    setImportIntegrationId(null)
+    setImportTarget(null)
     setSelectedProducts(new Set())
     importMutation.reset()
   }
+
+  const createCampaign = () => navigate({ to: '/dashboard/campaigns/new' })
 
   // remaining is null when unlimited (Pro, self-hosted); Infinity keeps the
   // selection math below simple and is never serialized.
@@ -426,354 +261,222 @@ function IntegrationsPage() {
     }
   }
 
-  const importingProvider = importIntegrationId
-    ? integrations.find((i) => i.id === importIntegrationId)
-    : null
-  const importingProviderLabel = importingProvider
-    ? PROVIDERS.find((p) => p.id === importingProvider.provider)?.name ?? importingProvider.provider
-    : ''
-
-  const connectProviderMeta = PROVIDERS.find((p) => p.id === connectProvider)
-  const providerLabel = connectProviderMeta?.name ?? connectProvider
-  const accountIdField = connectProviderMeta?.accountId
-  const keyAccess = connectProvider ? PROVIDER_KEY_ACCESS[connectProvider] : undefined
+  const importing = importTarget ? connected.find((i) => i.id === importTarget.integrationId) : undefined
+  const importingName = importing ? providerName(importing.provider) : ''
+  const unconnected = PROVIDERS.filter((p) => !connected.some((i) => i.provider === p.id))
+  const disconnectName = disconnectTarget ? providerName(disconnectTarget.provider) : ''
 
   return (
-    <div>
-      <div>
-        <h1 className="font-display text-4xl font-medium tracking-tight text-text-primary">
-          Integrations
-        </h1>
-        <p className="mt-1 text-base text-text-secondary">
-          Connect your payment platforms to enable PPP discounts
+    <div className="flex max-w-[1080px] flex-col gap-10">
+      <header className="flex flex-col gap-1.5">
+        <h1 className="font-display text-[32px] font-semibold tracking-tight text-text-primary">Integrations</h1>
+        <p className="max-w-[640px] text-[15px] text-text-secondary">
+          GoPayLocal creates each campaign's discount codes in the platform you sell with, and records when a customer
+          uses one.
         </p>
-      </div>
+      </header>
 
-      {isPending ? (
-        <div className="mt-8 flex items-center justify-center">
+      {integrationsQuery.isPending ? (
+        <div className="flex items-center justify-center py-12" role="status" aria-label="Loading integrations">
           <div className="h-6 w-6 animate-spin rounded-full border-4 border-border border-t-brand" />
         </div>
-      ) : (
-        <div className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
-          {PROVIDERS.map((provider) => {
-            const integration = getIntegration(provider.id)
-            const isConnected = integration?.status === 'active'
-            const hasCurrentEnvCreds = isConnected && (env === 'test' ? integration.hasTestCredentials : integration.hasLiveCredentials)
-
-            return (
-              <div
-                key={provider.id}
-                className="flex flex-col border border-border p-6"
-              >
-                <div className="flex items-start justify-between">
-                  <img
-                    src={`/logos/${provider.id}.svg`}
-                    alt={provider.name}
-                    className="h-10 w-10 shrink-0 object-contain"
-                  />
-                  {!canManage ? null : hasCurrentEnvCreds ? (
-                    <div className="flex gap-2">
-                      {/* Chargebee, Whop and Polar can't list products (the API answers 400). */}
-                      {providerCanImportProducts(provider.id) && (
-                        <button
-                          type="button"
-                          onClick={() => integration && setImportIntegrationId(integration.id)}
-                          className="border border-border px-3 py-1 text-[13px] font-medium text-text-primary transition-colors hover:bg-surface"
-                        >
-                          Import
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => integration && handleTest(integration.id)}
-                        disabled={testingId === integration?.id}
-                        className="border border-border px-3 py-1 text-[13px] font-medium text-text-primary transition-colors hover:bg-surface disabled:opacity-50"
-                      >
-                        {testingId === integration?.id ? 'Testing...' : 'Test'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openConnect(provider.id)}
-                        className="border border-success/40 bg-success/15 px-3 py-1 text-[13px] font-medium text-success transition-colors hover:bg-success/25"
-                      >
-                        Connected
-                      </button>
-                    </div>
-                  ) : env === 'test' && !providerHasTestMode(provider.id) ? (
-                    // No test environment at this provider; the API refuses test keys too.
-                    <span
-                      className="px-3 py-1 text-[13px] font-medium text-text-muted"
-                      title={`${provider.name} has no test mode. Switch to Live to connect it.`}
-                    >
-                      Live only
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => openConnect(provider.id)}
-                      className="border border-border px-3 py-1 text-[13px] font-medium text-text-primary transition-colors hover:bg-surface"
-                    >
-                      {isConnected ? `Add ${env} key` : 'Connect'}
-                    </button>
-                  )}
-                </div>
-
-                <h3 className="mt-4 font-display text-base font-semibold text-text-primary">
-                  {provider.name}
-                </h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-text-secondary">
-                  {provider.description}
-                </p>
-
-                {hasCurrentEnvCreds && (
-                  <div className="mt-3">
-                    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${env === 'test' ? 'text-amber-400' : 'text-success'}`}>
-                      <span className={`h-1.5 w-1.5 rounded-full ${env === 'test' ? 'bg-amber-400' : 'bg-success'}`} />
-                      {env === 'test' ? 'Test' : 'Live'} connected
-                    </span>
-                  </div>
-                )}
-
-                {isConnected && integration && (
-                  <WebhookStatusLine
-                    integration={integration}
-                    environment={env}
-                    onSetup={canManage ? () => handleWebhookSetup(integration.id) : undefined}
-                    pending={webhookSetupId === integration.id}
-                  />
-                )}
-
-                {isConnected && integration && (integration.health?.length ?? 0) > 0 && (
-                  <ul className="mt-3 space-y-1.5 border-l-2 border-amber-400 pl-3">
-                    {integration.health.map((issue) => (
-                      <li key={issue.area} className="text-xs leading-relaxed text-text-secondary">
-                        <span className="font-medium text-amber-400">
-                          {HEALTH_AREA_LABELS[issue.area]}
-                          {issue.environment ? ` (${issue.environment})` : ''}:
-                        </span>{' '}
-                        {issue.message}{' '}
-                        <span className="text-text-muted">{new Date(issue.at).toLocaleString()}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                {/* Disconnect (with inline confirm) — removes all credentials
-                    for this provider. Only shown once connected. */}
-                {canManage && isConnected && integration && (
-                  <div className="mt-auto border-t border-border pt-3 text-right">
-                    {confirmDisconnectId === integration.id ? (
-                      <div className="flex items-center justify-end gap-2">
-                        <span className="mr-auto text-[13px] text-text-secondary">
-                          Disconnect {provider.name}? Removes test + live credentials and unlinks its campaigns.
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => disconnectMutation.mutate(integration.id)}
-                          disabled={disconnectMutation.isPending}
-                          className="bg-red-600 px-2.5 py-1 text-[13px] font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
-                        >
-                          {disconnectMutation.isPending ? 'Removing...' : 'Confirm'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setConfirmDisconnectId(null)}
-                          disabled={disconnectMutation.isPending}
-                          className="border border-border px-2.5 py-1 text-[13px] font-medium text-text-primary transition-colors hover:bg-surface disabled:opacity-50"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDisconnectId(integration.id)}
-                        className="text-[13px] font-medium text-red-400 transition-colors hover:text-red-300"
-                      >
-                        Disconnect
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            )
-          })}
+      ) : integrationsQuery.isError ? (
+        // Without this, a failed load looked like nothing was connected.
+        <div role="alert" className="flex flex-col gap-3 border border-border bg-panel px-6 py-5">
+          <p className="font-display text-lg font-semibold text-text-primary">Couldn't load your integrations</p>
+          <p className="text-sm text-text-secondary">
+            {integrationsQuery.error.message || 'Something went wrong.'} Nothing has changed; try again.
+          </p>
+          <div>
+            <button type="button" onClick={() => integrationsQuery.refetch()} className={btnSecondary}>
+              {integrationsQuery.isFetching ? 'Loading…' : 'Try again'}
+            </button>
+          </div>
         </div>
+      ) : connected.length === 0 ? (
+        <>
+          <section aria-labelledby="start-title" className="border border-border bg-panel">
+            <div className="flex flex-col gap-1.5 border-b border-border px-6 py-5">
+              <h2 id="start-title" className="font-display text-xl font-semibold text-text-primary">
+                Connect the platform you sell with
+              </h2>
+              <p className="text-sm text-text-secondary">
+                {canManage
+                  ? 'Nothing is connected yet. You can add another platform or change keys later.'
+                  : 'Nothing is connected yet. An owner or admin of this workspace can connect one.'}
+              </p>
+            </div>
+            <ol className="grid gap-px bg-border md:grid-cols-3">
+              {[
+                ['Create a key', 'Each platform shows the exact permissions it needs, and nothing more.'],
+                ['Paste it here', "It's encrypted before it's stored, and redemption tracking is set up for you."],
+                ['Import your products', 'Then create a campaign, and its codes appear in your platform.'],
+              ].map(([title, text], i) => (
+                <li key={title} className="flex flex-col gap-1.5 bg-panel px-6 py-5">
+                  <span className="font-mono text-xs text-brand-text">0{i + 1}</span>
+                  <p className="font-semibold text-text-primary">{title}</p>
+                  <p className="text-[13px] text-text-secondary">{text}</p>
+                </li>
+              ))}
+            </ol>
+          </section>
+
+          <section aria-labelledby="choose-title" className="flex flex-col gap-4">
+            <SectionTitle id="choose-title">Choose a platform</SectionTitle>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {PROVIDERS.map((p) => (
+                <ProviderTile key={p.id} provider={p} env={env} canManage={canManage} onConnect={() => openConnect(p.id)} />
+              ))}
+            </div>
+          </section>
+        </>
+      ) : (
+        <>
+          <section aria-labelledby="connected-title" className="flex flex-col gap-4">
+            <SectionTitle id="connected-title" count={connected.length}>
+              Connected
+            </SectionTitle>
+            {connected.map((integration) => (
+              <IntegrationCard
+                key={integration.id}
+                integration={integration}
+                env={env}
+                usedBy={campaigns ? campaigns.filter((c) => c.integrationId === integration.id).length : null}
+                productsInEnv={products ? products.length : null}
+                canManage={canManage}
+                canImport={canImport}
+                testing={testingId === integration.id}
+                webhookPendingEnv={webhookPending?.id === integration.id ? webhookPending.env : null}
+                actions={{
+                  onTest: () => testMutation.mutate(integration),
+                  onKey: (e) => openKey(integration, e),
+                  onWebhook: (e) => webhookMutation.mutate({ id: integration.id, env: e }),
+                  onImport: () => setImportTarget({ integrationId: integration.id, environment: env }),
+                  onDisconnect: () => {
+                    disconnectMutation.reset()
+                    setDisconnectTarget(integration)
+                  },
+                  onCreateCampaign: createCampaign,
+                }}
+              />
+            ))}
+          </section>
+
+          {unconnected.length > 0 && (
+            <section aria-labelledby="add-title" className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <SectionTitle id="add-title">Add a platform</SectionTitle>
+                <p className="text-[13px] text-text-muted">
+                  You can connect more than one; each campaign uses one.
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {unconnected.map((p) => (
+                  <ProviderTile key={p.id} provider={p} env={env} canManage={canManage} onConnect={() => openConnect(p.id)} />
+                ))}
+              </div>
+            </section>
+          )}
+        </>
       )}
 
-      {/* Connect Dialog */}
-      <Dialog open={connectProvider !== null} onOpenChange={(open) => !open && closeDialog()}>
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>Connect {providerLabel}</DialogTitle>
-            <DialogDescription>
-              Enter your API key to connect {providerLabel} with GoPayLocal.
-              {connectProviderMeta?.docsUrl && (
-                <>
-                  {' '}
-                  <a
-                    href={connectProviderMeta.docsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 font-medium text-brand-text underline underline-offset-2 hover:no-underline"
-                  >
-                    Learn how to get your API key
-                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-                    </svg>
-                  </a>
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
+      <p className="flex items-start gap-2.5 text-[13px] text-text-muted">
+        <LockIcon className="mt-0.5 h-4 w-4 flex-none" />
+        <span>
+          Keys are encrypted before they're stored and are never shown again, to you or anyone else.
+          {canManage && connected.length > 0 && ' To change one, paste a new key from Manage.'}
+        </span>
+      </p>
 
-          <div className="space-y-4">
-            {keyAccess && (
-              <section aria-labelledby="key-access-title" className="border border-border bg-surface px-3 py-2.5">
-                <h3 id="key-access-title" className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  What the key needs
-                </h3>
-                <p className="mt-1 text-[13px] text-text-primary">{keyAccess.key}</p>
-                <ul className="mt-2 space-y-1.5">
-                  {keyAccess.permissions.map((permission) => (
-                    <li key={permission.name} className="text-[13px] leading-snug">
-                      <code className="font-mono text-[12px] font-medium text-text-primary">{permission.name}</code>
-                      <span className="block text-text-secondary">{permission.usedFor}</span>
-                    </li>
-                  ))}
-                </ul>
-                {keyAccess.note && (
-                  <p className="mt-2 text-xs text-text-secondary">{keyAccess.note}</p>
-                )}
-              </section>
-            )}
+      {connectTarget && (
+        <ConnectPanel
+          key={`${connectTarget.provider}-${connectTarget.environment}-${connectTarget.mode}`}
+          teamId={teamId}
+          target={connectTarget}
+          canImport={canImport}
+          onClose={() => setConnectTarget(null)}
+          onImport={(integrationId, environment) => {
+            setConnectTarget(null)
+            setImportTarget({ integrationId, environment })
+          }}
+          onCreateCampaign={() => {
+            setConnectTarget(null)
+            createCampaign()
+          }}
+        />
+      )}
 
-            <div>
-              <label
-                htmlFor="api-key"
-                className="mb-1 block text-sm font-medium text-text-primary"
-              >
-                API Key <span className="text-brand-text">*</span>
-              </label>
-              <input
-                id="api-key"
-                type="password"
-                required
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder={connectProviderMeta?.placeholder[env] ?? 'Enter API key...'}
-                className="w-full border border-border bg-bg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
-              />
-            </div>
-
-            {accountIdField && (
-              <div>
-                <label
-                  htmlFor="account-id"
-                  className="mb-1 block text-sm font-medium text-text-primary"
-                >
-                  {accountIdField.label} <span className="text-brand-text">*</span>
-                </label>
-                <input
-                  id="account-id"
-                  type="text"
-                  required
-                  value={accountId}
-                  onChange={(e) => setAccountId(e.target.value)}
-                  placeholder={accountIdField.placeholder}
-                  aria-describedby="account-id-help"
-                  className="w-full border border-border bg-bg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
-                />
-                <p id="account-id-help" className="mt-1 text-xs text-text-secondary">
-                  {accountIdField.help}
-                </p>
-              </div>
-            )}
-
-            <p className="text-[13px] text-text-secondary">
-              Credentials will be saved for <span className={env === 'test' ? 'font-medium text-amber-400' : 'font-medium text-success'}>{env}</span> mode.
-              {' '}GoPayLocal encrypts the key before storing it and never shows it again.
-            </p>
-
-            {connectMutation.error && (
-              <p className="text-[13px] text-brand-text">
-                {connectMutation.error.message || 'Failed to connect. Check your credentials and try again.'}
-              </p>
-            )}
-          </div>
-
-          <DialogFooter>
-            <button
-              type="button"
-              onClick={closeDialog}
-              className="border border-border px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-surface"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={connectMutation.isPending || !apiKey.trim()}
-              className="bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50"
-            >
-              {connectMutation.isPending ? 'Connecting...' : 'Connect'}
-            </button>
-          </DialogFooter>
-        </form>
+      {/* Disconnect */}
+      <Dialog open={disconnectTarget !== null} onOpenChange={(open) => !open && !disconnectMutation.isPending && setDisconnectTarget(null)}>
+        <DialogHeader>
+          <DialogTitle>Disconnect {disconnectName}?</DialogTitle>
+          <DialogDescription>
+            GoPayLocal deletes the saved keys and removes its redemption webhooks from {disconnectName}. Campaigns that use {disconnectName} are unlinked, and the active auto-apply ones are paused. Codes already
+            created stay usable in {disconnectName} until you delete them there.
+          </DialogDescription>
+        </DialogHeader>
+        {disconnectMutation.error && (
+          <p role="alert" className="text-[13px] text-brand-text">
+            {disconnectMutation.error.message || "Couldn't disconnect. Try again."}
+          </p>
+        )}
+        <DialogFooter>
+          <button
+            type="button"
+            onClick={() => setDisconnectTarget(null)}
+            disabled={disconnectMutation.isPending}
+            className={btnSecondary}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => disconnectTarget && disconnectMutation.mutate(disconnectTarget.id)}
+            disabled={disconnectMutation.isPending}
+            className="inline-flex h-10 items-center justify-center bg-red-600 px-4 text-[13px] font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+          >
+            {disconnectMutation.isPending ? 'Disconnecting…' : `Disconnect ${disconnectName}`}
+          </button>
+        </DialogFooter>
       </Dialog>
 
-      {/* Import Products Dialog */}
-      <Dialog open={importIntegrationId !== null} onOpenChange={(open) => !open && closeImportDialog()} size="lg">
+      {/* Import Products */}
+      <Dialog open={importTarget !== null} onOpenChange={(open) => !open && closeImportDialog()} size="lg">
         <div className="space-y-5">
           <DialogHeader>
-            <DialogTitle>Import from {importingProviderLabel}</DialogTitle>
+            <DialogTitle>Import from {importingName}</DialogTitle>
             <DialogDescription>
-              Select products to import into GoPayLocal.
+              Select the {importEnv} products to import into GoPayLocal.
             </DialogDescription>
           </DialogHeader>
 
-          {/* Limit warning/info banner */}
           {usage && isAtLimit && (
-            <div className="flex items-center gap-3 rounded border border-amber-800 bg-amber-950/50 p-3">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-900">
-                <svg className="h-4 w-4 text-amber-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-amber-200">Product limit reached</p>
-                <p className="mt-0.5 text-[13px] text-amber-300">
-                  Your {usage.plan} plan allows {productsLabel(usage.maxProducts)}. You currently have {usage.currentCount}/{usage.maxProducts}.
-                </p>
-              </div>
+            <div className="border border-warning-border bg-warning-light p-3">
+              <p className="text-sm font-semibold text-warning">Product limit reached</p>
+              <p className="mt-0.5 text-[13px] text-text-secondary">
+                Your {usage.plan} plan allows {productsLabel(usage.maxProducts)}. You currently have {usage.currentCount}/{usage.maxProducts}.
+              </p>
             </div>
           )}
           {usage && !isAtLimit && remaining < Infinity && remaining <= 3 && (
-            <div className="flex items-center gap-3 rounded border border-blue-800 bg-blue-950/50 p-3">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-900">
-                <svg className="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-blue-200">{remaining} product slot{remaining === 1 ? '' : 's'} remaining</p>
-                <p className="mt-0.5 text-[13px] text-blue-300">
-                  Your {usage.plan} plan allows {productsLabel(usage.maxProducts)}. You have {usage.currentCount}/{usage.maxProducts} used.
-                </p>
-              </div>
+            <div className="border border-border bg-surface p-3">
+              <p className="text-sm font-semibold text-text-primary">{remaining} product slot{remaining === 1 ? '' : 's'} remaining</p>
+              <p className="mt-0.5 text-[13px] text-text-secondary">
+                Your {usage.plan} plan allows {productsLabel(usage.maxProducts)}. You have {usage.currentCount}/{usage.maxProducts} used.
+              </p>
             </div>
           )}
 
-          {/* Product list */}
           {isFetchingProducts ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex items-center justify-center py-12" role="status" aria-label="Loading products">
               <div className="h-6 w-6 animate-spin rounded-full border-4 border-border border-t-brand" />
             </div>
           ) : providerProducts.length === 0 ? (
             <div className="px-6 py-12 text-center">
               <p className="text-base font-medium text-text-primary">No products found</p>
               <p className="mx-auto mt-1.5 max-w-sm text-sm text-text-secondary">
-                {importingProviderLabel} returned no products for your {env} environment. Create a
-                product there first, or switch environments in the sidebar.
+                {importingName} returned no products for your {importEnv} environment. Create a product there first, or
+                switch environments in the sidebar.
               </p>
             </div>
           ) : (
@@ -791,9 +494,7 @@ function IntegrationsPage() {
                     : `Select all (${providerProducts.length})`}
                 </label>
                 {selectedProducts.size > 0 && (
-                  <span className="text-[13px] tabular-nums text-text-secondary">
-                    {selectedProducts.size} selected
-                  </span>
+                  <span className="text-[13px] tabular-nums text-text-secondary">{selectedProducts.size} selected</span>
                 )}
               </div>
 
@@ -801,7 +502,6 @@ function IntegrationsPage() {
                 {providerProducts.map((product) => {
                   const isSelected = selectedProducts.has(product.providerProductId)
                   const isDisabled = !isSelected && selectedProducts.size >= remaining
-
                   return (
                     <label
                       key={product.providerProductId}
@@ -817,12 +517,8 @@ function IntegrationsPage() {
                         className="shrink-0 accent-brand"
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-text-primary">
-                          {product.name}
-                        </p>
-                        {product.url && (
-                          <p className="truncate text-[13px] text-text-secondary">{product.url}</p>
-                        )}
+                        <p className="truncate text-sm font-medium text-text-primary">{product.name}</p>
+                        {product.url && <p className="truncate text-[13px] text-text-secondary">{product.url}</p>}
                       </div>
                       {product.price != null && (
                         <span className="shrink-0 font-mono text-sm font-medium tabular-nums text-text-primary">
@@ -837,28 +533,23 @@ function IntegrationsPage() {
             </div>
           )}
 
-          {/* Footer */}
-          <div className="flex items-center justify-between border-t border-border pt-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5">
             {usage && canUpgrade && remaining < Infinity ? (
               <button
                 type="button"
-                onClick={() => navigate({ to: '/dashboard/settings', search: { tab: 'billing' } })}
-                className="flex items-center gap-1.5 text-[13px] font-medium text-amber-300 transition-colors hover:text-amber-100"
+                onClick={() => {
+                  closeImportDialog()
+                  navigate({ to: '/dashboard/settings', search: { tab: 'billing' } })
+                }}
+                className="text-[13px] font-medium text-warning underline-offset-2 hover:underline"
               >
-                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
-                </svg>
                 {isAtLimit ? 'Upgrade to import' : 'Need more? Upgrade'}
               </button>
             ) : (
               <div />
             )}
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={closeImportDialog}
-                className="border border-border px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-surface"
-              >
+            <div className="flex gap-2.5">
+              <button type="button" onClick={closeImportDialog} className={btnSecondary}>
                 Cancel
               </button>
               {!isAtLimit && (
@@ -866,23 +557,11 @@ function IntegrationsPage() {
                   type="button"
                   onClick={() => importMutation.mutate([...selectedProducts])}
                   disabled={selectedProducts.size === 0 || importMutation.isPending}
-                  className="bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50"
+                  className={btnPrimary}
                 >
                   {importMutation.isPending
-                    ? 'Importing...'
+                    ? 'Importing…'
                     : `Import ${selectedProducts.size || ''} product${selectedProducts.size === 1 ? '' : 's'}`}
-                </button>
-              )}
-              {isAtLimit && canUpgrade && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    closeImportDialog()
-                    navigate({ to: '/dashboard/settings', search: { tab: 'billing' } })
-                  }}
-                  className="bg-amber-500 px-4 py-2 text-sm font-medium text-inverted-text transition-colors hover:bg-amber-400"
-                >
-                  Upgrade Plan
                 </button>
               )}
             </div>

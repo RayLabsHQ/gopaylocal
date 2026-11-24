@@ -126,8 +126,13 @@ Stripe, Paddle, Gumroad, Chargebee, Dodo, Polar, Whop, Creem, WooCommerce.
 
 The permissions each platform's key needs are in `PROVIDER_KEY_ACCESS`
 (`packages/shared/src/constants/provider-key-access.ts`), shown in the dashboard's
-Connect dialog and repeated on each integration's docs page: change both together
+Connect panel and repeated on each integration's docs page: change both together
 when an integration starts or stops calling an endpoint.
+
+Connecting checks the key with the platform before anything is stored
+(`checkKey` in `apps/api/src/routes/integrations.ts`, the same `listDiscounts` call
+as the Test button), so a key the platform refuses is never saved and never
+replaces a working one.
 
 Lemon Squeezy was removed in November 2026 (the platform stops processing payments
 on 2027-03-31); do not re-add it. Its merchants are being moved to Stripe Managed
@@ -175,6 +180,16 @@ submit — lands on `/dashboard` exactly like the OAuth flow.
   anything else
 - `pnpm typecheck` — every package, plus the API tests and scripts
   (`apps/api/tsconfig.test.json`) and the e2e suite (`tsconfig.e2e.json`)
+
+### Dashboard screenshots
+
+`pnpm screenshots` (`e2e/screenshots/capture.ts`) takes the dashboard images for the
+docs and the README. It starts only the dashboard's Vite dev server and answers every
+API request in the browser from made-up data (`e2e/screenshots/demo-data.ts`); the
+API address is a `.invalid` host, so nothing reaches a real server. Never take docs or
+README images from a real account, and never use mockups in them: retake from the
+built dashboard. Add a shot to `SHOTS` and any data it needs to `demo-data.ts` and
+`fake-api.ts`; the script lists requests the demo data didn't answer.
 
 ### Scheduled GitHub workflows
 

@@ -23,7 +23,7 @@ GoPayLocal creates percentage coupons on your Chargebee site (Product Catalog 2.
    - the **API key** for that site;
    - the **Site name**: the `acme` in `acme.chargebee.com`. Use the same name in Test; GoPayLocal adds `-test` itself.
 
-   GoPayLocal checks the key and sets up redemption tracking. **Test** on the card checks the key again later.
+   GoPayLocal checks the key with Chargebee before saving it, then sets up redemption tracking. **Test connection** on the card checks the key again later.
 
 3. **Create a campaign**
 
