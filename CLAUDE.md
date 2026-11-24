@@ -159,6 +159,14 @@ Besides `ci.yml` (typecheck, unit, integration and docs build on every push and 
   on Workers Free. Needs the secrets `CLOUDFLARE_KV_API_TOKEN` and
   `CLOUDFLARE_ACCOUNT_ID`; without them it reports "not set up".
 
+- `release-sdks.yml` (by hand only, from `main`): publishes `@gopaylocal/js` and
+  `@gopaylocal/react` to npm when the version in a package's `package.json` is not on
+  npm yet (`.github/scripts/release-sdks.sh`); `-f dry_run=true` builds and lists the
+  files and publishes nothing. It signs in through npm's trusted publishing, so there
+  is no token; the file name is part of what npm checks, so do not rename it. A run
+  without `dry_run` publishes, and a published version cannot be taken back: run it
+  only on the maintainer's instruction.
+
 Guide for the first two: `apps/api/PROVIDER_VERIFICATION.md`. The status table there
 is the record of which integrations have been verified against a real account; do not
 describe an integration as verified beyond what it says.

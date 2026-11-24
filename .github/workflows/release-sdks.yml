@@ -1,0 +1,105 @@
+name: Release SDKs
+
+# Publishes the two SDKs to npm: @gopaylocal/js (packages/js-sdk) and
+# @gopaylocal/react (packages/react-sdk). It runs only by hand
+# (Actions > Release SDKs > Run workflow), from main:
+#
+#   gh workflow run release-sdks.yml                    # publish
+#   gh workflow run release-sdks.yml -f dry_run=true    # build and list the files, publish nothing
+#
+# A package is published when the version in its package.json is not on npm
+# yet, and skipped otherwise. So a release is: change "version" in one or both
+# package.json files, push to main, run this workflow. Running it twice is
+# harmless. A version with a hyphen (1.2.0-beta.1) is published under the
+# dist-tag "next", any other under "latest".
+#
+# Signing in to npm. No token is stored. npm accepts the publish because each
+# package names this workflow as its trusted publisher (npmjs.com > the package
+# > Settings > Trusted publishing > GitHub Actions: RayLabsHQ, gopaylocal,
+# release-sdks.yml, with "npm publish" allowed). The same sign-in attaches a
+# provenance statement to every version.
+# https://docs.npmjs.com/trusted-publishers
+#
+# Three things to know about it:
+#   - A trusted publisher can only be added to a package that exists. The first
+#     version of a new package is published by a maintainer from their machine
+#     (`npm publish` in the package's directory).
+#   - A trusted publisher that is not used within two days of being added
+#     expires. Add it on the day of the release.
+#   - The file name is part of what npm checks. After renaming this file, replace
+#     the trusted publisher of both packages.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build and list the files, publish nothing
+        type: boolean
+        default: false
+
+# This workflow can publish, so every action is pinned to a commit: a tag can be
+# moved to different code, a commit cannot. The comment after each is its version.
+permissions:
+  contents: read
+
+concurrency:
+  group: release-sdks
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Publish to npm
+    # A fork has no trusted publisher; nothing to do there.
+    if: github.repository == 'RayLabsHQ/gopaylocal'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # Lets the job prove to npm which workflow it is (OpenID Connect).
+      id-token: write
+    steps:
+      - name: Only from main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Run this workflow from main, not from ${GITHUB_REF}."
+          exit 1
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # No dependency cache in a release build: what is published is built from
+      # a fresh install of the lockfile.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Check the npm version
+        # Trusted publishing needs npm 11.5.1 or later.
+        run: |
+          have=$(npm --version)
+          echo "npm $have"
+          if [ "$(printf '%s\n' "11.5.1" "$have" | sort -V | head -n 1)" != "11.5.1" ]; then
+            echo "::error::npm $have is older than 11.5.1, which trusted publishing needs."
+            exit 1
+          fi
+
+      - run: pnpm install --frozen-lockfile
+
+      # The SDK test project also runs the banner's tests.
+      - name: Build banner bundle
+        run: pnpm build:banner
+
+      - name: Typecheck the SDKs
+        run: pnpm --filter @gopaylocal/js --filter @gopaylocal/react typecheck
+
+      - run: pnpm test:sdk
+
+      - name: Publish
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: bash .github/scripts/release-sdks.sh packages/js-sdk packages/react-sdk
