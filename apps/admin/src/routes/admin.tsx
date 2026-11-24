@@ -73,26 +73,33 @@ function AdminLayout() {
   }
 
   return (
-    <div className="flex min-h-screen">
-      {/* Sidebar */}
-      <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-bg">
+    <div className="flex min-h-screen flex-col md:flex-row">
+      {/* Sidebar; a top bar with a scrolling nav strip on a phone */}
+      <aside className="flex w-full shrink-0 flex-col border-b border-border bg-bg md:w-60 md:border-r md:border-b-0">
         {/* Logo */}
-        <div className="flex items-center gap-2 border-b border-border px-5 py-6">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-4 md:px-5 md:py-6">
           <BrandMark className="h-5 w-5 shrink-0" />
           <Link to="/admin" className="font-mono text-[13px] font-semibold uppercase tracking-[0.08em] text-accent">
             GoPayLocal
           </Link>
           <span className="eyebrow">// admin</span>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="ml-auto cursor-pointer border border-border px-2.5 py-1 text-xs text-text-secondary hover:border-accent hover:text-accent md:hidden"
+          >
+            Sign out
+          </button>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-0.5 px-4 py-5">
+        <nav className="flex gap-1 overflow-x-auto px-2 py-2 md:block md:flex-1 md:space-y-0.5 md:px-4 md:py-5">
           {navigation.map((item) => (
             <Link
               key={item.name}
               to={item.to}
               activeOptions={{ exact: item.to === '/admin' }}
-              className="flex cursor-pointer items-center gap-2.5 border-l-2 border-transparent px-3 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:border-l-border-strong hover:text-text-primary [&.active]:border-l-accent [&.active]:bg-accent/10 [&.active]:font-semibold [&.active]:text-accent"
+              className="flex shrink-0 cursor-pointer items-center gap-2.5 whitespace-nowrap border-l-2 border-transparent px-3 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:border-l-border-strong hover:text-text-primary [&.active]:border-l-accent [&.active]:bg-accent/10 [&.active]:font-semibold [&.active]:text-accent"
             >
               <item.icon className="h-4 w-4 shrink-0" />
               {item.name}
@@ -101,7 +108,7 @@ function AdminLayout() {
         </nav>
 
         {/* User */}
-        <div className="border-t border-border p-4">
+        <div className="hidden border-t border-border p-4 md:block">
           <div className="flex items-center gap-3">
             {session.user?.image ? (
               <img src={session.user.image as string} alt="" className="h-8 w-8 shrink-0 object-cover" />
@@ -130,8 +137,8 @@ function AdminLayout() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto bg-bg">
-        <div className="mx-auto max-w-7xl px-6 py-8">
+      <main className="min-w-0 flex-1 overflow-y-auto bg-bg">
+        <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
           <Outlet />
         </div>
       </main>
