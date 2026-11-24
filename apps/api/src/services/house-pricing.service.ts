@@ -29,7 +29,14 @@ import type { Bindings } from "../bindings";
 import type { Database } from "../db";
 import { campaigns, internalOrganizations, platformSettings } from "../db/schema";
 import { COUNTRY_NAMES, PLAN_PRICES_USD } from "@gopaylocal/shared/constants";
-import { localPricing, regionalCharge, type RegionalCharge } from "@gopaylocal/shared/currency";
+import {
+  charm,
+  localPricing,
+  regionalCharge,
+  type CharmStrategy,
+  type LocalPricing,
+  type RegionalCharge,
+} from "@gopaylocal/shared/currency";
 import { isSelfHosted } from "../lib/entitlements";
 import { buildBannerDocNow } from "./banner-cache.service";
 import { loadFxRates, parseExcludedCurrencies } from "./fx-cache";
@@ -122,7 +129,26 @@ export type HousePriceTable =
     }
   | { ok: false; problem: string };
 
-/** Every discounted country's price, exactly as the config endpoint serves it now. */
+/**
+ * The local amount Dodo is told to charge, from the visitor's converted price:
+ * charm-rounded DOWN with the house campaign's strategy, so it is never above
+ * the exact discounted price and at most 8% below it (charm.ts). The discount
+ * the pages state ("70% off") is therefore never more than the real one. The
+ * config endpoint rounds a visitor's estimate UP instead, which is right next to
+ * a code for the exact percentage and wrong for a price that is charged as shown.
+ * A price in the product's own currency is exact and left to regionalCharge.
+ */
+export function chargedLocalPrice(
+  basePrice: number,
+  discount: number,
+  local: Pick<LocalPricing, "currencyCode" | "fxRate" | "fxAsOf" | "localPrice">,
+  strategy: CharmStrategy,
+): number | null {
+  if (!local.fxAsOf) return local.localPrice;
+  return charm(basePrice * (1 - discount / 100) * local.fxRate, local.currencyCode, strategy, "down");
+}
+
+/** Every discounted country's price, as the house sync writes it to Dodo. */
 export async function houseRegionalPrices(
   db: Database,
   env: HouseEnv,
@@ -190,7 +216,9 @@ export async function houseRegionalPrices(
       basePrice: pricing.basePrice,
       baseCurrency: pricing.currency,
       discount: info.discount,
-      local: local ? { currencyCode: local.currencyCode, localPrice: local.localPrice } : null,
+      local: local
+        ? { currencyCode: local.currencyCode, localPrice: chargedLocalPrice(pricing.basePrice, info.discount, local, pricing.charm) }
+        : null,
     });
     if (charge) rows.push({ country, countryName: COUNTRY_NAMES[country] ?? info.countryName ?? country, discount: info.discount, charge });
   }

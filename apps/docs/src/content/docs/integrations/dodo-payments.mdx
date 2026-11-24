@@ -74,6 +74,15 @@ POST /checkouts
 
 Static payment links (`checkout.dodopayments.com/buy/...`) take no discount code; there the customer enters it.
 
+## Dodo's Pricing Settings
+
+Dodo has pricing settings of its own, under **Settings > Pricing Settings** in its dashboard. Two of them change what checkout charges, and GoPayLocal can't see either:
+
+- **Purchasing Power Parity**: Dodo takes its own percentage off a product that opts in, and the GoPayLocal code then comes off that lower price. Leave it off on the products your campaigns cover, or visitors get two discounts.
+- **Charm Pricing**: Dodo rounds the converted list price to an ending such as 49.99, before the code is applied ([Dodo's Charm Pricing](https://docs.dodopayments.com/features/charm-pricing)). In Dodo's own example, $47 becomes $49.99. The banner's local price then no longer matches checkout. Leave it off and use the campaign's [Charm Pricing](/guides/charm-pricing/) setting, which rounds the price on the banner.
+
+**Adaptive Currency** can stay on. It charges customers in their own currency; the banner's local price is an estimate of that amount ([Multi-Currency](/guides/multi-currency/)).
+
 ## Test Mode
 
 Connect a test-mode key while the dashboard is on **Test**. Test campaigns then create their codes in your Dodo test mode. A test key sent as a live key (or the other way round) is refused when you connect, and the Connect panel shows Dodo's error message.

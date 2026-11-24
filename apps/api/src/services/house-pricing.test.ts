@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { CHARM_STRATEGIES } from "@gopaylocal/shared/currency";
 import {
+  chargedLocalPrice,
   compareWithDodo,
   dodoErrorMessage,
   houseSyncUnavailable,
@@ -134,5 +136,34 @@ describe("publishedPriceFor", () => {
     expect(publishedPriceFor(published, { ...env, DODO_ENVIRONMENT: "live_mode" }, "IN")).toBeNull();
     expect(publishedPriceFor(published, { ...env, DODO_PRICE_ID_PRO_MONTHLY: "pdt_OTHER" }, "IN")).toBeNull();
     expect(publishedPriceFor(undefined, env, "IN")).toBeNull();
+  });
+});
+
+describe("chargedLocalPrice", () => {
+  // Rates as on 2026-11-24: 92.867 INR, 5.935 BRL and 18,229.1 IDR per USD.
+  const converted = (currencyCode: string, fxRate: number) => ({ currencyCode, fxRate, fxAsOf: "2026-11-24", localPrice: 0 });
+
+  it("rounds the charged price down, so the stated discount is never more than the real one", () => {
+    // Exact 70%-off prices: 529.34 INR, 103,905.87 IDR; 56% off: 49.62 BRL.
+    expect(chargedLocalPrice(19, 70, converted("INR", 92.867), "region_aware")).toBe(529);
+    expect(chargedLocalPrice(19, 70, converted("IDR", 18229.1), "region_aware")).toBe(99_000);
+    expect(chargedLocalPrice(19, 56, converted("BRL", 5.935), "region_aware")).toBe(49);
+    expect(chargedLocalPrice(19, 70, converted("INR", 92.867), "nearest_5")).toBe(500);
+    expect(chargedLocalPrice(19, 70, converted("INR", 92.867), "none")).toBe(529.34);
+  });
+
+  it("stays within 8% under the exact price for every strategy", () => {
+    for (const strategy of CHARM_STRATEGIES) {
+      for (const [code, rate, discount] of [["INR", 92.867, 70], ["BRL", 5.935, 56], ["IDR", 18229.1, 70], ["MXN", 19.24, 48], ["PLN", 4.07, 35]] as const) {
+        const exact = 19 * (1 - discount / 100) * rate;
+        const charged = chargedLocalPrice(19, discount, converted(code, rate), strategy)!;
+        expect(charged, `${strategy} ${code}`).toBeLessThanOrEqual(exact);
+        expect(charged, `${strategy} ${code}`).toBeGreaterThanOrEqual(exact * 0.92);
+      }
+    }
+  });
+
+  it("leaves a price in the product's own currency as the config endpoint gave it", () => {
+    expect(chargedLocalPrice(19, 70, { currencyCode: "USD", fxRate: 1, localPrice: 5.7 }, "region_aware")).toBe(5.7);
   });
 });

@@ -764,7 +764,7 @@ curl "${snippetApiBase}/v1/banner/config/${publicKey}${productQuery}"
                       </SelectGroup>
                     </SelectContent>
                   </Select>
-                  <CharmHelp strategy={editCharm} />
+                  <CharmHelp strategy={editCharm} provider={integrations.find((i) => i.id === editIntegrationId)?.provider} />
                 </div>
               </div>
 

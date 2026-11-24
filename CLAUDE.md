@@ -43,9 +43,12 @@ and a self-hosted mode with no limits and no billing.
   `GET /v1/pricing/pro`, so they only ever show a price Dodo charges; never compute the
   shown price separately. The website's banner uses the house public key
   (`PUBLIC_GOPAYLOCAL_PUBLIC_KEY`, set when `apps/web` is built and never committed),
-  which also switches the card's regional price on. Dodo's own PPP setting stays off (it
-  would discount again), and the house campaign gets no deals or A/B tests (Dodo would not
-  charge them).
+  which also switches the card's regional price on. Dodo's own PPP and Charm Pricing
+  settings stay off (PPP would discount again; Charm would round the $19 Dodo converts for
+  countries without a rule), and the house campaign gets no deals or A/B tests (Dodo would
+  not charge them). The sync charm-rounds each local price DOWN with the house campaign's
+  own strategy (`chargedLocalPrice`), so the "70% off" shown is never more than the real
+  discount; amounts charged in USD stay exact.
 - Internal workspaces (`internal_organizations`, set in the admin) and Dodo test-mode
   subscriptions (`subscriptions.environment = 'test'`) are left out of every admin metric.
   A test-mode subscription also grants Pro only while the Worker runs in Dodo test mode

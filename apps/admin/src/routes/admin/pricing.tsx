@@ -70,6 +70,14 @@ function RegionalPricePage() {
   }
 
   const table = data?.table
+  // The dashboard's labels for the campaign's Charm Pricing setting.
+  const CHARM_LABELS: Record<string, string> = {
+    none: 'None',
+    dot99: '.99 ending',
+    round_x9: 'Round to X9',
+    nearest_5: 'Nearest $5',
+    region_aware: 'Region-aware',
+  }
   const rows = table && table.ok ? table.rows : []
   const matching = rows.filter((r) => r.dodo?.status === 'match').length
   const lastSync = progress?.last ?? data?.settings?.lastSync ?? null
@@ -218,6 +226,12 @@ function RegionalPricePage() {
             <ul className="list-disc space-y-2 pl-5 text-[13px] leading-relaxed text-text-secondary">
               <li>Turn on Adaptive Currency, so countries are charged in their own currency.</li>
               <li>Leave Purchasing Power Parity off. It would take its own discount off the price set here.</li>
+              <li>
+                Leave Charm Pricing off. Dodo never rounds a per-country price, but it would round the $19 it converts for
+                countries without one, so they would no longer pay the $19 the website shows. The house campaign&apos;s own
+                charm setting{table?.ok ? ` (${CHARM_LABELS[table.charm] ?? table.charm})` : ''} rounds
+                every price here down to a charm price, so the discount shown is never more than the real one.
+              </li>
               <li>Per-country prices are fees-inclusive: the buyer pays the amount shown (plus tax if the product is tax-exclusive), and the currency fee is ours.</li>
               <li>Countries without a discount pay $19, converted by Adaptive Currency.</li>
               <li>Holiday deals and A/B tests on the house campaign would change the price shown but not the price charged. Don't add them.</li>

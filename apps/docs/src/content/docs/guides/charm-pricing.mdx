@@ -13,6 +13,10 @@ Charm pricing applies only to [converted local prices](/guides/multi-currency/).
 Local prices are estimates. They convert your price at the day's mid-market rate and round up to a charm price, at most 8% above the converted amount and never below it (an amount under 13 of the currency's smallest unit can round up by more than 8%, to the next one). Your payment provider charges the exact discounted price in your currency; the amount on the customer's statement depends on their bank's exchange rate.
 </Aside>
 
+<Aside type="note" title="Turn off your payment platform's rounding">
+Dodo Payments has a Charm Pricing setting of its own, which rounds the price at checkout. With both on, the banner shows GoPayLocal's rounding and checkout charges Dodo's, and the two can differ by a whole rounding step. Leave Dodo's off ([Dodo's Pricing Settings](/integrations/dodo-payments/#dodos-pricing-settings)).
+</Aside>
+
 ## Choosing a strategy
 
 Each campaign has a **Charm Pricing** setting, chosen when you create the campaign and changeable on its page in the dashboard. New campaigns start with **None**, which shows the converted price rounded only to the currency's smallest unit.

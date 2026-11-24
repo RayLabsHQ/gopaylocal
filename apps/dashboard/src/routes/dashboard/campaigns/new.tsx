@@ -413,7 +413,7 @@ function NewCampaignPage() {
                 </SelectGroup>
               </SelectContent>
             </Select>
-            <CharmHelp strategy={charmPricing} />
+            <CharmHelp strategy={charmPricing} provider={integrations.find((i) => i.id === integrationId)?.provider} />
           </div>
 
           <div>
