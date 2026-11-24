@@ -9,8 +9,8 @@ export function BrandMark({ className }: { className?: string }) {
       role="img"
       aria-label="GoPayLocal admin logo"
     >
-      <path fill="#00FF88" fillRule="evenodd" d="M0 0 H28 L0 28 Z M5.5 5.5 h6 v6 h-6 Z" />
-      <path fill="#FFFFFF" fillRule="evenodd" d="M32 4 V32 H4 Z M20.5 20.5 h6 v6 h-6 Z" />
+      <path fill="#00FF88" fillRule="evenodd" d="M0 0 H28 L0 28 Z M4 4 h8 v8 h-8 Z" />
+      <path fill="#FFFFFF" fillRule="evenodd" d="M32 4 V32 H4 Z M20 20 h8 v8 h-8 Z" />
     </svg>
   )
 }
