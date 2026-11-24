@@ -1,6 +1,6 @@
 {
   "name": "@gopaylocal/react",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "React provider, hooks and components for GoPayLocal: purchasing power parity (PPP) discounts and localized prices.",
   "license": "MIT",
   "author": "RayLabs",

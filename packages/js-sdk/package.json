@@ -1,6 +1,6 @@
 {
   "name": "@gopaylocal/js",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Browser SDK for GoPayLocal: purchasing power parity (PPP) discounts, localized prices and a discount banner for any website.",
   "license": "MIT",
   "author": "RayLabs",
