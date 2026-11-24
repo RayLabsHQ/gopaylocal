@@ -39,17 +39,20 @@ import RegionalProPrice from "./RegionalProPrice";
               <p class="font-display text-base font-semibold text-text-primary">
                 {card.name}
               </p>
-              <p
-                class="font-display text-5xl font-bold tracking-[-2px] tabular-nums mt-3 text-text-primary"
-              >
-                {card.price}
-              </p>
+              {card.highlighted ? (
+                <RegionalProPrice client:idle listPrice={card.price} />
+              ) : (
+                <p
+                  class="font-display text-5xl font-bold tracking-[-2px] tabular-nums mt-3 text-text-primary"
+                >
+                  {card.price}
+                </p>
+              )}
               <p
                 class="text-sm mt-3 leading-relaxed whitespace-pre-line text-text-secondary"
               >
                 {card.subtitle}
               </p>
-              {card.highlighted && <RegionalProPrice client:idle />}
             </div>
 
             <div class="mt-5">

@@ -885,9 +885,12 @@ function BillingTab({ returnedFromCheckout }: { returnedFromCheckout: boolean })
             <p className="flex items-start gap-2.5 border-b border-border px-6 py-3 text-[13px] text-text-primary">
               <ToneIcon tone="ok" className="mt-0.5 h-3.5 w-3.5" />
               <span>
-                Pro is {proLabel} a month in {regional.countryName}
-                {regional.discount !== null ? `, ${regional.discount}% off the $${PRO_MONTHLY} list price` : ''}.
-                Checkout charges this price when your billing address is in {regional.countryName}.
+                Pro is <span className="font-semibold">{proLabel}/mo</span> in {regional.countryName}{' '}
+                <s className="text-text-muted">
+                  <span className="sr-only">instead of the list price </span>${PRO_MONTHLY}
+                </s>
+                {regional.discount !== null ? `, ${regional.discount}% off` : ''}. Checkout charges this price when your
+                billing address is in {regional.countryName}.
               </span>
             </p>
           )}
