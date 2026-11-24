@@ -211,7 +211,7 @@ function RegionalPricePage() {
             <ul className="list-disc space-y-2 pl-5 text-[13px] leading-relaxed text-text-secondary">
               <li>Turn on Adaptive Currency, so countries are charged in their own currency.</li>
               <li>Leave Purchasing Power Parity off. It would take its own discount off the price set here.</li>
-              <li>Per-country prices are fees-inclusive: the buyer pays exactly the amount shown, and the currency fee is ours.</li>
+              <li>Per-country prices are fees-inclusive: the buyer pays the amount shown (plus tax if the product is tax-exclusive), and the currency fee is ours.</li>
               <li>Countries without a discount pay $19, converted by Adaptive Currency.</li>
               <li>Holiday deals and A/B tests on the house campaign would change the price shown but not the price charged. Don't add them.</li>
             </ul>

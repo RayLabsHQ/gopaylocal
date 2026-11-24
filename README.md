@@ -1,4 +1,28 @@
-# GoPayLocal
+<p align="center">
+  <a href="https://gopaylocal.com">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset=".github/assets/readme-banner-dark.png">
+      <img src=".github/assets/readme-banner-light.png" alt="GoPayLocal: open-source purchasing power parity discounts for your website" width="100%">
+    </picture>
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/RayLabsHQ/gopaylocal/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/RayLabsHQ/gopaylocal/ci.yml?branch=main&style=flat-square&label=CI" alt="CI status"></a>
+  <a href="LICENSING.md"><img src="https://img.shields.io/badge/license-AGPL--3.0%20%2F%20MIT-E42313?style=flat-square" alt="License: AGPL-3.0 for the apps, MIT for the SDKs and banner"></a>
+  <a href="https://www.npmjs.com/package/@gopaylocal/js"><img src="https://img.shields.io/npm/v/%40gopaylocal%2Fjs?style=flat-square&label=%40gopaylocal%2Fjs" alt="@gopaylocal/js on npm"></a>
+  <a href="https://www.npmjs.com/package/@gopaylocal/react"><img src="https://img.shields.io/npm/v/%40gopaylocal%2Freact?style=flat-square&label=%40gopaylocal%2Freact" alt="@gopaylocal/react on npm"></a>
+  <a href="https://docs.gopaylocal.com/self-hosting/"><img src="https://img.shields.io/badge/self--host-Cloudflare%20Workers-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Self-host on Cloudflare Workers"></a>
+</p>
+
+<p align="center">
+  <a href="https://gopaylocal.com"><b>Website</b></a> ·
+  <a href="https://docs.gopaylocal.com/getting-started/quickstart/"><b>Quickstart</b></a> ·
+  <a href="https://docs.gopaylocal.com"><b>Docs</b></a> ·
+  <a href="https://docs.gopaylocal.com/self-hosting/"><b>Self-hosting</b></a> ·
+  <a href="CONTRIBUTING.md"><b>Contributing</b></a> ·
+  <a href="ROADMAP.md"><b>Roadmap</b></a>
+</p>
 
 Purchasing power parity (PPP) discounts for your website. GoPayLocal reads each
 visitor's country at the Cloudflare edge, works out a discount for that country, creates
@@ -116,7 +140,9 @@ e2e/          Playwright end-to-end tests (run locally, not in CI)
 
 The API stores data in Postgres (through Cloudflare Hyperdrive) and uses Workers KV for
 caching and the VPN lists. The dashboards, marketing site and docs are deployed as
-Workers with static assets. The SDKs are not published to npm yet.
+Workers with static assets. The SDKs are on npm as
+[`@gopaylocal/js`](https://www.npmjs.com/package/@gopaylocal/js) and
+[`@gopaylocal/react`](https://www.npmjs.com/package/@gopaylocal/react).
 
 ## Development
 
