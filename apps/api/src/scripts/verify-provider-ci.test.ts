@@ -167,13 +167,14 @@ describe('actions used by the workflows', () => {
 
   it('finds the workflows', () => {
     expect(workflows.map((w) => w.name).sort()).toEqual(
-      ['ci.yml', 'provider-checks.yml', 'vpn-refresh.yml', 'woocommerce-store.yml'].sort(),
+      ['ci.yml', 'provider-checks.yml', 'release-sdks.yml', 'vpn-refresh.yml', 'woocommerce-store.yml'].sort(),
     );
   });
 
-  it('pins every action to a commit in a workflow that holds secrets', () => {
-    const withSecrets = workflows.filter((w) => /\$\{\{\s*secrets\b/.test(w.text));
-    expect(withSecrets.map((w) => w.name).sort()).toEqual(['provider-checks.yml', 'vpn-refresh.yml']);
+  it('pins every action to a commit in a workflow that holds secrets or can publish', () => {
+    // `id-token: write` lets a job sign in to npm as this repository's workflow.
+    const withSecrets = workflows.filter((w) => /\$\{\{\s*secrets\b/.test(w.text) || /id-token:\s*write/.test(w.text));
+    expect(withSecrets.map((w) => w.name).sort()).toEqual(['provider-checks.yml', 'release-sdks.yml', 'vpn-refresh.yml']);
     for (const w of withSecrets) {
       expect(usesOf(w.text).length).toBeGreaterThan(0);
       expect(usesOf(w.text).filter((ref) => !pinned(ref)), w.name).toEqual([]);
@@ -184,6 +185,37 @@ describe('actions used by the workflows', () => {
     for (const w of workflows) {
       const thirdParty = usesOf(w.text).filter((ref) => !ref.startsWith('actions/'));
       expect(thirdParty.filter((ref) => !pinned(ref)), w.name).toEqual([]);
+    }
+  });
+});
+
+describe('the SDK release workflow', () => {
+  const RELEASE_WORKFLOW = readFileSync(
+    fileURLToPath(new URL('../../../../.github/workflows/release-sdks.yml', import.meta.url)),
+    'utf8',
+  );
+
+  it('runs only by hand', () => {
+    const triggers = RELEASE_WORKFLOW.slice(RELEASE_WORKFLOW.indexOf('\non:\n'), RELEASE_WORKFLOW.indexOf('\npermissions:\n'));
+    expect(triggers).toContain('  workflow_dispatch:');
+    expect(triggers).not.toMatch(/^\s*(push|pull_request|pull_request_target|schedule|release|workflow_run):/m);
+  });
+
+  it('stores no npm token: only the publishing job can sign in, as the workflow itself', () => {
+    expect(RELEASE_WORKFLOW).not.toMatch(/\$\{\{\s*secrets\b/);
+    expect(RELEASE_WORKFLOW).toMatch(/\npermissions:\n  contents: read\n/);
+    expect(RELEASE_WORKFLOW.match(/id-token:\s*write/g)).toHaveLength(1);
+  });
+
+  it('publishes the two SDKs, and both can be published', () => {
+    const published = [...(RELEASE_WORKFLOW.match(/release-sdks\.sh (.+)$/m)?.[1] ?? '').split(' ')];
+    expect(published).toEqual(['packages/js-sdk', 'packages/react-sdk']);
+    for (const dir of published) {
+      const manifest = JSON.parse(readFileSync(fileURLToPath(new URL(`../../../../${dir}/package.json`, import.meta.url)), 'utf8'));
+      expect(manifest.private, dir).toBeUndefined();
+      expect(manifest.publishConfig, dir).toEqual({ access: 'public' });
+      // npm checks this against the repository the workflow runs in.
+      expect(manifest.repository.url, dir).toBe('git+https://github.com/RayLabsHQ/gopaylocal.git');
     }
   });
 });
