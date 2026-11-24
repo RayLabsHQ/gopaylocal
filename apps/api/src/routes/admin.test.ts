@@ -10,7 +10,7 @@ import { createSqlRecorder, type SqlRecorder } from "../lib/sql-recorder-test-he
 const state = vi.hoisted(() => ({ recorder: null as unknown as SqlRecorder }));
 vi.mock("../db", () => ({ createDb: () => state.recorder.db }));
 
-const { default: adminRoute } = await import("./admin");
+const { default: adminRoute, summarizeSubscriptions } = await import("./admin");
 
 function app() {
   const a = new Hono<AppEnv>();
@@ -103,5 +103,39 @@ describe("GET /v1/admin/stats/top-orgs", () => {
     expect(planQuery.sql).toContain('"subscriptions"."organization_id" in ($1)');
     expect(planQuery.params[0]).toBe("o1");
     expect(((await res.json()) as any).data[0].plan).toBe("pro");
+  });
+});
+
+describe("summarizeSubscriptions (admin MRR)", () => {
+  const row = (fields: Partial<{ plan: string; environment: string; recurringAmount: number | null; currency: string | null }>) => ({
+    plan: "pro",
+    environment: "live",
+    recurringAmount: null,
+    currency: null,
+    ...fields,
+  });
+
+  it("leaves test-mode subscriptions out of MRR and the Pro count, and reports how many", () => {
+    const out = summarizeSubscriptions([row({ environment: "test" }), row({ environment: "test" })]);
+    expect(out).toMatchObject({ estimatedMRR: 0, mrrByCurrency: {}, testSubscriptions: 2 });
+    expect(out.planCounts.pro).toBe(0);
+  });
+
+  it("counts each live subscription at the amount it is charged, per currency, never adding currencies", () => {
+    const out = summarizeSubscriptions([
+      row({ recurringAmount: 1900, currency: "USD" }),
+      row({ recurringAmount: 570, currency: "USD" }),
+      row({ recurringAmount: 48_000, currency: "INR" }),
+      row({ recurringAmount: 600, currency: "JPY" }),
+    ]);
+    expect(out.planCounts.pro).toBe(4);
+    expect(out.mrrByCurrency).toEqual({ USD: 24.7, INR: 480, JPY: 600 });
+    expect(out.estimatedMRR).toBe(24.7);
+  });
+
+  it("counts a row recorded before amounts were stored at the Pro list price, and folds legacy business into Pro", () => {
+    const out = summarizeSubscriptions([row({}), row({ plan: "business" }), row({ plan: "free" })]);
+    expect(out.planCounts.pro).toBe(2);
+    expect(out.estimatedMRR).toBe(38);
   });
 });

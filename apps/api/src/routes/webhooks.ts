@@ -1,5 +1,5 @@
 import { Hono, type Context } from "hono";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { ulid } from "ulid";
 import type { AppEnv, Bindings } from "../bindings";
 import { createDb, type Database } from "../db";
@@ -195,27 +195,27 @@ async function processWebhookEvent(
         (data.subscription?.subscription_id as string | undefined) ??
         null;
 
-      const existing = await db
-        .select()
-        .from(subscriptions)
-        .where(eq(subscriptions.organizationId, orgId))
-        .limit(1)
-        .then((rows) => rows[0]);
+      // The mode this Worker bills in: a delivery can only come from the mode
+      // whose webhook secret it was signed with.
+      const environment = env.DODO_ENVIRONMENT === "test_mode" ? "test" : "live";
+      const recurringAmount =
+        typeof data.recurring_pre_tax_amount === "number" && Number.isInteger(data.recurring_pre_tax_amount)
+          ? (data.recurring_pre_tax_amount as number)
+          : null;
+      const currency =
+        typeof data.currency === "string" && /^[A-Za-z]{3}$/.test(data.currency) ? data.currency.toUpperCase() : null;
+      const billingCountry =
+        typeof data.billing?.country === "string" && /^[A-Za-z]{2}$/.test(data.billing.country)
+          ? (data.billing.country as string).toUpperCase()
+          : null;
+      const now = new Date();
 
-      if (existing) {
-        await db
-          .update(subscriptions)
-          .set({
-            plan: resolvedPlan ?? existing.plan,
-            dodoCustId: custId ?? existing.dodoCustId,
-            dodoSubId: subId ?? existing.dodoSubId,
-            status: "active",
-            currentPeriodEnd: periodEnd ? new Date(periodEnd) : existing.currentPeriodEnd,
-            updatedAt: new Date(),
-          })
-          .where(eq(subscriptions.organizationId, orgId));
-      } else {
-        await db.insert(subscriptions).values({
+      // One row per organization (unique key): subscription.active and
+      // subscription.renewed arrive together, and a select-then-insert let both
+      // insert. A field the event doesn't carry keeps its stored value.
+      await db
+        .insert(subscriptions)
+        .values({
           id: ulid(),
           organizationId: orgId,
           // Safe default: only a verified/validated plan grants paid limits.
@@ -224,10 +224,28 @@ async function processWebhookEvent(
           dodoSubId: subId,
           status: "active",
           currentPeriodEnd: periodEnd ? new Date(periodEnd) : null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          environment,
+          recurringAmount,
+          currency,
+          billingCountry,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: subscriptions.organizationId,
+          set: {
+            plan: resolvedPlan ?? sql`${subscriptions.plan}`,
+            dodoCustId: custId ?? sql`${subscriptions.dodoCustId}`,
+            dodoSubId: subId ?? sql`${subscriptions.dodoSubId}`,
+            status: "active",
+            currentPeriodEnd: periodEnd ? new Date(periodEnd) : sql`${subscriptions.currentPeriodEnd}`,
+            environment,
+            recurringAmount: recurringAmount ?? sql`${subscriptions.recurringAmount}`,
+            currency: currency ?? sql`${subscriptions.currency}`,
+            billingCountry: billingCountry ?? sql`${subscriptions.billingCountry}`,
+            updatedAt: now,
+          },
         });
-      }
 
       // Plan may have changed (e.g. Free → Pro): rebuild the banner cache so the
       // "Powered by GoPayLocal" branding is removed on the live banner now,

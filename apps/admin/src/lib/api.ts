@@ -89,7 +89,12 @@ export type AdminStats = {
   totalUsers: number
   totalOrganizations: number
   subscriptionsByPlan: Record<string, number>
+  /** Live subscriptions billed in USD, per month (pre-tax). Test-mode subscriptions never count. */
   estimatedMRR: number
+  /** Live MRR per currency, major units; currencies are never added together. Optional during a deploy window. */
+  mrrByCurrency?: Record<string, number>
+  /** Active Pro subscriptions paid in Dodo test mode: Pro, but not revenue. */
+  testSubscriptions?: number
   activeOrgsLast30Days: number
   platformFunnel: {
     impressions: number

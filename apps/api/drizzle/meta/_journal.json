@@ -36,6 +36,13 @@
       "when": 1795260107873,
       "tag": "0004_holiday_deals",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795509332209,
+      "tag": "0005_subscription_per_org_and_mode",
+      "breakpoints": true
     }
   ]
 }

@@ -20,6 +20,7 @@ import {
 } from "../db/schema";
 import { PLAN_PRICES_USD, normalizePlan } from "@gopaylocal/shared/constants";
 import type { Plan } from "@gopaylocal/shared/types";
+import { minorUnitExponent } from "@gopaylocal/shared/currency";
 import { resolveEntitlements } from "../lib/entitlements";
 import {
   computeLimitWarnings,
@@ -683,6 +684,46 @@ app.get("/v1/admin/alerts", async (c) => {
 
 // ── Platform-wide stats ────────────────────────────────────────────────────
 
+type SubscriptionRevenueRow = {
+  plan: string;
+  environment: string;
+  recurringAmount: number | null;
+  currency: string | null;
+};
+
+/**
+ * Plan counts and monthly recurring revenue from active subscriptions.
+ * Test-mode rows are counted apart and never as revenue. Each subscription
+ * counts at the amount Dodo charges it (pre-tax); a row recorded before
+ * amounts were stored counts at the Pro list price. `mrrByCurrency` is in
+ * major units and never adds currencies together; `estimatedMRR` is its USD
+ * entry, the figure for a business priced in USD.
+ */
+export function summarizeSubscriptions(rows: SubscriptionRevenueRow[]): {
+  planCounts: Record<Plan, number>;
+  testSubscriptions: number;
+  mrrByCurrency: Record<string, number>;
+  estimatedMRR: number;
+} {
+  const planCounts: Record<Plan, number> = { free: 0, pro: 0 };
+  const mrrByCurrency: Record<string, number> = {};
+  let testSubscriptions = 0;
+  for (const row of rows) {
+    const plan = normalizePlan(row.plan);
+    if (plan !== "pro") continue;
+    if (row.environment === "test") {
+      testSubscriptions += 1;
+      continue;
+    }
+    planCounts.pro += 1;
+    const known = row.recurringAmount !== null && row.currency !== null;
+    const currency = known ? row.currency! : "USD";
+    const amount = known ? row.recurringAmount! / 10 ** minorUnitExponent(currency) : PLAN_PRICES_USD.pro.month;
+    mrrByCurrency[currency] = Math.round(((mrrByCurrency[currency] ?? 0) + amount) * 100) / 100;
+  }
+  return { planCounts, testSubscriptions, mrrByCurrency, estimatedMRR: mrrByCurrency.USD ?? 0 };
+}
+
 app.get("/v1/admin/stats", async (c) => {
   const db = createDb(c.env);
 
@@ -700,11 +741,16 @@ app.get("/v1/admin/stats", async (c) => {
     ] = await Promise.all([
       db.select({ total: count() }).from(users),
       db.select({ total: count() }).from(organizations),
+      // Active subscriptions, with the mode and amount each one is billed at.
       db
-        .select({ plan: subscriptions.plan, count: count() })
+        .select({
+          plan: subscriptions.plan,
+          environment: subscriptions.environment,
+          recurringAmount: subscriptions.recurringAmount,
+          currency: subscriptions.currency,
+        })
         .from(subscriptions)
-        .where(eq(subscriptions.status, "active"))
-        .groupBy(subscriptions.plan),
+        .where(eq(subscriptions.status, "active")),
       db
         .select({
           impressions: sumInt(analyticsRollups.impressions),
@@ -746,19 +792,12 @@ app.get("/v1/admin/stats", async (c) => {
         .groupBy(integrations.provider),
     ]);
 
-    // Legacy 'business' rows count as Pro; unknown values are ignored.
-    const planCounts: Record<Plan, number> = { free: 0, pro: 0 };
-    for (const row of subBreakdown) {
-      const plan = normalizePlan(row.plan);
-      if (plan) planCounts[plan] += row.count;
-    }
+    // Live subscriptions only: a Dodo test-mode subscription grants Pro but
+    // is not revenue. Legacy 'business' rows count as Pro.
+    const { planCounts, testSubscriptions, mrrByCurrency, estimatedMRR } = summarizeSubscriptions(subBreakdown);
 
     const totalOrgs = orgCountRows[0]?.total ?? 0;
-    const paidSubs = Object.values(planCounts).reduce((a, b) => a + b, 0);
-    planCounts.free = Math.max(0, totalOrgs - paidSubs + (planCounts.free ?? 0));
-
-    // Estimated MRR: active Pro subscriptions at the monthly list price.
-    const estimatedMRR = planCounts.pro * PLAN_PRICES_USD.pro.month;
+    planCounts.free = Math.max(0, totalOrgs - planCounts.pro);
 
     const funnel = funnelThisMonth[0] ?? { impressions: 0, clicks: 0, copies: 0, redemptions: 0, revenueSaved: 0 };
     const integrationCounts: Record<string, number> = {};
@@ -772,6 +811,8 @@ app.get("/v1/admin/stats", async (c) => {
         totalOrganizations: totalOrgs,
         subscriptionsByPlan: planCounts,
         estimatedMRR,
+        mrrByCurrency,
+        testSubscriptions,
         activeOrgsLast30Days: (activeOrgsRows[0]?.total as number) ?? 0,
         platformFunnel: funnel,
         revenueSavedThisMonth: funnel.revenueSaved,

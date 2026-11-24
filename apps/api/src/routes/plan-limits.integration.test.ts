@@ -527,5 +527,54 @@ describe("Plan limits (full Worker)", () => {
       expect(refused.status).toBe(403);
       expect(await refused.json()).toMatchObject({ plan: "free", maxProducts: 1, currentCount: 2 });
     });
+
+    it("subscription.active and subscription.renewed arriving together leave one row with the mode, amount and country", async () => {
+      // Dodo sends both for a new subscription; production once got two rows.
+      const client = createTestClient(
+        worker,
+        createTestBindings({
+          DODO_WEBHOOK_SECRET: WEBHOOK_SECRET,
+          DODO_PRICE_ID_PRO_MONTHLY: PRO_MONTHLY,
+          DODO_ENVIRONMENT: "test_mode",
+        }),
+      );
+      const t = await seedTenant(client, "Racing Org");
+      const data = {
+        product_id: PRO_MONTHLY,
+        subscription_id: "sub_race",
+        customer: { customer_id: "cus_race" },
+        next_billing_date: inDays(30).toISOString(),
+        recurring_pre_tax_amount: 1900,
+        currency: "USD",
+        billing: { country: "in" },
+        metadata: { organizationId: t.orgId, plan: "pro" },
+      };
+
+      const [active, renewed] = await Promise.all([
+        signedDelivery(client, "msg_race_active", { type: "subscription.active", data }),
+        signedDelivery(client, "msg_race_renewed", { type: "subscription.renewed", data }),
+      ]);
+      expect([active.status, renewed.status]).toEqual([200, 200]);
+
+      const rows = await getTestDb().select().from(subscriptions).where(eq(subscriptions.organizationId, t.orgId));
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        plan: "pro",
+        status: "active",
+        environment: "test",
+        recurringAmount: 1900,
+        currency: "USD",
+        billingCountry: "IN",
+      });
+
+      // An event that doesn't carry the amount or country keeps the stored ones.
+      const bare = await signedDelivery(client, "msg_race_plan", {
+        type: "subscription.plan_changed",
+        data: { product_id: PRO_MONTHLY, subscription_id: "sub_race", metadata: { organizationId: t.orgId } },
+      });
+      expect(bare.status).toBe(200);
+      const [after] = await getTestDb().select().from(subscriptions).where(eq(subscriptions.organizationId, t.orgId));
+      expect(after).toMatchObject({ recurringAmount: 1900, currency: "USD", billingCountry: "IN", dodoCustId: "cus_race" });
+    });
   });
 });

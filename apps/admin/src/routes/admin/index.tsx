@@ -35,8 +35,10 @@ function AdminDashboardPage() {
       {/* KPI Cards */}
       <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <KPICard
-          title="Estimated MRR"
-          value={statsLoading ? '--' : `$${stats?.estimatedMRR ?? 0}`}
+          title="MRR"
+          qualifier="Live"
+          value={statsLoading ? '--' : formatUsd(stats?.estimatedMRR ?? 0)}
+          sub={statsLoading ? undefined : mrrNote(stats?.mrrByCurrency, stats?.testSubscriptions)}
           highlight
         />
         <KPICard
@@ -318,6 +320,19 @@ function PlanBadge({ plan }: { plan: string }) {
       {plan}
     </span>
   )
+}
+
+function formatUsd(n: number): string {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: n % 1 === 0 ? 0 : 2 }).format(n)
+}
+
+/** Other currencies (never added to USD) and the test subscriptions left out. */
+function mrrNote(byCurrency: Record<string, number> | undefined, test: number | undefined): string | undefined {
+  const parts = Object.entries(byCurrency ?? {})
+    .filter(([currency, amount]) => currency !== 'USD' && amount > 0)
+    .map(([currency, amount]) => `+ ${currency} ${amount.toLocaleString('en-US')}`)
+  if (test) parts.push(`${test} test ${test === 1 ? 'subscription' : 'subscriptions'} not counted`)
+  return parts.length > 0 ? parts.join(' · ') : undefined
 }
 
 function formatNumber(n: number): string {

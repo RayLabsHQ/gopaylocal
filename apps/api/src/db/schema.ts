@@ -112,12 +112,23 @@ export const invitations = pgTable("invitation", {
 
 export const subscriptions = pgTable("subscriptions", {
   id: t.text("id").primaryKey(),
-  organizationId: t.text("organization_id").notNull(),
+  // One row per organization: Dodo sends subscription.active and
+  // subscription.renewed together, so the webhook upserts on this.
+  organizationId: t.text("organization_id").notNull().unique(),
   plan: t.text("plan").$type<Plan>().notNull(),
   dodoCustId: t.text("dodo_cust_id"),
   dodoSubId: t.text("dodo_sub_id"),
   status: t.text("status").notNull(),
   currentPeriodEnd: t.timestamp("current_period_end"),
+  // The Dodo mode (DODO_ENVIRONMENT) the subscription was paid in. A test-mode
+  // subscription grants Pro like any other but is never counted as revenue.
+  environment: t.text("environment").$type<"live" | "test">().default("live").notNull(),
+  // What Dodo reports charging each period: pre-tax, in the smallest unit of
+  // `currency`. Null until the first subscription event that carries it.
+  recurringAmount: t.integer("recurring_amount"),
+  currency: t.text("currency"),
+  // ISO 3166-1 alpha-2, from the billing address given at checkout.
+  billingCountry: t.text("billing_country"),
   createdAt: t.timestamp("created_at").defaultNow().notNull(),
   updatedAt: t.timestamp("updated_at").defaultNow().notNull(),
 });
