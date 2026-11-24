@@ -30,6 +30,7 @@ import me from "./routes/me";
 import billing from "./routes/billing";
 import teamMembers from "./routes/team-members";
 import webhooks from "./routes/webhooks";
+import proPrice from "./routes/pro-price";
 import admin from "./routes/admin";
 import adminInsights from "./routes/admin-insights";
 import adminHousePricing from "./routes/admin-house-pricing";
@@ -65,6 +66,7 @@ app.route("/", auth);
 app.route("/", bannerScript);
 app.route("/", analyticsIngest);
 app.route("/", webhooks);
+app.route("/", proPrice);
 
 // ── Admin routes (require session + admin role) ────────────────────────────
 

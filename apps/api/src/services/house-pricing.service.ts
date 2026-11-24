@@ -4,15 +4,17 @@
  * The hosted service prices Pro with its own product: a campaign in the "house"
  * workspace (an internal workspace, chosen in the admin) holds the country
  * discounts, capped by the campaign's maximum discount. The price page and the
- * dashboard's Billing page show each visitor that campaign's price through the
- * public config endpoint, and Dodo Payments charges the same amount through
- * per-country prices ("Localized Pricing" rules on the Pro product), which this
- * module writes. The house campaign has no payment platform, so it never
+ * dashboard's Billing page show each visitor the price Dodo Payments charges in
+ * their country: per-country prices ("Localized Pricing" rules on the Pro
+ * product) that this module writes from that campaign, and records after every
+ * sync for `GET /v1/pricing/pro` to serve. The pages can therefore never show a
+ * price that Dodo doesn't charge, even between an exchange-rate refresh and the
+ * sync that follows it. The house campaign has no payment platform, so it never
  * creates discount codes: the price itself is lower, nothing is entered at
  * checkout, and Dodo's own PPP setting must stay off (it would apply on top).
  *
- * Both sides compute the amount with regionalCharge (packages/shared), from the
- * banner document the config endpoint serves and the same exchange rates.
+ * The amounts come from regionalCharge (packages/shared), applied to the banner
+ * document the config endpoint serves and the same exchange rates.
  *
  * Writes are batched: a sync makes at most `budget` Dodo calls and reports what
  * is left, so it fits the Workers Free subrequest limit. The admin's "Push to
@@ -49,10 +51,28 @@ export interface HouseSyncRecord {
   remaining: number;
 }
 
+/** One country's price as Dodo charges it after the last sync. */
+export interface HousePublishedPrice {
+  currency: string;
+  /** Minor units, as Dodo stores it. */
+  minorAmount: number;
+  /** The discount this amount was written for; null for a price this module didn't write. */
+  discount: number | null;
+}
+
+/** What Dodo charges per country, recorded after every sync. */
+export interface HousePublished {
+  at: string;
+  environment: "test_mode" | "live_mode";
+  productId: string;
+  prices: Record<string, HousePublishedPrice>;
+}
+
 export interface HouseSettings {
   organizationId: string;
   campaignId: string;
   lastSync?: HouseSyncRecord;
+  published?: HousePublished;
 }
 
 type HouseEnv = Pick<
@@ -70,7 +90,7 @@ export async function loadHouseSettings(db: Database): Promise<HouseSettings | n
     .limit(1);
   const v = row?.value as Partial<HouseSettings> | undefined;
   if (!v || typeof v.organizationId !== "string" || typeof v.campaignId !== "string") return null;
-  return { organizationId: v.organizationId, campaignId: v.campaignId, lastSync: v.lastSync };
+  return { organizationId: v.organizationId, campaignId: v.campaignId, lastSync: v.lastSync, published: v.published };
 }
 
 export async function saveHouseSettings(db: Database, settings: HouseSettings, userId: string | null): Promise<void> {
@@ -193,8 +213,12 @@ interface DodoReply {
   body: unknown;
 }
 
+export function dodoMode(env: Pick<Bindings, "DODO_ENVIRONMENT">): "test_mode" | "live_mode" {
+  return env.DODO_ENVIRONMENT === "test_mode" ? "test_mode" : "live_mode";
+}
+
 function dodoBase(env: Pick<Bindings, "DODO_ENVIRONMENT">): string {
-  return env.DODO_ENVIRONMENT === "test_mode" ? "https://test.dodopayments.com" : "https://live.dodopayments.com";
+  return dodoMode(env) === "test_mode" ? "https://test.dodopayments.com" : "https://live.dodopayments.com";
 }
 
 async function dodo(env: HouseEnv, method: string, path: string, body?: unknown): Promise<DodoReply> {
@@ -320,6 +344,46 @@ export function compareWithDodo(rows: readonly HousePriceRow[], rules: readonly 
   return { byCountry, extraRules };
 }
 
+/**
+ * Dodo's per-country prices as a published list: one entry per country that has
+ * a rule. The discount comes from the table row when the rule has the row's
+ * amount (just written, or already right), else from the previous list when
+ * the amount is unchanged, else null.
+ */
+export function publishedPrices(
+  rules: readonly DodoRule[],
+  rows: readonly HousePriceRow[],
+  previous: HousePublished["prices"] | null,
+): HousePublished["prices"] {
+  const byCountry = new Map(rows.map((r) => [r.country, r]));
+  const prices: HousePublished["prices"] = {};
+  for (const rule of rules) {
+    const country = ruleCountry(rule);
+    if (!country || Object.hasOwn(prices, country)) continue;
+    const currency = rule.currency.toUpperCase();
+    const row = byCountry.get(country);
+    const before = previous && Object.hasOwn(previous, country) ? previous[country]! : null;
+    const discount =
+      row && row.charge.currency === currency && row.charge.minorAmount === rule.amount
+        ? row.discount
+        : before && before.currency === currency && before.minorAmount === rule.amount
+          ? before.discount
+          : null;
+    prices[country] = { currency, minorAmount: rule.amount, discount };
+  }
+  return prices;
+}
+
+/** The published price for a country, if it was recorded for the Dodo mode and product in use now. */
+export function publishedPriceFor(
+  published: HousePublished | undefined | null,
+  env: Pick<Bindings, "DODO_ENVIRONMENT" | "DODO_PRICE_ID_PRO_MONTHLY">,
+  country: string,
+): HousePublishedPrice | null {
+  if (!published || published.environment !== dodoMode(env) || published.productId !== env.DODO_PRICE_ID_PRO_MONTHLY) return null;
+  return Object.hasOwn(published.prices, country) ? published.prices[country]! : null;
+}
+
 export type HouseSyncResult =
   | { outcome: "skipped"; reason: string }
   | { outcome: "problem"; problem: string }
@@ -363,11 +427,18 @@ export async function syncHousePrices(
   calls++;
   if (!listed.ok) return { outcome: "problem", problem: `Couldn't list the Pro product's prices. ${dodoErrorMessage(listed)}` };
 
-  const actions = planDodoSync(table.rows, rulesOf(listed.body));
+  const rulesBefore = rulesOf(listed.body);
+  const actions = planDodoSync(table.rows, rulesBefore);
+  // Dodo's rules as each call leaves them, for the published list.
+  const after = new Map<string, DodoRule>();
+  for (const rule of rulesBefore) {
+    const country = ruleCountry(rule);
+    if (country && !after.has(country)) after.set(country, rule);
+  }
   const record: HouseSyncRecord = {
     at: new Date(opts.now ?? Date.now()).toISOString(),
     trigger: opts.trigger,
-    environment: env.DODO_ENVIRONMENT === "test_mode" ? "test_mode" : "live_mode",
+    environment: dodoMode(env),
     productId: env.DODO_PRICE_ID_PRO_MONTHLY!,
     created: 0,
     updated: 0,
@@ -389,6 +460,7 @@ export async function syncHousePrices(
         fail(reply);
         continue;
       }
+      if (action.country && after.get(action.country)?.id === action.ruleId) after.delete(action.country);
       if (action.kind === "archive") {
         record.archived++;
         continue;
@@ -396,8 +468,10 @@ export async function syncHousePrices(
     }
     if (action.kind === "update") {
       const reply = await dodo(env, "PATCH", `${rulesPath}/${encodeURIComponent(action.ruleId)}`, { amount: action.amount });
-      if (reply.ok) record.updated++;
-      else fail(reply);
+      if (reply.ok) {
+        record.updated++;
+        after.set(action.country, { id: action.ruleId, country_code: action.country, currency: action.currency, amount: action.amount });
+      } else fail(reply);
       continue;
     }
     // create, or the second half of replace
@@ -406,13 +480,28 @@ export async function syncHousePrices(
       country_code: action.country,
       amount: action.amount,
     });
-    if (!reply.ok) fail(reply);
-    else if (action.kind === "replace") record.updated++;
+    if (!reply.ok) {
+      fail(reply);
+      continue;
+    }
+    if (action.kind === "replace") record.updated++;
     else record.created++;
+    const id = typeof (reply.body as { id?: unknown } | null)?.id === "string" ? (reply.body as { id: string }).id : "";
+    after.set(action.country, { id, country_code: action.country, currency: action.currency, amount: action.amount });
   }
   record.remaining = actions.length - done;
   record.failures = record.failures.slice(0, 20);
-  await saveHouseSettings(db, { ...settings, lastSync: record }, opts.userId ?? null);
+  const previous =
+    settings.published && settings.published.environment === record.environment && settings.published.productId === record.productId
+      ? settings.published.prices
+      : null;
+  const published: HousePublished = {
+    at: record.at,
+    environment: record.environment,
+    productId: record.productId,
+    prices: publishedPrices([...after.values()], table.rows, previous),
+  };
+  await saveHouseSettings(db, { ...settings, lastSync: record, published }, opts.userId ?? null);
   return { outcome: "synced", record };
 }
 

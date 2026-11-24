@@ -73,9 +73,11 @@ function AdminLayout() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col md:flex-row">
+    // From md up the shell is exactly the window's height: the sidebar stays put
+    // and only <main> scrolls. On a phone the page scrolls under the top bar.
+    <div className="flex min-h-screen flex-col md:h-dvh md:min-h-0 md:flex-row md:overflow-hidden">
       {/* Sidebar; a top bar with a scrolling nav strip on a phone */}
-      <aside className="flex w-full shrink-0 flex-col border-b border-border bg-bg md:w-60 md:border-r md:border-b-0">
+      <aside className="flex w-full shrink-0 flex-col border-b border-border bg-bg md:w-60 md:overflow-y-auto md:border-r md:border-b-0">
         {/* Logo */}
         <div className="flex items-center gap-2 border-b border-border px-4 py-4 md:px-5 md:py-6">
           <BrandMark className="h-5 w-5 shrink-0" />

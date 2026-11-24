@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DODO_CURRENCY_MINIMUMS, regionalCharge, regionalOfferFromAnswer } from "./regional-charge";
+import { DODO_CURRENCY_MINIMUMS, regionalCharge, regionalOfferFromProPrice } from "./regional-charge";
 
 const PRO = { basePrice: 19, baseCurrency: "USD" };
 
@@ -50,37 +50,40 @@ describe("regionalCharge", () => {
   });
 });
 
-describe("regionalOfferFromAnswer", () => {
-  const answer = {
-    show: true,
-    country: "IN",
-    countryName: "India",
-    discount: 70,
-    code: null,
-    baseCurrencyCode: "USD",
-    currencyCode: "INR",
-    localPrice: 479,
-    fxAsOf: "2026-11-24",
-  };
-
-  it("reads the price the config endpoint served", () => {
-    expect(regionalOfferFromAnswer(answer, 19, "USD")).toEqual({
-      currency: "INR",
-      amount: 479,
-      minorAmount: 47_900,
-      local: true,
-      discount: 70,
+describe("regionalOfferFromProPrice", () => {
+  const body = {
+    data: {
       country: "IN",
       countryName: "India",
+      listPrice: 19,
+      listCurrency: "USD",
+      offer: { discount: 70, currency: "INR", amount: 529, minorAmount: 52900 },
+    },
+  };
+
+  it("reads the offer the pricing endpoint serves", () => {
+    expect(regionalOfferFromProPrice(body)).toEqual({
+      country: "IN",
+      countryName: "India",
+      discount: 70,
+      currency: "INR",
+      amount: 529,
+      minorAmount: 52900,
     });
   });
 
-  it("ignores no-discount answers, deals, A/B arms, codes and a product in another currency", () => {
-    expect(regionalOfferFromAnswer({ show: false, reason: "no_discount" }, 19, "USD")).toBeNull();
-    expect(regionalOfferFromAnswer({ ...answer, deal: { id: "d" } }, 19, "USD")).toBeNull();
-    expect(regionalOfferFromAnswer({ ...answer, experimentId: "e", variant: "b" }, 19, "USD")).toBeNull();
-    expect(regionalOfferFromAnswer({ ...answer, baseCurrencyCode: "EUR" }, 19, "USD")).toBeNull();
-    expect(regionalOfferFromAnswer({ ...answer, code: "PPP70" }, 19, "USD")).toBeNull();
-    expect(regionalOfferFromAnswer(null, 19, "USD")).toBeNull();
+  it("keeps a price whose discount isn't known", () => {
+    const unknown = { data: { ...body.data, offer: { ...body.data.offer, discount: null } } };
+    expect(regionalOfferFromProPrice(unknown)?.discount).toBeNull();
+  });
+
+  it("is null for the list price and for anything malformed", () => {
+    expect(regionalOfferFromProPrice({ data: { ...body.data, offer: null } })).toBeNull();
+    expect(regionalOfferFromProPrice({ data: { ...body.data, country: null } })).toBeNull();
+    expect(regionalOfferFromProPrice({ data: { ...body.data, offer: { ...body.data.offer, amount: 0 } } })).toBeNull();
+    expect(regionalOfferFromProPrice({ data: { ...body.data, offer: { ...body.data.offer, currency: "inr" } } })).toBeNull();
+    expect(regionalOfferFromProPrice({ data: { ...body.data, offer: { ...body.data.offer, discount: 100 } } })).toBeNull();
+    expect(regionalOfferFromProPrice({ show: true, discount: 70 })).toBeNull();
+    expect(regionalOfferFromProPrice(null)).toBeNull();
   });
 });

@@ -5,8 +5,11 @@ import {
   houseSyncUnavailable,
   isHouseSyncRun,
   planDodoSync,
+  publishedPriceFor,
+  publishedPrices,
   type DodoRule,
   type HousePriceRow,
+  type HousePublished,
 } from "./house-pricing.service";
 
 const row = (country: string, currency: string, minorAmount: number): HousePriceRow => ({
@@ -93,5 +96,43 @@ describe("scheduling and availability", () => {
     );
     expect(dodoErrorMessage({ status: 500, body: null })).toBe("Dodo answered 500");
     expect(dodoErrorMessage({ status: 422, body: "x".repeat(500) })).toHaveLength("Dodo answered 422: ".length + 200);
+  });
+});
+
+describe("publishedPrices", () => {
+  it("lists what Dodo charges per country, with the discount when the amount is the one written for it", () => {
+    const rows = [row("IN", "INR", 52_900), row("BR", "BRL", 4990)];
+    const rules = [rule("r1", "IN", "INR", 52_900), rule("r2", "BR", "BRL", 3990), rule("r3", null, "EUR", 900), rule("r4", "IN", "INR", 1)];
+    expect(publishedPrices(rules, rows, null)).toEqual({
+      IN: { currency: "INR", minorAmount: 52_900, discount: 50 },
+      // An old amount the table no longer wants is still what Dodo charges.
+      BR: { currency: "BRL", minorAmount: 3990, discount: null },
+    });
+  });
+
+  it("keeps the earlier discount for an amount that didn't change", () => {
+    const previous = { BR: { currency: "BRL", minorAmount: 3990, discount: 60 } };
+    expect(publishedPrices([rule("r2", "br", "brl", 3990)], [row("BR", "BRL", 4990)], previous)).toEqual({
+      BR: { currency: "BRL", minorAmount: 3990, discount: 60 },
+    });
+  });
+});
+
+describe("publishedPriceFor", () => {
+  const published: HousePublished = {
+    at: "2026-11-24T00:00:00.000Z",
+    environment: "test_mode",
+    productId: "pdt_FAKE",
+    prices: { IN: { currency: "INR", minorAmount: 52_900, discount: 70 } },
+  };
+  const env = { DODO_ENVIRONMENT: "test_mode", DODO_PRICE_ID_PRO_MONTHLY: "pdt_FAKE" } as const;
+
+  it("answers only for the Dodo mode and product the list was recorded for", () => {
+    expect(publishedPriceFor(published, env, "IN")).toEqual({ currency: "INR", minorAmount: 52_900, discount: 70 });
+    expect(publishedPriceFor(published, env, "US")).toBeNull();
+    expect(publishedPriceFor(published, env, "constructor")).toBeNull();
+    expect(publishedPriceFor(published, { ...env, DODO_ENVIRONMENT: "live_mode" }, "IN")).toBeNull();
+    expect(publishedPriceFor(published, { ...env, DODO_PRICE_ID_PRO_MONTHLY: "pdt_OTHER" }, "IN")).toBeNull();
+    expect(publishedPriceFor(undefined, env, "IN")).toBeNull();
   });
 });

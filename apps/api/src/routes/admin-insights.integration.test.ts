@@ -13,6 +13,7 @@ import {
   users,
 } from "../db/schema";
 import { createTestBindings, createTestClient, type TestClient } from "../test/helpers";
+import { resetProPriceMemo } from "./pro-price";
 import { as, seedOrg, seedTenant, seedUser, signIn, type TestUser } from "../test/auth";
 import { cleanupTestDb, closeTestDb, getTestDb } from "../test/setup";
 
@@ -148,6 +149,16 @@ describe("admin insights and the regional Pro price", () => {
     const india = rows.find((r) => r.country === "IN")!;
     expect(india).toMatchObject({ discount: 70, currency: "USD", amount: 5.7 });
 
+    // The public price follows Dodo, not the campaign: nothing is at Dodo yet.
+    const proPrice = async (country?: string) => {
+      resetProPriceMemo();
+      const res = await client.request("/v1/pricing/pro", country ? { cf: { country } } : {});
+      expect(res.status).toBe(200);
+      expect(res.headers.get("access-control-allow-origin")).toBe("*");
+      return (await res.json()).data;
+    };
+    expect((await proPrice("IN")).offer).toBeNull();
+
     // Push until nothing is left; each request stays within its call budget.
     let batches = 0;
     for (;;) {
@@ -170,8 +181,23 @@ describe("admin insights and the regional Pro price", () => {
     expect(synced.table.rows.every((r: { dodo: { status: string } }) => r.dodo.status === "match")).toBe(true);
     expect(synced.dodo).toEqual({ ok: true, extraRules: 0 });
 
+    expect(await proPrice("IN")).toEqual({
+      country: "IN",
+      countryName: "India",
+      listPrice: 19,
+      listCurrency: "USD",
+      offer: { discount: 70, currency: "USD", amount: 5.7, minorAmount: 570 },
+    });
+    expect((await proPrice("US")).offer).toBeNull();
+    expect(await proPrice()).toMatchObject({ country: null, offer: null });
+
     // A lower cap: changed amounts are updated in place, nothing is created.
     await getTestDb().update(campaigns).set({ maxDiscountPercent: 50 }).where(eq(campaigns.id, house.campaignId));
+    // Until the sync runs, the page still shows what Dodo charges.
+    expect((await proPrice("IN")).offer).toMatchObject({ discount: 70, minorAmount: 570 });
+    // Picking the campaign again keeps the recorded prices.
+    expect((await client.request("/v1/admin/house-pricing", { method: "PUT", headers: as(admin), json: { campaignId: house.campaignId } })).status).toBe(200);
+    expect((await proPrice("IN")).offer).toMatchObject({ discount: 70, minorAmount: 570 });
     let update;
     do {
       update = (await (await client.request("/v1/admin/house-pricing/sync", { method: "POST", headers: as(admin) })).json()).data;
@@ -179,6 +205,7 @@ describe("admin insights and the regional Pro price", () => {
     } while (update.record.remaining > 0);
     expect(dodo.state.rules.find((r) => r.country_code === "IN")).toMatchObject({ currency: "USD", amount: 950 });
     expect(dodo.state.rules).toHaveLength(rows.length);
+    expect((await proPrice("IN")).offer).toEqual({ discount: 50, currency: "USD", amount: 9.5, minorAmount: 950 });
 
     // A payment platform connected to the house campaign since it was picked
     // stops every sync: its codes would come off the per-country price.

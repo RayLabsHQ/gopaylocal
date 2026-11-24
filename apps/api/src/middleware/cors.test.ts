@@ -348,10 +348,13 @@ describe("corsClassFor", () => {
     expect(corsClassFor("/v1/banner/script.js")).toBe("public-asset");
     expect(corsClassFor("/v1/banner/bundle.js")).toBe("public-asset");
     expect(corsClassFor("/v1/banner/config/gpl_pk_x")).toBe("public-read");
+    expect(corsClassFor("/v1/pricing/pro")).toBe("public-read");
     expect(corsClassFor("/v1/events")).toBe("public-write");
     for (const p of [
       "/v1/events/",
       "/v1/eventsx",
+      "/v1/pricing/pro/",
+      "/v1/pricing/promo",
       "/v1/banner/config",
       "/v1/banner/script.jsx",
       "/v1/teams/org_1/banner-configs/camp_1",

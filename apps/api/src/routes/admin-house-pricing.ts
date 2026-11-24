@@ -125,7 +125,13 @@ app.put("/v1/admin/house-pricing", async (c) => {
       return c.json({ error: "The house campaign must have no payment platform, so it shows the price without a code." }, 400);
     }
     const previous = await loadHouseSettings(db);
-    await saveHouseSettings(db, { organizationId: campaign.organizationId, campaignId: campaign.id }, admin.id);
+    // The published list describes what Dodo charges, not the campaign: keep it
+    // until the next sync rewrites it, so the pricing pages stay right meanwhile.
+    await saveHouseSettings(
+      db,
+      { organizationId: campaign.organizationId, campaignId: campaign.id, ...(previous?.published ? { published: previous.published } : {}) },
+      admin.id,
+    );
     await db.insert(adminAuditLog).values({
       id: ulid(),
       adminUserId: admin.id,

@@ -91,35 +91,41 @@ function toMinor(amount: number, currency: string): number {
   return Math.round(amount * 10 ** minorUnitExponent(currency));
 }
 
-export interface RegionalOffer extends RegionalCharge {
-  discount: number;
+/** The hosted Pro price for one visitor, as `GET /v1/pricing/pro` answers it. */
+export interface RegionalOffer {
   country: string;
   countryName: string;
+  /** Percent off the list price; null for a price the house sync didn't write. */
+  discount: number | null;
+  currency: string;
+  /** Major units, as shown. */
+  amount: number;
+  /** Minor units, as Dodo charges. */
+  minorAmount: number;
 }
 
 /**
- * A visitor's charge from the config endpoint's answer for them
- * (`GET /v1/banner/config/{publicKey}`). Null when they get no discount, when
- * the answer is for a product in another currency, and when it is a holiday
- * deal, an A/B test arm, or an offer with a code: Dodo's per-country prices
- * follow none of them.
+ * The visitor's regional Pro price from the `GET /v1/pricing/pro` response body
+ * (`{ data: { country, countryName, offer } }`), or null for the list price.
+ * The endpoint serves what Dodo Payments charges per country, so a page that
+ * shows this shows the price checkout charges.
  */
-export function regionalOfferFromAnswer(answer: unknown, basePrice: number, baseCurrency: string): RegionalOffer | null {
-  if (!answer || typeof answer !== "object") return null;
-  const a = answer as Record<string, unknown>;
-  if (a.show !== true || typeof a.discount !== "number" || typeof a.country !== "string") return null;
-  // A code would be taken off the per-country price at checkout: not this setup.
-  if (a.deal || a.experimentId || a.code) return null;
-  if (typeof a.baseCurrencyCode === "string" && a.baseCurrencyCode !== baseCurrency) return null;
-  const charge = regionalCharge({
-    basePrice,
-    baseCurrency,
-    discount: a.discount,
-    local:
-      typeof a.currencyCode === "string"
-        ? { currencyCode: a.currencyCode, localPrice: typeof a.localPrice === "number" ? a.localPrice : null }
-        : null,
-  });
-  if (!charge) return null;
-  return { ...charge, discount: a.discount, country: a.country, countryName: typeof a.countryName === "string" ? a.countryName : a.country };
+export function regionalOfferFromProPrice(body: unknown): RegionalOffer | null {
+  const data = body && typeof body === "object" ? (body as { data?: unknown }).data : null;
+  if (!data || typeof data !== "object") return null;
+  const d = data as Record<string, unknown>;
+  const offer = d.offer && typeof d.offer === "object" ? (d.offer as Record<string, unknown>) : null;
+  if (!offer || typeof d.country !== "string") return null;
+  const { discount, currency, amount, minorAmount } = offer;
+  if (typeof currency !== "string" || !/^[A-Z]{3}$/.test(currency)) return null;
+  if (typeof amount !== "number" || !(amount > 0) || typeof minorAmount !== "number" || !(minorAmount > 0)) return null;
+  if (discount !== null && (typeof discount !== "number" || !(discount > 0) || discount >= 100)) return null;
+  return {
+    country: d.country,
+    countryName: typeof d.countryName === "string" ? d.countryName : d.country,
+    discount,
+    currency,
+    amount,
+    minorAmount,
+  };
 }

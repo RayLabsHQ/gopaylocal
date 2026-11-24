@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { PLAN_PRICES_USD } from '@gopaylocal/shared/constants';
-import { regionalOfferFromAnswer, type RegionalOffer } from '@gopaylocal/shared/currency';
+import { regionalOfferFromProPrice, type RegionalOffer } from '@gopaylocal/shared/currency';
 
-// Pro is priced with GoPayLocal itself: the house workspace's campaign holds
-// each country's discount, served by the same config endpoint our customers'
-// banners use, and Dodo Payments charges that price at checkout. Without the
-// key (a fork, a local build) nothing renders and the card shows the list price.
+// Pro is priced per country with GoPayLocal itself, and Dodo Payments charges
+// that price at checkout. GET /v1/pricing/pro answers with what Dodo charges in
+// the visitor's country. The house key (which also loads the site's banner)
+// marks the hosted site's build: without it (a fork, a local build) nothing
+// renders and the card shows the list price.
 const HOUSE_KEY = import.meta.env.PUBLIC_GOPAYLOCAL_PUBLIC_KEY as string | undefined;
 const API_BASE = (import.meta.env.PUBLIC_GOPAYLOCAL_API_URL as string | undefined) || 'https://api.gopaylocal.com';
 
@@ -28,10 +28,10 @@ export default function RegionalProPrice() {
   useEffect(() => {
     if (!HOUSE_KEY) return;
     let cancelled = false;
-    fetch(`${API_BASE}/v1/banner/config/${encodeURIComponent(HOUSE_KEY)}`)
+    fetch(`${API_BASE}/v1/pricing/pro`)
       .then((res) => (res.ok ? res.json() : null))
-      .then((answer) => {
-        if (!cancelled) setOffer(regionalOfferFromAnswer(answer, PLAN_PRICES_USD.pro.month, 'USD'));
+      .then((body) => {
+        if (!cancelled) setOffer(regionalOfferFromProPrice(body));
       })
       .catch(() => {});
     return () => {
@@ -47,7 +47,8 @@ export default function RegionalProPrice() {
       </span>
       <span className="text-text-secondary">
         {' '}
-        · {offer.discount}% off, charged at checkout when your billing address is in {offer.countryName}
+        · {offer.discount !== null ? `${offer.discount}% off, charged` : 'Charged'} at checkout when your billing address is in{' '}
+        {offer.countryName}
       </span>
     </p>
   );

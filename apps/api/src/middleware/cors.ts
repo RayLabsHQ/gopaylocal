@@ -14,7 +14,8 @@ import { isSelfHosted } from "../lib/entitlements";
  *
  *  class          paths                                  Access-Control-Allow-Origin            credentials
  *  public-asset   GET /v1/banner/script.js, bundle.js    `*` (no Vary: stays publicly cacheable)  no
- *  public-read    GET /v1/banner/config/:publicKey       `*` + Vary: Origin                      no
+ *  public-read    GET /v1/banner/config/:publicKey,      `*` + Vary: Origin                      no
+ *                 GET /v1/pricing/pro
  *  public-write   POST /v1/events                        request origin reflected + Vary: Origin  yes
  *  app            everything else                        allowlisted origin only + Vary: Origin   yes
  *
@@ -53,7 +54,7 @@ export function corsClassFor(path: string): CorsClass {
   if (path === "/v1/banner/script.js" || path === "/v1/banner/bundle.js") {
     return "public-asset";
   }
-  if (path.startsWith("/v1/banner/config/")) return "public-read";
+  if (path.startsWith("/v1/banner/config/") || path === "/v1/pricing/pro") return "public-read";
   if (path === "/v1/events") return "public-write";
   return "app";
 }

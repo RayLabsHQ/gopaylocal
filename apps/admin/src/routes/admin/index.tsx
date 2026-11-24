@@ -28,15 +28,6 @@ function AdminDashboardPage() {
       <h1 className="font-display text-[42px] font-bold tracking-tight text-text-primary">
         Command Center
       </h1>
-      <p className="mt-1 text-base text-text-secondary">
-        <span className="font-mono text-accent">//</span> Business intelligence, in real time
-      </p>
-      {!statsLoading && (stats?.internalOrganizations ?? 0) > 0 && (
-        <p className="mt-2 text-[13px] text-text-muted">
-          Live data only. {stats?.internalOrganizations} internal{' '}
-          {stats?.internalOrganizations === 1 ? 'workspace and its members are' : 'workspaces and their members are'} left out.
-        </p>
-      )}
 
       {/* KPI Cards */}
       <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
