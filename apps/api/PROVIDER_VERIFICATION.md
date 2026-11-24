@@ -232,9 +232,9 @@ a run by hand.
 **Keys.** The workflow runs only on its schedule and on manual runs, never for
 pull requests, so code from a fork cannot reach the secrets. This repository's
 workflow logs are public, so the workflow runs the tool with `--public-log`:
-no part of a key, no product names or prices, no checkout link and no account
-name or store host are printed. What the log does show is the number of
-products, the throwaway discount code (created and deleted in the same run)
+no part of a key, no product names, prices or ids, no discount code, no
+checkout link and no account name or store host are printed. What the log
+does show is the result of each step, the number of products and discounts,
 and the provider hosts contacted. For every provider
 with a sandbox the tool refuses a live key. Gumroad and WooCommerce have no
 sandbox; give those two a key from an account or store that exists only for

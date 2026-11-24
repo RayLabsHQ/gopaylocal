@@ -21,8 +21,9 @@
  *
  * The report can be public (a public repository's workflow logs are), so the
  * tool always runs with --public-log: check names, results and counts, and
- * nothing of the account's contents (no part of a key, no product names or
- * prices, no checkout link, no account name or store host).
+ * nothing of the account's contents (no part of a key, no product names,
+ * prices or ids, no discount code, no checkout link, no account name or store
+ * host).
  */
 
 import { spawnSync } from 'node:child_process';

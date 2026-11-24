@@ -372,8 +372,8 @@ ${checkoutIds}
   --json                print one JSON report on stdout (progress goes to stderr);
                         use \`pnpm -s ...\` so pnpm's banner doesn't precede it
   --public-log          for output anyone can read (CI on a public repository): prints no
-                        part of a key, no product names or prices, no checkout link and
-                        no account name or store host
+                        part of a key, no product names, prices or ids, no discount code,
+                        no checkout link and no account name or store host
   --timeout <seconds>   per-call timeout (default ${DEFAULT_TIMEOUT_SECONDS})
 
 Replay flags (--replay <file>: JSON {"headers": {...}, "rawBody": "..."}):

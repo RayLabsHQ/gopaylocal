@@ -718,6 +718,11 @@ describe('main: verify run', () => {
       expect(text).not.toContain('checkout.example.test');
       expect(text.toLowerCase()).not.toContain('private-store');
       expect(text).toContain('1 product(s); --product is one of them');
+      // The throwaway code works on a real store until cleanup; the product id is the merchant's.
+      expect(text).not.toMatch(/VERIFY-?ZZ17-?AAAA/i);
+      expect(text).toContain('[throwaway code]');
+      expect(text).not.toContain('price_1');
+      expect(text).toContain('built for [product] with [throwaway code]');
     }
     const h = harness(storeEnv, fake.provider);
     await main(['woocommerce', '--product', 'price_1', '--allow-live', '--public-log', '--json'], h.deps);

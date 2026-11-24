@@ -84,7 +84,10 @@ export async function main(argv: string[], deps: MainDeps): Promise<number> {
   const account = resolveAccountId(profile, deps.env);
   // The account name can be part of a host ({site}.chargebee.com) or be a
   // store's URL; neither belongs in a log anyone can read.
-  if (options.publicLog) redactor.addAccount(account.value);
+  if (options.publicLog) {
+    redactor.addAccount(account.value);
+    redactor.addLabel(options.product, '[product]');
+  }
 
   const problems: string[] = [];
   if (account.conflict) problems.push(account.conflict);

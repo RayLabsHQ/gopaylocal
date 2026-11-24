@@ -186,6 +186,9 @@ export async function verifyFlow(ctx: FlowContext): Promise<VerifyArtifacts> {
   // 2. create-discount — cleanup is registered the moment the provider returns
   // an id, before any assertion, so a half-right result still gets deleted.
   const requestedCode = generateThrowawayCode(ctx.providerName, percent, ctx.randomBytes);
+  // --public-log: the code works at the provider until cleanup, and on Gumroad
+  // or WooCommerce that is a real store. Anyone watching the log could use it.
+  if (options.publicLog) ctx.redactor.addLabel(requestedCode, '[throwaway code]');
   const create = await runner.step('create-discount', async () => {
     const d: ProviderDiscount = await provider.createDiscount({
       name: `GoPayLocal verify ${requestedCode}`,
@@ -194,6 +197,7 @@ export async function verifyFlow(ctx: FlowContext): Promise<VerifyArtifacts> {
       amount: percent,
       ...(profile?.scopeDiscountToProduct && options.product ? { productIds: [options.product] } : {}),
     });
+    if (options.publicLog && d?.code) ctx.redactor.addLabel(d.code, '[throwaway code]');
     if (d && isRealId(d.providerDiscountId)) {
       art.discount = {
         providerDiscountId: d.providerDiscountId,
