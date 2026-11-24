@@ -63,11 +63,11 @@ describe('planRun', () => {
     }
   });
 
-  it('runs with --json and nothing else by default', () => {
+  it('runs with --json and --public-log and nothing else by default', () => {
     expect(planRun({ VERIFY_PROVIDER: 'paddle', GPL_VERIFY_API_KEY: 'k' })).toEqual({
       kind: 'run',
       provider: 'paddle',
-      args: ['paddle', '--json'],
+      args: ['paddle', '--json', '--public-log'],
     });
   });
 
@@ -78,7 +78,7 @@ describe('planRun', () => {
       VERIFY_PRODUCT: ' abc ',
       VERIFY_REAL_ACCOUNT: 'true',
     });
-    expect(plan).toEqual({ kind: 'run', provider: 'gumroad', args: ['gumroad', '--json', '--product', 'abc', '--allow-live'] });
+    expect(plan).toEqual({ kind: 'run', provider: 'gumroad', args: ['gumroad', '--json', '--public-log', '--product', 'abc', '--allow-live'] });
     // GitHub sets an unset secret or a false flag to '' or 'false': neither adds a flag.
     const plain = planRun({
       VERIFY_PROVIDER: 'stripe',
@@ -87,12 +87,12 @@ describe('planRun', () => {
       VERIFY_REAL_ACCOUNT: 'false',
       VERIFY_DRY_RUN: 'false',
     });
-    expect(plan.kind === 'run' && plain.kind === 'run' && plain.args).toEqual(['stripe', '--json']);
+    expect(plan.kind === 'run' && plain.kind === 'run' && plain.args).toEqual(['stripe', '--json', '--public-log']);
   });
 
   it('passes --dry-run when asked', () => {
     const plan = planRun({ VERIFY_PROVIDER: 'creem', GPL_VERIFY_API_KEY: 'k', VERIFY_DRY_RUN: 'true' });
-    expect(plan.kind === 'run' && plan.args).toEqual(['creem', '--json', '--dry-run']);
+    expect(plan.kind === 'run' && plan.args).toEqual(['creem', '--json', '--public-log', '--dry-run']);
   });
 
   it('accepts the dodo alias', () => {

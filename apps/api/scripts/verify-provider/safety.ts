@@ -16,6 +16,12 @@ export function mask(value: string | null | undefined): string {
   return `${head}…${value.slice(-4)} [${n} chars]`;
 }
 
+/** A secret for output anyone can read (--public-log): its length and nothing else. */
+export function hidden(value: string | null | undefined): string {
+  if (value == null || value === '') return '(not set)';
+  return `[hidden, ${value.length} chars]`;
+}
+
 /**
  * Replaces every known secret (and its common encodings) in output text with
  * its mask. All tool output passes through one Redactor, so a provider error
@@ -23,6 +29,22 @@ export function mask(value: string | null | undefined): string {
  */
 export class Redactor {
   private readonly secrets = new Map<string, string>(); // variant → mask
+  private readonly hideAll: boolean;
+
+  /** `hideAll`: show no part of a secret, only its length (--public-log). */
+  constructor(options: { hideAll?: boolean } = {}) {
+    this.hideAll = options.hideAll ?? false;
+  }
+
+  /**
+   * Replace a value that is not a credential but should not be printed (an
+   * account name, a store's host) with a label. Very short values are left
+   * alone: replacing them would garble unrelated text.
+   */
+  addLabel(value: string | null | undefined, label: string): void {
+    if (!value || value.length < 4) return;
+    this.secrets.set(value, label);
+  }
 
   add(secret: string | null | undefined): void {
     if (!secret || secret.length < 6) return;
@@ -34,7 +56,7 @@ export class Redactor {
       this.add(secret.slice(0, colon));
       this.add(secret.slice(colon + 1));
     }
-    const masked = mask(secret);
+    const masked = this.hideAll ? hidden(secret) : mask(secret);
     const variants = new Set<string>([secret, encodeURIComponent(secret)]);
     try {
       variants.add(btoa(secret));

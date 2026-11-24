@@ -43,7 +43,7 @@ import { hostMatches, installNetworkGuard } from '../../scripts/verify-provider/
 import { PROVIDER_PROFILES, resolveAccountId } from '../../scripts/verify-provider/profiles';
 import type { ProviderProfile } from '../../scripts/verify-provider/profiles';
 import { StepRunner, runWithCleanup } from '../../scripts/verify-provider/runner';
-import { Redactor, decideMode, mask } from '../../scripts/verify-provider/safety';
+import { Redactor, decideMode, hidden, mask } from '../../scripts/verify-provider/safety';
 import type { ModeInput } from '../../scripts/verify-provider/safety';
 
 // ── helpers ─────────────────────────────────────────────────────────────────
@@ -313,7 +313,32 @@ describe('mask', () => {
   });
 });
 
+describe('hidden', () => {
+  it('shows the length of a secret and no part of it', () => {
+    const key = `sk_test_${'x'.repeat(90)}WXYZ`;
+    expect(hidden(key)).toBe(`[hidden, ${key.length} chars]`);
+    expect(hidden(undefined)).toBe('(not set)');
+  });
+});
+
 describe('Redactor', () => {
+  it('with hideAll, replaces a secret with its length only', () => {
+    const r = new Redactor({ hideAll: true });
+    const key = `sk_test_${'x'.repeat(40)}WXYZ`;
+    r.add(key);
+    const out = r.redact(`Invalid key ${key} provided`);
+    expect(out).toBe(`Invalid key [hidden, ${key.length} chars] provided`);
+    expect(out).not.toContain('sk_test_');
+    expect(out).not.toContain('WXYZ');
+  });
+
+  it('replaces a labelled value wherever it appears, and leaves very short ones alone', () => {
+    const r = new Redactor();
+    r.addLabel('acme-test', '[account id]');
+    r.addLabel('abc', '[account id]');
+    expect(r.redact('Hosts contacted: acme-test.chargebee.com (abc)')).toBe('Hosts contacted: [account id].chargebee.com (abc)');
+  });
+
   it('replaces a secret and its URL- and base64-encoded forms', () => {
     const r = new Redactor();
     const key = 'live_key+with/specials=0123456789';
@@ -635,6 +660,40 @@ describe('main: verify run', () => {
       expect(text).not.toContain(TEST_KEY);
       expect(text).toContain(mask(TEST_KEY));
     }
+  });
+
+  it('--public-log prints no part of the key, no product, no checkout link and no account host', async () => {
+    const fake = makeFakeProvider({ name: 'woocommerce' });
+    const storeEnv = { GPL_VERIFY_API_KEY: TEST_KEY, GPL_VERIFY_STORE_URL: 'https://shop.private-store.example' };
+    for (const flags of [['--public-log'], ['--public-log', '--json']]) {
+      const h = harness(storeEnv, fake.provider);
+      const code = await main(['woocommerce', '--product', 'price_1', '--allow-live', ...flags], h.deps);
+      const text = h.all();
+      expect(code, text).toBe(0);
+      expect(text).not.toContain(TEST_KEY);
+      expect(text).not.toContain(TEST_KEY.slice(-4));
+      expect(text).not.toContain('sk_test_');
+      expect(text).toContain(`[hidden, ${TEST_KEY.length} chars]`);
+      expect(text).not.toContain('"Pro"');
+      expect(text).not.toContain('19 usd');
+      expect(text).not.toContain('checkout.example.test');
+      expect(text).not.toContain('private-store.example');
+      expect(text).toContain('1 product(s); --product is one of them');
+    }
+    const h = harness(storeEnv, fake.provider);
+    await main(['woocommerce', '--product', 'price_1', '--allow-live', '--public-log', '--json'], h.deps);
+    const report = jsonReport(h);
+    expect(report.artifacts.checkoutUrl).toBeUndefined();
+    expect(statusOf(report, 'checkout-url')).toEqual(['PASS']);
+  });
+
+  it('--public-log hides a key the provider echoes in an error', async () => {
+    const fake = makeFakeProvider({ failOn: { listProducts: new Error(`Invalid key ${TEST_KEY} provided`) } });
+    const h = harness(env, fake.provider);
+    await main(['stripe', '--public-log', '--json'], h.deps);
+    expect(h.all()).not.toContain(TEST_KEY);
+    expect(h.all()).not.toContain(TEST_KEY.slice(-4));
+    expect(h.all()).toContain(`[hidden, ${TEST_KEY.length} chars]`);
   });
 
   it('cleanup still deletes the discount when a later check fails', async () => {

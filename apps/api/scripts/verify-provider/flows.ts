@@ -160,16 +160,22 @@ export async function verifyFlow(ctx: FlowContext): Promise<VerifyArtifacts> {
           typeof p.name !== 'string' ||
           (p.price !== null && !Number.isFinite(p.price)),
       );
-      const sample = products.slice(0, 5).map(fmtProduct).join('; ');
+      // --public-log: the account's catalogue (names, prices, ids) is not printed.
+      const sample = options.publicLog ? '' : products.slice(0, 5).map(fmtProduct).join('; ');
       let detail = `${products.length} product(s)${sample ? `: ${sample}${products.length > 5 ? '; …' : ''}` : ''}`;
       if (options.product && !products.some((p) => p.providerProductId === options.product)) {
         detail += ` (note: --product ${options.product} is not one of these ids; expected ${profile?.checkoutId ?? 'a provider id'})`;
+      } else if (options.product && options.publicLog) {
+        detail += '; --product is one of them';
       }
-      const data = { count: products.length, products: products.slice(0, 20) };
+      const data = options.publicLog
+        ? { count: products.length }
+        : { count: products.length, products: products.slice(0, 20) };
       if (malformed.length) {
+        const which = options.publicLog ? '' : `: ${JSON.stringify(malformed.slice(0, 2))}`;
         return {
           status: 'FAIL',
-          detail: `${malformed.length} of ${products.length} product(s) are malformed (missing id/name or non-numeric price): ${JSON.stringify(malformed.slice(0, 2))}`,
+          detail: `${malformed.length} of ${products.length} product(s) are malformed (missing id/name or non-numeric price)${which}`,
           data,
         };
       }
@@ -295,15 +301,18 @@ export async function verifyFlow(ctx: FlowContext): Promise<VerifyArtifacts> {
       try {
         parsed = new URL(url);
       } catch {
-        return { status: 'FAIL', detail: `buildCheckoutUrl() returned something that is not a URL: ${JSON.stringify(url)}` };
+        const what = options.publicLog ? '' : `: ${JSON.stringify(url)}`;
+        return { status: 'FAIL', detail: `buildCheckoutUrl() returned something that is not a URL${what}` };
       }
-      if (parsed.protocol !== 'https:') return { status: 'FAIL', detail: `checkout URL is not https: ${url}` };
+      if (parsed.protocol !== 'https:') {
+        return { status: 'FAIL', detail: `checkout URL is not https${options.publicLog ? '' : `: ${url}`}` };
+      }
       art.checkoutUrl = url;
       return {
         detail: art.discount
           ? `built for ${productId} with ${art.discount.code}`
           : `built for ${productId} WITHOUT a discount (create-discount did not succeed)`,
-        data: { url },
+        ...(options.publicLog ? {} : { data: { url } }),
       };
     });
   }
@@ -350,7 +359,11 @@ export async function verifyFlow(ctx: FlowContext): Promise<VerifyArtifacts> {
     }
   }
 
-  if (art.checkoutUrl) {
+  if (art.checkoutUrl && options.publicLog) {
+    // Anyone who can read the log could open the link and buy.
+    out.info('');
+    out.info('Checkout URL built; not printed with --public-log. Run the tool on your machine to get one.');
+  } else if (art.checkoutUrl) {
     out.info('');
     out.info(`Checkout URL (complete a test purchase here):\n  ${art.checkoutUrl}`);
     if (art.discount && !options.keep && !options.wait) {

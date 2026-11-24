@@ -15,6 +15,8 @@ export interface CliOptions {
   allowLive: boolean;
   dryRun: boolean;
   json: boolean;
+  /** The output can be read by anyone (CI on a public repository). */
+  publicLog: boolean;
   timeoutMs: number;
   // verify and replay, Stripe only (scripts/verify-provider/stripe-managed-payments.ts)
   managedPayments: boolean;
@@ -52,6 +54,7 @@ const OPTION_SPEC = {
   'allow-live': { type: 'boolean' },
   'dry-run': { type: 'boolean' },
   json: { type: 'boolean' },
+  'public-log': { type: 'boolean' },
   timeout: { type: 'string' },
   'managed-payments': { type: 'boolean' },
   product: { type: 'string' },
@@ -158,6 +161,7 @@ export function parseCliArgs(argv: string[]): ParseResult {
   options.allowLive = v['allow-live'] ?? false;
   options.dryRun = v['dry-run'] ?? false;
   options.json = v.json ?? false;
+  options.publicLog = v['public-log'] ?? false;
 
   if (mode !== 'capture' && !provider) {
     return fail(`missing provider name (one of: ${Object.keys(PROVIDER_PROFILES).join(', ')})`);
@@ -288,6 +292,7 @@ function baseOptions(mode: RunMode): CliOptions {
     allowLive: false,
     dryRun: false,
     json: false,
+    publicLog: false,
     timeoutMs: DEFAULT_TIMEOUT_SECONDS * 1000,
     managedPayments: false,
     percent: DEFAULT_PERCENT,
@@ -366,6 +371,9 @@ ${checkoutIds}
                         print the plan; no API calls
   --json                print one JSON report on stdout (progress goes to stderr);
                         use \`pnpm -s ...\` so pnpm's banner doesn't precede it
+  --public-log          for output anyone can read (CI on a public repository): prints no
+                        part of a key, no product names or prices, no checkout link and
+                        no account name or store host
   --timeout <seconds>   per-call timeout (default ${DEFAULT_TIMEOUT_SECONDS})
 
 Replay flags (--replay <file>: JSON {"headers": {...}, "rawBody": "..."}):

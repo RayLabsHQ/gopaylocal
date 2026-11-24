@@ -18,7 +18,7 @@ import { exitCodeFor, formatStepLine, formatSummaryTable } from './report';
 import type { JsonReport } from './report';
 import { StepRunner, describeError, runWithCleanup, summarize } from './runner';
 import { managedPaymentsPlan } from './stripe-managed-payments';
-import { Redactor, decideMode, mask } from './safety';
+import { Redactor, decideMode, hidden, mask } from './safety';
 import type { ModeDecision } from './safety';
 
 export interface MainDeps {
@@ -60,7 +60,8 @@ export async function main(argv: string[], deps: MainDeps): Promise<number> {
     return 0;
   }
 
-  const redactor = new Redactor();
+  const redactor = new Redactor({ hideAll: options.publicLog });
+  const show = options.publicLog ? hidden : mask;
   // Human output goes to stdout; with --json, stdout carries only the report.
   const progress = options.json ? deps.stderr : deps.stdout;
   const out: Output = {
@@ -81,6 +82,16 @@ export async function main(argv: string[], deps: MainDeps): Promise<number> {
   redactor.add(apiKey);
   redactor.add(webhookSecret);
   const account = resolveAccountId(profile, deps.env);
+  if (options.publicLog && account.value) {
+    // The account name can be part of a host ({site}.chargebee.com) or be a
+    // store's URL; neither belongs in a log anyone can read.
+    redactor.addLabel(account.value, '[account id]');
+    try {
+      redactor.addLabel(new URL(account.value).host, '[account host]');
+    } catch {
+      // not a URL
+    }
+  }
 
   const problems: string[] = [];
   if (account.conflict) problems.push(account.conflict);
@@ -111,9 +122,9 @@ export async function main(argv: string[], deps: MainDeps): Promise<number> {
     [
       `GoPayLocal provider verification: ${profile?.displayName ?? providerName} (${options.mode}${options.dryRun ? ', dry run' : ''})`,
       `  mode:        ${decision.effective.toUpperCase()}: ${decision.basis}`,
-      `  api key:     ${mask(apiKey)} (${GENERIC_ENV.apiKey})`,
+      `  api key:     ${show(apiKey)} (${GENERIC_ENV.apiKey})`,
       ...(account.value ? [`  account id:  ${account.value} (${account.source})`] : []),
-      ...(options.mode === 'replay' ? [`  secret:      ${mask(webhookSecret)} (${GENERIC_ENV.webhookSecret})`] : []),
+      ...(options.mode === 'replay' ? [`  secret:      ${show(webhookSecret)} (${GENERIC_ENV.webhookSecret})`] : []),
       `  code:        ${deps.commit() ?? 'unknown commit'}, node ${deps.nodeVersion}`,
     ].join('\n'),
   );
@@ -344,7 +355,7 @@ async function runWithProvider(input: RunInput): Promise<{ caps: Record<string, 
         if (options.mode === 'verify') {
           const art = await verifyFlow(ctx);
           if (art.discount) artifacts.discount = art.discount;
-          if (art.checkoutUrl) artifacts.checkoutUrl = art.checkoutUrl;
+          if (art.checkoutUrl && !options.publicLog) artifacts.checkoutUrl = art.checkoutUrl;
           // The secret itself never goes into the report.
           if (art.webhook) artifacts.webhook = { endpointId: art.webhook.endpointId, hasSecret: art.webhook.hasSecret };
         } else if (options.mode === 'cleanup') {

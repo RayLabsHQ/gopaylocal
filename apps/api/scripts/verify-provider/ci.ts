@@ -19,9 +19,10 @@
  *
  * Exit status: 0 passed or not set up, 1 anything else.
  *
- * The report can be public (a public repository's workflow logs are), so it
- * holds only what the tool itself prints: check names, results and details,
- * with credentials already redacted by the tool.
+ * The report can be public (a public repository's workflow logs are), so the
+ * tool always runs with --public-log: check names, results and counts, and
+ * nothing of the account's contents (no part of a key, no product names or
+ * prices, no checkout link, no account name or store host).
  */
 
 import { spawnSync } from 'node:child_process';
@@ -60,7 +61,7 @@ export function planRun(env: Env): CiPlan {
   if (!set(env.GPL_VERIFY_API_KEY)) {
     return { kind: 'not-set-up', provider, secretName: apiKeySecretName(provider) };
   }
-  const args = [provider, '--json'];
+  const args = [provider, '--json', '--public-log'];
   const product = set(env.VERIFY_PRODUCT);
   if (product) args.push('--product', product);
   if (set(env.VERIFY_REAL_ACCOUNT) === 'true') args.push('--allow-live');
