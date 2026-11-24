@@ -95,7 +95,10 @@ const campaignFields = {
   name: z.string().min(1).max(200),
   status: z.enum(['active', 'paused', 'draft']),
   pricingMode: z.enum(['group', 'ppp_factor', 'custom']),
-  discountDelivery: z.enum(['banner_coupon', 'auto_apply']),
+  discountDelivery: z.enum(['banner_coupon', 'auto_apply', 'provider_price']),
+  // The payment platform's product a 'provider_price' campaign prices per
+  // country (a Dodo product id). Checked against the platform by the API.
+  providerProductId: z.string().trim().min(1).max(128).nullable().optional(),
   charmPricingStrategy: z.enum(['none', 'dot99', 'round_x9', 'nearest_5', 'region_aware']),
   maxDiscountPercent: z.number().min(0).max(100),
   // Country code -> percent. Keys become country entries of the banner's KV

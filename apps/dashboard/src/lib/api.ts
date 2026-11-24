@@ -115,6 +115,8 @@ export const DISCOUNT_DELIVERY_LABELS: Record<DiscountDelivery, string> = {
   banner_coupon: 'Banner + Coupon Code',
   // The merchant's own checkout applies the code; same name as the form option.
   auto_apply: 'Auto-apply at checkout',
+  // No code: the payment platform (Dodo) charges each country's price itself.
+  provider_price: 'Dodo charges the country price',
 }
 
 // Human-friendly provider names for selectors and labels.

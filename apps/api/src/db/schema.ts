@@ -300,6 +300,9 @@ export const campaigns = pgTable("campaigns", {
     .$type<DiscountDelivery>()
     .default("banner_coupon")
     .notNull(),
+  // The payment platform's product a 'provider_price' campaign prices per
+  // country (services/campaign-country-prices.service.ts). Null otherwise.
+  providerProductId: t.text("provider_product_id"),
   charmPricingStrategy: t
     .text("charm_pricing_strategy")
     .$type<CharmPricingStrategy>()
@@ -445,6 +448,44 @@ export const coupons = pgTable("coupons", {
     .on(table.dealId)
     .where(sql`"status" = 'active'`),
 ]);
+
+// ── Country prices at the payment platform ──────────────────────────────────
+
+/**
+ * The per-country prices a 'provider_price' campaign keeps on one platform
+ * product (services/campaign-country-prices.service.ts): what should be there
+ * and what the platform charged after the last sync. One row per campaign and
+ * product. No foreign keys, on purpose: a row whose campaign is gone, paused
+ * or moved to another product (`wanted` = 'none') is prices still to be removed
+ * at the platform, and the scheduled job finds it by exactly that. The row is
+ * deleted once the platform has none of them left.
+ */
+export const campaignCountryPrices = pgTable(
+  "campaign_country_prices",
+  {
+    id: t.text("id").primaryKey(),
+    campaignId: t.text("campaign_id").notNull(),
+    organizationId: t.text("organization_id").notNull(),
+    integrationId: t.text("integration_id").notNull(),
+    environment: t.text("environment").$type<"live" | "test">().notNull(),
+    providerProductId: t.text("provider_product_id").notNull(),
+    /** 'prices': keep them in line with the campaign; 'none': remove them all. */
+    wanted: t.text("wanted").$type<"prices" | "none">().notNull(),
+    /** country -> { currency, minorAmount, discount }: what the platform charges. */
+    published: t.jsonb("published").$type<Record<string, { currency: string; minorAmount: number; discount: number | null }>>(),
+    /** What the last sync did (counts, failures, changes left, or the problem that stopped it). */
+    lastSync: t.jsonb("last_sync"),
+    /** Changes the last sync left; the scheduled job carries on while above 0. */
+    remaining: t.integer("remaining").default(0).notNull(),
+    syncedAt: t.timestamp("synced_at"),
+    createdAt: t.timestamp("created_at").defaultNow().notNull(),
+    updatedAt: t.timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    t.uniqueIndex("campaign_country_prices_campaign_product_idx").on(table.campaignId, table.providerProductId),
+    t.index("campaign_country_prices_org_idx").on(table.organizationId),
+  ],
+);
 
 // ── Banner Configs ──────────────────────────────────────────────────────────
 

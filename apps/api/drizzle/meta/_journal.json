@@ -50,6 +50,13 @@
       "when": 1795512351119,
       "tag": "0006_internal_orgs_and_platform_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795536554533,
+      "tag": "0007_provider_country_prices",
+      "breakpoints": true
     }
   ]
 }

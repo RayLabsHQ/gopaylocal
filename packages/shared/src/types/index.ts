@@ -26,7 +26,12 @@ export type PlanLimits = {
 
 export type PricingMode = 'group' | 'ppp_factor' | 'custom';
 
-export type DiscountDelivery = 'banner_coupon' | 'auto_apply';
+/**
+ * How a visitor gets the discount: a code shown in the banner, a code applied
+ * for them, or (provider_price) no code at all: the payment platform charges
+ * the country's price itself (Dodo Localized Pricing, written by GoPayLocal).
+ */
+export type DiscountDelivery = 'banner_coupon' | 'auto_apply' | 'provider_price';
 
 export type CharmPricingStrategy =
   | 'none'
