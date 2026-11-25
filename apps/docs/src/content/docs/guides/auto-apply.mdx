@@ -8,7 +8,7 @@ import { Aside } from '@astrojs/starlight/components';
 With auto-apply, your checkout puts the visitor's PPP code on the order for them instead of asking them to copy it from the banner. GoPayLocal gives your page the code; your checkout passes it to the payment provider.
 
 <Aside type="note">
-GoPayLocal serves the same code whichever **Discount Delivery** a campaign uses, and the banner still shows it. **Auto-apply at checkout** tells GoPayLocal that your checkout applies the code: such a campaign needs a payment integration before it can be active, and it is paused if that integration is disconnected. Applying the code is up to your checkout code, as described below.
+GoPayLocal serves the same code with **Banner + Coupon Code** and with **Auto-apply at checkout**, and the banner shows it either way. (The third delivery, **Dodo charges the country price**, has no code at all: see [Dodo Payments](/integrations/dodo-payments/#dodo-charges-the-country-price).) **Auto-apply at checkout** tells GoPayLocal that your checkout applies the code: such a campaign needs a payment integration before it can be active, and it is paused if that integration is disconnected. Applying the code is up to your checkout code, as described below.
 </Aside>
 
 ## Auto-Apply vs. Coupon Codes

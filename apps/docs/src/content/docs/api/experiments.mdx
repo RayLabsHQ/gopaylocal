@@ -152,6 +152,7 @@ Both campaigns must belong to the workspace and to `productId`, be in the same e
 | `403` | `no_product_access` | A member without access to the product |
 | `409` | `campaign_not_active` | A campaign is paused or draft |
 | `409` | `campaign_not_servable` | A campaign has no banner configuration |
+| `409` | `campaign_charges_country_prices` | A campaign's discount delivery is `provider_price`: Dodo charges the country price to every buyer, so visitors can't be split |
 | `409` | `experiment_already_running` | The product already has a running experiment in this environment |
 
 ## Get an Experiment

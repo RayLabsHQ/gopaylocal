@@ -1,11 +1,11 @@
 ---
 title: Dodo Payments
-description: Connect Dodo Payments so GoPayLocal creates PPP discount codes in your Dodo account and counts their redemptions.
+description: Connect Dodo Payments so GoPayLocal creates PPP discount codes in your Dodo account, or sets each country's price on your Dodo product, and counts redemptions.
 ---
 
 import { Steps, Aside } from '@astrojs/starlight/components';
 
-GoPayLocal creates percentage discount codes in your Dodo Payments account and counts the payments that use them. Dodo Payments is a Merchant of Record, so it handles sales tax and VAT on these sales.
+GoPayLocal creates percentage discount codes in your Dodo Payments account and counts the payments that use them. It can instead set each country's price on your Dodo product, so buyers pay the local price without a code: see [Dodo charges the country price](#dodo-charges-the-country-price). Dodo Payments is a Merchant of Record, so it handles sales tax and VAT on these sales.
 
 ## Setup
 
@@ -18,7 +18,7 @@ GoPayLocal creates percentage discount codes in your Dodo Payments account and c
    | Resource | Access | Used for |
    |---|---|---|
    | Discounts | Write | Creating, listing and deleting the discount codes |
-   | Products | Read | Importing your products |
+   | Products | Read (Write if Dodo charges the country price) | Importing your products; with Write, setting each country's price on the Dodo product a campaign prices |
    | Webhooks | Write | Creating the webhook that reports redemptions, and removing it when you disconnect; reading its signing secret |
 
    Test mode and live mode have separate keys.
@@ -74,12 +74,64 @@ POST /checkouts
 
 Static payment links (`checkout.dodopayments.com/buy/...`) take no discount code; there the customer enters it.
 
+## Dodo charges the country price
+
+A campaign whose **Discount Delivery** is **Dodo charges the country price** creates no codes. GoPayLocal writes one [Localized Pricing](https://docs.dodopayments.com/features/localized-pricing) rule per discounted country on the Dodo product you pick, and Dodo charges that price to buyers whose billing country it is. The banner shows the exact price Dodo charges, and there is nothing to enter at checkout.
+
+<Steps>
+
+1. **Give the key Products: Write**
+
+   GoPayLocal switches the product to per-country prices and writes the rules, which needs **Products: Write** instead of Read.
+
+2. **Prepare the Dodo product**
+
+   - Its price must be the GoPayLocal product's price, in the same currency.
+   - Dodo's **Purchasing Power Parity** must be off on it, or Dodo would take its own discount off these prices.
+   - It must have no country prices of its own. Dodo keeps one price per country, so GoPayLocal won't start on a product that has some.
+   - Usage-based and pay-what-you-want prices can't have country prices.
+
+   GoPayLocal checks all four before it writes anything, and shows what's wrong on the campaign's **Prices at Dodo** tab.
+
+3. **Set up the campaign**
+
+   Choose **Dodo Payments** as the payment integration, set **Discount Delivery** to **Dodo charges the country price**, and pick the Dodo product. Only members with access to every product can pick it.
+
+4. **Activate it**
+
+   GoPayLocal writes up to 30 prices straight away and the rest in batches every 10 minutes. The **Prices at Dodo** tab lists each country's price and how the last sync went; **Sync now** runs another batch.
+
+</Steps>
+
+Each price is the product's price with the country's discount, in the visitor's currency when an exchange rate exists. With a charm strategy it is rounded **down** to the nearest charm ending, so the discount the banner states is never more than the real one. Without a usable exchange rate the price is in the product's own currency.
+
+Two things Dodo does differently when a country price applies ([Localized Pricing](https://docs.dodopayments.com/features/localized-pricing), [Adaptive Currency](https://docs.dodopayments.com/features/adaptive-currency)):
+
+- **Tax:** the price is before tax, like your product's price. On a tax-exclusive product, Dodo adds tax at checkout.
+- **Currency fee:** the buyer pays exactly the price, and Dodo's currency conversion fee (2–4%, by order value) comes out of your payout. Without a country price, Dodo adds that fee on top of the buyer's price unless you turned on **Fees Inclusive**.
+
+GoPayLocal keeps the prices in line:
+
+- right after a change to the campaign;
+- at the next 10-minute run after a change to your parity groups or to the product's price;
+- every 6 hours, as exchange rates move.
+
+A country whose discount changed is left out of the banner until its new price is written, so the banner never shows a price Dodo doesn't charge.
+
+Pausing or deleting the campaign, moving it to another Dodo product, or switching it back to codes removes the prices GoPayLocal wrote. A rule you add yourself in Dodo is left alone. To switch an active campaign to codes, pause it first: a code on top of a country price would discount twice. Disconnecting Dodo pauses these campaigns and removes their prices before the key is deleted.
+
+Holiday deals and A/B tests aren't available with this delivery, because Dodo charges the country price to every buyer from that country.
+
+<Aside type="note">
+GoPayLocal's own Pro plan is priced this way. This delivery has not yet been run against a merchant's live Dodo account; it is covered by tests that stand in for Dodo's API.
+</Aside>
+
 ## Dodo's Pricing Settings
 
 Dodo has pricing settings of its own, under **Settings > Pricing Settings** in its dashboard. Two of them change what checkout charges, and GoPayLocal can't see either:
 
-- **Purchasing Power Parity**: Dodo takes its own percentage off a product that opts in, and the GoPayLocal code then comes off that lower price. Leave it off on the products your campaigns cover, or visitors get two discounts.
-- **Charm Pricing**: Dodo rounds the converted list price to an ending such as 49.99, before the code is applied ([Dodo's Charm Pricing](https://docs.dodopayments.com/features/charm-pricing)). In Dodo's own example, $47 becomes $49.99. The banner's local price then no longer matches checkout. Leave it off and use the campaign's [Charm Pricing](/guides/charm-pricing/) setting, which rounds the price on the banner.
+- **Purchasing Power Parity**: Dodo takes its own percentage off a product that opts in, and the GoPayLocal code then comes off that lower price. Leave it off on the products your campaigns cover, or visitors get two discounts. A product whose country prices GoPayLocal sets is refused while it is on.
+- **Charm Pricing**: Dodo rounds the converted list price to an ending such as 49.99, before the code is applied ([Dodo's Charm Pricing](https://docs.dodopayments.com/features/charm-pricing)). In Dodo's own example, $47 becomes $49.99. The banner's local price then no longer matches checkout. Leave it off and use the campaign's [Charm Pricing](/guides/charm-pricing/) setting, which rounds the price on the banner. Dodo doesn't round a country price GoPayLocal set, but it would still round the converted price in countries without one.
 
 **Adaptive Currency** can stay on. It charges customers in their own currency; the banner's local price is an estimate of that amount ([Multi-Currency](/guides/multi-currency/)).
 

@@ -128,7 +128,7 @@ function CampaignsPage() {
             <thead>
               <tr className="border-b border-border text-left text-xs text-text-muted">
                 <th scope="col" className="px-6 py-3 font-semibold">Campaign</th>
-                <th scope="col" className="px-4 py-3 font-semibold">Codes in</th>
+                <th scope="col" className="px-4 py-3 font-semibold">Payment platform</th>
                 <th scope="col" className="px-4 py-3 font-semibold">Delivery</th>
                 <th scope="col" className="px-4 py-3 font-semibold">Pricing</th>
                 <th scope="col" className="px-4 py-3 text-right font-semibold">Max off</th>

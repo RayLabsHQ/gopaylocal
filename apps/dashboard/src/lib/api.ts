@@ -34,6 +34,8 @@ export type Campaign = {
   integrationId: string | null
   pricingMode: PricingMode
   discountDelivery: DiscountDelivery
+  /** discountDelivery 'provider_price': the Dodo product whose country prices GoPayLocal sets. */
+  providerProductId: string | null
   charmPricingStrategy: CharmPricingStrategy
   maxDiscountPercent: number
   status: CampaignStatus
@@ -184,6 +186,35 @@ export type CountryAnalytics = {
 // the plan's retention window (Free = 7 days), so wider selections silently
 // return the retained slice rather than erroring.
 export type AnalyticsRangeDays = 7 | 30 | 90 | 365
+
+/** One country's price as the last sync recorded it at Dodo. */
+export type CountryPrice = { country: string; currency: string; minorAmount: number; discount: number }
+
+/** How the last sync of a campaign's country prices went (services/campaign-country-prices.service.ts). */
+export type CountryPriceSync = {
+  at: string
+  trigger: 'change' | 'schedule' | 'manual'
+  created: number
+  updated: number
+  archived: number
+  failures: Array<{ country: string | null; status: number; message: string }>
+  remaining: number
+  problem?: string
+}
+
+/** GET /v1/teams/:orgId/campaigns/:id/country-prices */
+export type CountryPriceStatus = {
+  current: {
+    providerProductId: string
+    environment: 'live' | 'test'
+    prices: CountryPrice[]
+    lastSync: CountryPriceSync | null
+    remaining: number
+    syncedAt: string | null
+    verified: boolean
+  } | null
+  removing: number
+}
 
 export type ProviderProduct = {
   providerProductId: string
@@ -434,6 +465,7 @@ export const api = {
         status?: CampaignStatus
         pricingMode?: PricingMode
         discountDelivery?: DiscountDelivery
+        providerProductId?: string | null
         charmPricingStrategy?: CharmPricingStrategy
         maxDiscountPercent?: number
         discountOverrides?: Record<string, number> | null
@@ -457,6 +489,12 @@ export const api = {
       apiFetch<{ success: boolean }>(`/v1/teams/${teamId}/campaigns/${campaignId}`, {
         method: 'DELETE',
       }),
+    countryPrices: (teamId: string, campaignId: string) =>
+      apiFetch<{ data: CountryPriceStatus }>(`/v1/teams/${teamId}/campaigns/${campaignId}/country-prices`).then((r) => r.data),
+    syncCountryPrices: (teamId: string, campaignId: string) =>
+      apiFetch<{ data: CountryPriceStatus }>(`/v1/teams/${teamId}/campaigns/${campaignId}/country-prices/sync`, {
+        method: 'POST',
+      }).then((r) => r.data),
   },
 
   experiments: {

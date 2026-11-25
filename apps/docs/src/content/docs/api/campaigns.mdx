@@ -24,6 +24,7 @@ These endpoints sit under `/v1/teams/:orgId/` and accept a [secret API key](/api
   "status": "active",
   "pricingMode": "group",
   "discountDelivery": "banner_coupon",
+  "providerProductId": null,
   "charmPricingStrategy": "none",
   "maxDiscountPercent": 60,
   "discountOverrides": null,
@@ -42,7 +43,8 @@ These endpoints sit under `/v1/teams/:orgId/` and accept a [secret API key](/api
 | `environment` | `string` | `"live"` or `"test"` |
 | `status` | `string` | `"draft"`, `"active"` or `"paused"` |
 | `pricingMode` | `string` | `"group"` (the country's parity group discount), `"ppp_factor"` (calculated from purchasing power) or `"custom"` (per-country `discountOverrides`, falling back to the group discount). See [Pricing modes](/guides/pricing-modes/). |
-| `discountDelivery` | `string` | `"banner_coupon"` (the banner shows a code to copy) or `"auto_apply"` (the discount is applied at checkout; needs an integration). See [Auto-apply](/guides/auto-apply/). |
+| `discountDelivery` | `string` | `"banner_coupon"` (the banner shows a code to copy), `"auto_apply"` (the discount is applied at checkout; needs an integration; see [Auto-apply](/guides/auto-apply/)) or `"provider_price"` (no code: GoPayLocal sets each country's price on a Dodo product and Dodo charges it; see [Dodo charges the country price](/integrations/dodo-payments/#dodo-charges-the-country-price)) |
+| `providerProductId` | `string \| null` | With `"provider_price"`: the Dodo product whose country prices GoPayLocal sets. Required before the campaign can be `active`. One campaign per Dodo product. |
 | `charmPricingStrategy` | `string` | `"none"`, `"dot99"`, `"round_x9"`, `"nearest_5"` or `"region_aware"`. See [Charm pricing](/guides/charm-pricing/). |
 | `maxDiscountPercent` | `number` | Upper bound for any country's discount, 0-100 |
 | `discountOverrides` | `object \| null` | Country code to percent, e.g. `{ "IN": 50 }`, used by `custom` mode (still capped by `maxDiscountPercent`). At most 300 entries, each keyed by a two-letter country code |
@@ -144,6 +146,9 @@ Errors:
 - `400` with `"code": "provider_has_no_test_mode"` for a `test` campaign linked to a provider that has no test mode (Gumroad, WooCommerce).
 - `400` with `"code": "integration_missing_key"` for an `active` campaign whose integration has no key for the campaign's environment. A draft is accepted, so the key can be added before going live.
 - `403` when a member creates a campaign for a product they don't have access to.
+- `400` with `"code": "country_prices_unsupported"` for a `provider_price` campaign linked to an integration other than Dodo Payments, or `"code": "country_prices_incomplete"` for an `active` one without a Dodo integration or `providerProductId`.
+- `403` with `"code": "country_prices_need_full_access"` when a member limited to some products sets `providerProductId`. GoPayLocal products and Dodo products aren't linked, so only members with access to every product choose the Dodo product.
+- `409` with `"code": "country_prices_product_taken"` when another campaign sets that Dodo product's prices, or GoPayLocal is still removing prices it set there.
 
 ## Update Campaign
 
@@ -155,7 +160,15 @@ Send only the fields to change; they are validated as on create. Activating a ca
 
 **Response:** `{ "data": <campaign> }`, or `404`.
 
-While the campaign is an arm of a running A/B test, setting a status other than `active`, or moving it to another product or environment, is refused with `409` and `{ "error", "code": "campaign_in_running_experiment", "experimentId" }`. Other fields can change mid-test. End the test first.
+While the campaign is an arm of a running A/B test, setting a status other than `active`, or moving it to another product or environment, is refused with `409` and `{ "error", "code": "campaign_in_running_experiment", "experimentId" }`. Other fields can change mid-test. End the test first. An arm can't be switched to `provider_price` either.
+
+For `provider_price` the create errors apply, and also:
+
+- `403` with `"code": "country_prices_need_full_access"` when a member limited to some products changes `providerProductId` or the integration, or switches the campaign to `provider_price`. They can still change its other fields and pause or reactivate it.
+- `409` with `"code": "campaign_has_deals"` when switching a campaign that has holiday deals that haven't ended.
+- `409` with `"code": "country_prices_still_at_dodo"` (and `remaining`, the number of countries) when an active campaign would offer codes while Dodo still charges the prices it set: pause it, wait for the prices to be removed, then switch it.
+
+Changing a `provider_price` campaign updates its prices at Dodo right away; see [Country prices](#country-prices).
 
 ## Delete Campaign
 
@@ -170,6 +183,52 @@ Deletes the campaign, its banner configuration, its [holiday deals](/api/deals/)
 <Aside type="caution">
 Discount codes already created at the payment provider are **not** deleted there, because customers may already have them. Remove them in the provider's dashboard if you need to.
 </Aside>
+
+## Country prices
+
+For a `provider_price` campaign: the prices Dodo charges, as GoPayLocal wrote them, and how the last sync went.
+
+```
+GET /v1/teams/:orgId/campaigns/:id/country-prices
+POST /v1/teams/:orgId/campaigns/:id/country-prices/sync
+```
+
+`POST .../sync` writes one batch now (up to 30 changes) and answers like `GET`. It returns `400` with `"code": "not_country_prices"` for another delivery. A secret API key may call both.
+
+```json
+{
+  "data": {
+    "current": {
+      "providerProductId": "pdt_example123",
+      "environment": "live",
+      "prices": [
+        { "country": "IN", "currency": "INR", "minorAmount": 219900, "discount": 70 }
+      ],
+      "lastSync": {
+        "at": "2026-11-24T18:00:00.000Z",
+        "trigger": "schedule",
+        "created": 0,
+        "updated": 1,
+        "archived": 0,
+        "failures": [],
+        "remaining": 0
+      },
+      "remaining": 0,
+      "syncedAt": "2026-11-24T18:00:00.000Z",
+      "verified": true
+    },
+    "removing": 0
+  }
+}
+```
+
+| Field | Description |
+|---|---|
+| `current` | The Dodo product the campaign prices now, or `null` when it prices none (not active, or no product chosen) |
+| `prices` | One entry per country: `minorAmount` in the currency's smallest unit, as Dodo stores it, and the `discount` the price was written for. The banner offers only a country whose `discount` is its current one. |
+| `lastSync` | The last sync: what it created, updated and archived at Dodo, the rules Dodo refused (`failures`), changes still to make (`remaining`), and `problem` when nothing was written (for example, the Dodo product's price differs from the GoPayLocal product's). `trigger` is `change`, `schedule` or `manual`. |
+| `verified` | The Dodo product passed the checks and GoPayLocal has written to it |
+| `removing` | Dodo products this campaign priced before, whose prices are still being removed |
 
 ## Banner Settings
 

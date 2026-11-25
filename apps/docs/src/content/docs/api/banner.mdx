@@ -132,6 +132,7 @@ This is a $19 product with **Round to X9** charm pricing, for a visitor in India
 | `localPrice` | `number` | The product's price after the discount, in `currencyCode` |
 | `localOriginalPrice` | `number` | The product's price before the discount, in `currencyCode` |
 | `charmPricingStrategy` | `"none" \| "dot99" \| "round_x9" \| "nearest_5" \| "region_aware"` | The campaign's [charm pricing](/guides/charm-pricing/) setting, so a client can round other prices the same way |
+| `priceCharged` | `true` | Only when the payment platform charges `localPrice` itself: see [Prices Dodo charges](#prices-dodo-charges) |
 | `campaignId` | `string` | The campaign that answered. During an A/B test, the campaign of the visitor's arm. |
 | `experimentId` | `string` | Only while an A/B test applies: the test |
 | `variant` | `"a" \| "b"` | Only while an A/B test applies: the visitor's arm (`a` is campaign A, `b` is campaign B) |
@@ -153,6 +154,12 @@ Local prices are estimates. They convert your price at the day's mid-market rate
 
 Rate sources, the refresh schedule and the country-to-currency mapping are in [Multi-currency display](/guides/multi-currency/).
 
+### Prices Dodo charges
+
+For a campaign whose discount delivery is `provider_price` ([Dodo charges the country price](/integrations/dodo-payments/#dodo-charges-the-country-price)), `localPrice` is not an estimate: it is the price GoPayLocal set on the Dodo product for the visitor's country, and Dodo charges exactly that (before tax, like your product's price) to a buyer with that billing country. The answer then has `priceCharged: true`, `code: null` and no `fxAsOf`. `currencyCode` is the currency Dodo charges in: the visitor's, or the product's when no exchange rate was usable. `localOriginalPrice` is the product's price in that currency, for showing the price before the discount. The default message for these campaigns says there is nothing to enter at checkout.
+
+A country is offered only while Dodo charges the price written for its current discount. After a discount changes, the country answers `no_discount` until its new price is written: right after a change to the campaign (up to 30 countries at once, the rest every 10 minutes), or at the next 10-minute run after a change to parity groups or the product's price.
+
 ### Reasons for `show: false`
 
 | Reason | Description |
@@ -162,7 +169,7 @@ Rate sources, the refresh schedule and the country-to-currency mapping are in [M
 | `quota_exceeded` | The organization used its monthly API calls (Free plan, see below) |
 | `no_active_campaign` | Nothing can be served for this product: no active campaign with a banner, or `product` is unknown or malformed |
 | `domain_not_allowed` | The campaign has an allowed-domains list and the request's `Origin` (or `Referer`) is not on it or a subdomain of it |
-| `no_discount` | The campaign has no discount for the visitor's country and no holiday deal is running, or no coupon code could be produced for the country |
+| `no_discount` | The campaign has no discount for the visitor's country and no holiday deal is running, or no coupon code could be produced for the country, or (with `provider_price`) Dodo doesn't charge the price for the country's current discount yet |
 
 ### Errors
 

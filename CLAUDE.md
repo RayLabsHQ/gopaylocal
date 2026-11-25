@@ -290,6 +290,28 @@ country's discount; the deal on a tie.
   countries, a deal added on top of the country discount, a percentage that changes by
   day (all in `ROADMAP.md`).
 
+### Country prices at Dodo (merchant campaigns)
+
+A campaign whose `discount_delivery` is `provider_price` has no codes: GoPayLocal writes one
+Dodo Localized Pricing rule per discounted country on the merchant's Dodo product
+(`campaigns.provider_product_id`) with the merchant's key, and Dodo charges it by billing
+country. Sync: `apps/api/src/services/campaign-country-prices.service.ts` (state in
+`campaign_country_prices`, one row per campaign and Dodo product) on top of
+`dodo-country-prices.ts`; dashboard tab **Prices at Dodo**; docs in
+`integrations/dodo-payments.mdx`.
+
+- Shown = charged: the banner serves a country only when the recorded price was written for
+  its current discount (`campaignCountries` in `banner-cache.service.ts`), with
+  `priceCharged: true` and no code. Never show a computed price for these campaigns.
+- Before the first write the product must cost what the GoPayLocal product costs, have
+  Dodo's PPP off and no rules of its own; `verified_at` is set just before that write.
+  Only rules for countries GoPayLocal published may ever be archived (`ownedCountries`), and
+  a row never verified is dropped without a Dodo call. Do not loosen either.
+- Dodo integration only; one campaign per Dodo product; no holiday deals, no A/B tests;
+  codes are refused while Dodo still charges a campaign's prices ("pause first", or a
+  buyer gets both). Choosing the Dodo product needs access to every product.
+- Disconnecting Dodo pauses these campaigns and removes their prices with the key first.
+
 ### Toolchain notes
 
 - TypeScript 7 has no compiler API. `apps/web` (astro check) and the two SDKs (tsup

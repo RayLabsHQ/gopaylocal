@@ -115,6 +115,7 @@ Where the code comes from follows from the campaign:
 | `400` | `code_not_allowed` | `code` was sent for a campaign that has a payment integration |
 | `400` | `integration_unavailable` | The campaign's integration is not active, so no code can be created |
 | `409` | `deal_limit` | The campaign already has 20 deals that have not ended |
+| `409` | `deals_unavailable_with_country_prices` | The campaign's discount delivery is `provider_price`: Dodo charges the country price, not the deal |
 | `502` | `provider_error` | The payment platform refused the code. Nothing is stored; `error` carries the platform's message |
 
 ## Update Deal
@@ -136,6 +137,7 @@ A deal that will run after the update needs a working code. For a `"provider"` d
 | `400` | `integration_unavailable` | A code is needed and the campaign's integration is not active |
 | `404` | | `"Deal not found"` |
 | `409` | `deal_limit` | The update would bring an ended deal back while the campaign has 20 that have not ended |
+| `409` | `deals_unavailable_with_country_prices` | The campaign's discount delivery is `provider_price` |
 | `502` | `provider_error` | A code was needed and the payment platform refused it |
 
 ## Delete Deal

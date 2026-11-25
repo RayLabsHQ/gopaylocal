@@ -76,7 +76,10 @@ export const PROVIDER_KEY_ACCESS: Record<IntegrationProvider, ProviderKeyAccess>
     key: 'An API key with these resources set. Everything else can stay None.',
     permissions: [
       { name: 'Discounts: Write', usedFor: 'Creating, listing and deleting the discount codes' },
-      { name: 'Products: Read', usedFor: 'Importing your products' },
+      {
+        name: 'Products: Read (Write if Dodo charges the country price)',
+        usedFor: "Importing your products; with Write, setting each country's price on the Dodo product a campaign prices",
+      },
       { name: 'Webhooks: Write', usedFor: `${WEBHOOK}; reading its signing secret` },
     ],
   },

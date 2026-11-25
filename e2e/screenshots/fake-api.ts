@@ -73,6 +73,8 @@ async function answer(
     return json({ data: list });
   }
   if (path === `${team}/experiments/${demo.experiment.id}`) return json({ data: demo.experimentDetail });
+  if (path === `${team}/campaigns/camp_regional/country-prices` && method === "GET") return json({ data: demo.countryPrices });
+  if (path === `${team}/integrations/${demo.dodo.id}/products` && method === "GET") return json({ data: demo.dodoProducts });
   const campaignMatch = path.match(new RegExp(`^${team}/(campaigns|banner-configs)/([^/]+)(/deals)?$`));
   if (campaignMatch && method === "GET") {
     const [, kind, id, deals] = campaignMatch;

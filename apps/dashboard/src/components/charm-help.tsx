@@ -1,4 +1,4 @@
-import type { CharmPricingStrategy } from '@gopaylocal/shared'
+import type { CharmPricingStrategy, DiscountDelivery } from '@gopaylocal/shared'
 
 /**
  * Help text under a campaign's Charm Pricing select: what visitors in another
@@ -7,7 +7,29 @@ import type { CharmPricingStrategy } from '@gopaylocal/shared'
  * converted amount, never below it); visitors who pay in the product's own
  * currency always see the exact price.
  */
-export function CharmHelp({ strategy, provider }: { strategy: CharmPricingStrategy; provider?: string | null }) {
+export function CharmHelp({
+  strategy,
+  provider,
+  delivery,
+}: {
+  strategy: CharmPricingStrategy
+  provider?: string | null
+  delivery?: DiscountDelivery
+}) {
+  // Dodo charges the country price: the price is written to Dodo, rounded
+  // down (services/dodo-country-prices.ts countryCharge), and charged exactly.
+  if (delivery === 'provider_price') {
+    return (
+      <p className="mt-1.5 text-[13px] text-text-secondary">
+        Each country's price is your price with its discount, converted at the day's mid-market rate
+        {strategy === 'none'
+          ? ', with no rounding.'
+          : ' and rounded down to a charm price within 8% of it (when none fits, the price stays exact), so the discount the banner states is never more than the real one.'}{' '}
+        Dodo charges exactly that price and doesn't apply its own Charm Pricing to it. Leave Dodo's Charm Pricing off
+        anyway: it would still round the converted price in countries without a discount.
+      </p>
+    )
+  }
   const rounding =
     strategy === 'none'
       ? "round up to the currency's smallest unit, never below the converted amount"

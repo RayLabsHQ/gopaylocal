@@ -53,6 +53,27 @@ const SHOTS: Shot[] = [
   { name: "overview", path: "/dashboard", viewport: { width: 1440, height: 1240 }, scenario: connected },
   { name: "campaigns", path: "/dashboard/campaigns", viewport: { width: 1440, height: 860 }, scenario: connected },
   { name: "campaign-setup", path: "/dashboard/campaigns/camp_pro", viewport: { width: 1440, height: 1500 }, scenario: connected },
+  {
+    name: "campaign-country-prices",
+    path: "/dashboard/campaigns/camp_regional",
+    viewport: { width: 1440, height: 1240 },
+    scenario: connected,
+    steps: async (page) => {
+      await page.getByRole("tab", { name: "Prices at Dodo" }).click();
+      await page.getByText("Dodo charges your price in 12 countries").waitFor();
+    },
+  },
+  {
+    name: "campaign-country-prices-settings",
+    path: "/dashboard/campaigns/camp_regional",
+    viewport: { width: 1440, height: 1240 },
+    scenario: connected,
+    steps: async (page) => {
+      await page.getByRole("tab", { name: "Settings" }).click();
+      await page.getByRole("button", { name: "Edit settings" }).click();
+      await page.getByText("Dodo product").first().waitFor();
+    },
+  },
   { name: "ab-test", path: "/dashboard/experiments/exp_launch", viewport: { width: 1440, height: 1240 }, scenario: connected },
   { name: "ab-tests", path: "/dashboard/experiments", viewport: { width: 1440, height: 640 }, scenario: connected },
   { name: "products", path: "/dashboard/products", viewport: { width: 1440, height: 760 }, scenario: connected },

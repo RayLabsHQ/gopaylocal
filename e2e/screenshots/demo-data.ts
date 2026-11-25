@@ -135,6 +135,7 @@ const campaign = (id: string, name: string, productId: string, integrationId: st
   integrationId,
   pricingMode: "ppp_factor",
   discountDelivery: "banner_coupon",
+  providerProductId: null as string | null,
   charmPricingStrategy: "none",
   maxDiscountPercent: 60,
   status: "active",
@@ -152,7 +153,53 @@ export const campaigns = [
   { ...campaign("camp_team", "Team plan", "prod_team", dodo.id), discountDelivery: "auto_apply" },
   { ...campaign("camp_course", "Pricing course", "prod_course", gumroad.id), status: "paused" },
   { ...campaign("camp_templates", "Template pack", "prod_templates", null), status: "draft" },
+  {
+    ...campaign("camp_regional", "Team plan, priced at Dodo", "prod_team", dodo.id),
+    discountDelivery: "provider_price",
+    providerProductId: "pdt_DEMO_team",
+    charmPricingStrategy: "region_aware",
+    maxDiscountPercent: 70,
+  },
 ];
+
+// ── Country prices at Dodo (camp_regional) ───────────────────────────────────
+
+/** The Dodo account's products, as the integration lists them. */
+export const dodoProducts = [
+  { providerProductId: "pdt_DEMO_team", name: "Team plan", price: 79, currency: "USD", url: "https://checkout.example.com/buy/pdt_DEMO_team" },
+  { providerProductId: "pdt_DEMO_pro", name: "Pro plan", price: 29, currency: "USD", url: "https://checkout.example.com/buy/pdt_DEMO_pro" },
+];
+
+const price = (country: string, currency: string, minorAmount: number, discount: number) => ({ country, currency, minorAmount, discount });
+
+/** GET /campaigns/camp_regional/country-prices: made-up prices, charm-rounded down as the sync writes them. */
+export const countryPrices = {
+  current: {
+    providerProductId: "pdt_DEMO_team",
+    environment: "live",
+    prices: [
+      // A $79 plan at made-up rates, charm-rounded down as the sync writes it.
+      // minorAmount uses the currency's ISO exponent (IDR 2, VND 0).
+      price("AR", "USD", 2999, 60),
+      price("BR", "BRL", 22900, 50),
+      price("EG", "USD", 2299, 70),
+      price("ID", "IDR", 43900000, 65),
+      price("IN", "INR", 189900, 70),
+      price("MX", "MXN", 78900, 50),
+      price("NG", "USD", 2299, 70),
+      price("PH", "PHP", 159900, 65),
+      price("PL", "PLN", 16999, 45),
+      price("TR", "TRY", 104900, 60),
+      price("VN", "VND", 689000, 65),
+      price("ZA", "ZAR", 69900, 50),
+    ],
+    lastSync: { at: "2026-11-24T18:00:00.000Z", trigger: "schedule", created: 0, updated: 3, archived: 0, failures: [], remaining: 0 },
+    remaining: 0,
+    syncedAt: "2026-11-24T18:00:00.000Z",
+    verified: true,
+  },
+  removing: 0,
+};
 
 const product = (id: string, name: string, basePrice: number) => ({
   id,

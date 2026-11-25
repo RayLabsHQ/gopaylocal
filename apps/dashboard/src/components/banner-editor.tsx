@@ -12,7 +12,7 @@ import {
   type BannerConfig,
   type BannerPosition,
 } from '@gopaylocal/shared'
-import { currencyForCountry, localPricing, type LocalPricing } from '@gopaylocal/shared/currency'
+import { currencyForCountry, currencySymbolOf, localPricing, minorUnitExponent, type LocalPricing } from '@gopaylocal/shared/currency'
 import { api, ApiError, type FxRatesView } from '~/lib/api'
 import { usePermissions } from '~/lib/permissions'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
@@ -285,18 +285,35 @@ export function BannerEditor({ teamId, campaignId, step }: { teamId: string; cam
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [campaign, parityGroups])
 
-  const sample = useMemo((): { data: TemplateData; country: SampleCountry | null; pricing: LocalPricing | null } => {
+  // Dodo charges the country price: the banner serves the price the last sync
+  // recorded for the country's current discount, with no code, so the preview
+  // does the same (banner-cache.service.ts campaignCountries, banner-script.ts
+  // chargedPriceFields).
+  const chargesCountryPrices = campaign?.discountDelivery === 'provider_price'
+  const { data: countryPriceStatus } = useQuery({
+    queryKey: ['country-prices', teamId, campaignId],
+    queryFn: () => api.campaigns.countryPrices(teamId, campaignId),
+    enabled: !!teamId && canView && chargesCountryPrices,
+  })
+
+  const sample = useMemo((): {
+    data: TemplateData
+    country: SampleCountry | null
+    pricing: LocalPricing | null
+    /** Dodo charges the country price: whether it charges one for this country's discount. */
+    charged: boolean | null
+  } => {
     const country =
       sampleCountries.find((c) => c.code === sampleCode) ??
       sampleCountries.find((c) => c.code === 'IN') ??
       sampleCountries[0] ??
       null
-    if (!country || !campaign) return { data: FALLBACK_SAMPLE, country: null, pricing: null }
+    if (!country || !campaign) return { data: FALLBACK_SAMPLE, country: null, pricing: null, charged: null }
     const base = {
       country: country.code,
       countryName: country.name,
       discount: country.discount,
-      code: sampleCouponCode(country.code, country.discount),
+      code: chargesCountryPrices ? null : sampleCouponCode(country.code, country.discount),
     }
     const pricing = product
       ? localPricing({
@@ -310,7 +327,27 @@ export function BannerEditor({ teamId, campaignId, step }: { teamId: string; cam
           excludedCurrencies: excludedOf(fxView),
         })
       : null
-    if (!pricing) return { data: base, country, pricing: null }
+    const recorded = chargesCountryPrices
+      ? countryPriceStatus?.current?.prices.find((p) => p.country === country.code && p.discount === country.discount)
+      : undefined
+    const charged = chargesCountryPrices ? !!recorded : null
+    if (!pricing) return { data: base, country, pricing: null, charged }
+    if (recorded && product) {
+      const amount = recorded.minorAmount / 10 ** minorUnitExponent(recorded.currency)
+      const sameCurrency = recorded.currency === pricing.currencyCode
+      return {
+        data: {
+          ...base,
+          currencyCode: recorded.currency,
+          currencySymbol: sameCurrency ? pricing.currencySymbol : currencySymbolOf(recorded.currency),
+          localPrice: amount,
+          localOriginalPrice: sameCurrency ? pricing.localOriginalPrice : product.basePrice,
+        },
+        country,
+        pricing,
+        charged,
+      }
+    }
     return {
       data: {
         ...base,
@@ -321,8 +358,9 @@ export function BannerEditor({ teamId, campaignId, step }: { teamId: string; cam
       },
       country,
       pricing,
+      charged,
     }
-  }, [sampleCountries, sampleCode, campaign, product, fxView])
+  }, [sampleCountries, sampleCode, campaign, product, fxView, chargesCountryPrices, countryPriceStatus])
 
   const [draft, setDraft] = useState<BannerConfig | null>(null)
   const [errors, setErrors] = useState<FieldErrors>({})
@@ -453,10 +491,14 @@ export function BannerEditor({ teamId, campaignId, step }: { teamId: string; cam
           )}
           <BannerPreview config={form} sample={sample.data} showBranding={showBranding} />
           <p className="mt-1.5 text-[13px] text-text-secondary">
-            {`Sample visitor from ${sample.data.countryName} with ${sample.data.discount}% off and the sample code ${sample.data.code}.`}
+            {sample.charged === null
+              ? `Sample visitor from ${sample.data.countryName} with ${sample.data.discount}% off and the sample code ${sample.data.code}.`
+              : sample.charged
+                ? `Sample visitor from ${sample.data.countryName} with ${sample.data.discount}% off. No code: the price is the one Dodo charges there, before tax.`
+                : `Sample visitor from ${sample.data.countryName} with ${sample.data.discount}% off. Dodo doesn't charge a price for this discount there yet, so the banner doesn't show in ${sample.data.countryName} until the next sync; the price here is an estimate.`}
             {showBranding && ' On the Free plan the banner also shows a "Powered by GoPayLocal" link.'}
           </p>
-          {sample.pricing && product && (
+          {sample.pricing && product && !sample.charged && (
             <p className="mt-1 text-[13px] text-text-secondary" data-testid="preview-pricing">
               {previewPricingNote(
                 sample.pricing,

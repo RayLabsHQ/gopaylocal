@@ -24,6 +24,7 @@ import { useEnv } from '~/lib/env'
 import { EnvNotice } from '~/components/env-notice'
 import { CharmHelp } from '~/components/charm-help'
 import { DeliveryHelp } from '~/components/delivery-help'
+import { DodoProductSelect } from '~/components/country-prices'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
 import {
   PPP_MULTIPLIERS,
@@ -92,6 +93,7 @@ function NewCampaignPage() {
   const [pricingMode, setPricingMode] = useState<PricingMode>('ppp_factor')
   const [discountDelivery, setDiscountDelivery] = useState<DiscountDelivery>('banner_coupon')
   const [integrationId, setIntegrationId] = useState<string>(NO_INTEGRATION)
+  const [providerProductId, setProviderProductId] = useState('')
   const [charmPricing, setCharmPricing] = useState<CharmPricingStrategy>('none')
   const [maxDiscount, setMaxDiscount] = useState(50)
   const [status, setStatus] = useState<CampaignStatus>('draft')
@@ -132,6 +134,18 @@ function NewCampaignPage() {
   // the Create button is disabled for that combination. Surface the reason.
   const blockedByAutoApply = autoApplyNeedsIntegration && status === 'active'
 
+  // Dodo charges the country price: only with a Dodo Payments integration,
+  // and an active campaign needs the Dodo product (the API refuses both).
+  const selectedIntegration = integrations.find((i) => i.id === integrationId)
+  const countryPrices = discountDelivery === 'provider_price'
+  const countryPricesProblem = !countryPrices
+    ? null
+    : selectedIntegration?.provider !== 'dodopayments'
+      ? 'Dodo charges the country price only with a Dodo Payments integration. Pick it above.'
+      : status === 'active' && !providerProductId
+        ? 'Pick the Dodo product, or save the campaign as a draft.'
+        : null
+
   const createCampaign = useMutation({
     mutationFn: () =>
       api.campaigns.create(teamId, {
@@ -140,6 +154,7 @@ function NewCampaignPage() {
         integrationId: integrationId === NO_INTEGRATION ? null : integrationId,
         pricingMode,
         discountDelivery,
+        ...(countryPrices && providerProductId ? { providerProductId } : {}),
         charmPricingStrategy: charmPricing,
         maxDiscountPercent: maxDiscount,
         status,
@@ -356,6 +371,7 @@ function NewCampaignPage() {
                 <SelectGroup>
                   <SelectItem value="banner_coupon">Banner + Coupon Code</SelectItem>
                   <SelectItem value="auto_apply">Auto-apply at checkout</SelectItem>
+                  <SelectItem value="provider_price">Dodo charges the country price</SelectItem>
                 </SelectGroup>
               </SelectContent>
             </Select>
@@ -394,7 +410,9 @@ function NewCampaignPage() {
               </ErrorText>
             ) : (
               <p className="mt-1.5 text-[13px] text-text-secondary">
-                Links the campaign to a provider so coupons are created automatically.
+                {countryPrices
+                  ? 'GoPayLocal sets the country prices on a product in this Dodo account.'
+                  : 'Links the campaign to a provider so coupons are created automatically.'}
               </p>
             )}
           </div>
@@ -413,8 +431,19 @@ function NewCampaignPage() {
                 </SelectGroup>
               </SelectContent>
             </Select>
-            <CharmHelp strategy={charmPricing} provider={integrations.find((i) => i.id === integrationId)?.provider} />
+            <CharmHelp strategy={charmPricing} provider={integrations.find((i) => i.id === integrationId)?.provider} delivery={discountDelivery} />
           </div>
+
+          {countryPrices && selectedIntegration?.provider === 'dodopayments' && (
+            <DodoProductSelect
+              teamId={teamId}
+              integrationId={integrationId}
+              env={env}
+              value={providerProductId}
+              onChange={setProviderProductId}
+              product={selectedProduct}
+            />
+          )}
 
           <div>
             <label className="block text-sm font-medium text-text-primary">Initial Status</label>
@@ -431,6 +460,7 @@ function NewCampaignPage() {
           </div>
 
           {/* Why the Create button is disabled (mirrors the edit page). */}
+          {countryPricesProblem && <ErrorText>{countryPricesProblem}</ErrorText>}
           {blockedByAutoApply && (
             <div className="border border-warning-border bg-warning-light p-3">
               <p className="text-[13px] text-text-primary">
@@ -444,7 +474,7 @@ function NewCampaignPage() {
           )}
 
           <div className="flex items-center gap-3 pt-2">
-            <button type="submit" disabled={createCampaign.isPending || !selectedProduct || !name || blockedByAutoApply} className="bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50">
+            <button type="submit" disabled={createCampaign.isPending || !selectedProduct || !name || blockedByAutoApply || !!countryPricesProblem} className="bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50">
               {createCampaign.isPending ? 'Creating…' : 'Create campaign'}
             </button>
             <button type="button" onClick={() => navigate({ to: '/dashboard/campaigns' })} className="border border-border px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-surface">

@@ -11,6 +11,7 @@ import { BannerEditor } from '~/components/banner-editor'
 import { HolidayDeals } from '~/components/holiday-deals'
 import { CharmHelp } from '~/components/charm-help'
 import { DeliveryHelp } from '~/components/delivery-help'
+import { CountryPricesPanel, DodoProductSelect } from '~/components/country-prices'
 import type { PricingMode, DiscountDelivery, CharmPricingStrategy, CampaignStatus } from '@gopaylocal/shared'
 import { providerLogo } from '~/components/integrations/providers'
 import { btnPrimary, btnSecondary, Spinner } from '~/components/ui/page'
@@ -23,7 +24,7 @@ export const Route = createFileRoute('/dashboard/campaigns/$id')({
 // Sentinel for the "no integration" Select option (Radix can't use an empty value).
 const NO_INTEGRATION = 'none'
 
-type Tab = 'setup' | 'deals' | 'settings'
+type Tab = 'setup' | 'deals' | 'prices' | 'settings'
 
 const CODE_TABS = ['Script Tag', 'React', 'Next.js', 'API'] as const
 type CodeTab = (typeof CODE_TABS)[number]
@@ -87,6 +88,7 @@ function CampaignDetailPage() {
   const [editPricingMode, setEditPricingMode] = useState<PricingMode>('ppp_factor')
   const [editDelivery, setEditDelivery] = useState<DiscountDelivery>('banner_coupon')
   const [editIntegrationId, setEditIntegrationId] = useState<string>(NO_INTEGRATION)
+  const [editProviderProductId, setEditProviderProductId] = useState('')
   const [editCharm, setEditCharm] = useState<CharmPricingStrategy>('none')
   const [editMaxDiscount, setEditMaxDiscount] = useState(50)
 
@@ -96,6 +98,7 @@ function CampaignDetailPage() {
     setEditPricingMode(campaign.pricingMode)
     setEditDelivery(campaign.discountDelivery)
     setEditIntegrationId(campaign.integrationId ?? NO_INTEGRATION)
+    setEditProviderProductId(campaign.providerProductId ?? '')
     setEditCharm(campaign.charmPricingStrategy)
     setEditMaxDiscount(campaign.maxDiscountPercent)
     setIsEditing(true)
@@ -242,12 +245,24 @@ curl "${snippetApiBase}/v1/banner/config/${publicKey}${productQuery}"
     editDelivery === 'auto_apply' && editIntegrationId === NO_INTEGRATION
   const editBlockedByIntegration =
     editAutoApplyNeedsIntegration && campaign?.status === 'active'
+  // Dodo charges the country price: only with a Dodo Payments integration,
+  // and an active campaign needs the Dodo product (the API refuses both).
+  const editCountryPrices = editDelivery === 'provider_price'
+  const editIsDodo = integrations.find((i) => i.id === editIntegrationId)?.provider === 'dodopayments'
+  const editCountryPricesProblem = !editCountryPrices
+    ? null
+    : !editIsDodo
+      ? 'Dodo charges the country price only with a Dodo Payments integration. Pick it below.'
+      : campaign?.status === 'active' && !editProviderProductId
+        ? 'Pick the Dodo product, or pause the campaign first.'
+        : null
 
   const handleSave = () => {
     updateCampaign.mutate({
       name: editName,
       pricingMode: editPricingMode,
       discountDelivery: editDelivery,
+      ...(editCountryPrices ? { providerProductId: editProviderProductId || null } : {}),
       integrationId: editIntegrationId === NO_INTEGRATION ? null : editIntegrationId,
       charmPricingStrategy: editCharm,
       maxDiscountPercent: editMaxDiscount,
@@ -287,8 +302,10 @@ curl "${snippetApiBase}/v1/banner/config/${publicKey}${productQuery}"
   // Activating an auto-apply campaign with no integration is rejected by the
   // server (it can't apply a discount at checkout). Disable the Activate/Resume
   // toggle so the user gets a co-located reason instead of a 400 dead-end.
+  const countryPricesIncomplete =
+    campaign.discountDelivery === 'provider_price' && (!campaign.integrationId || !campaign.providerProductId)
   const cannotActivate =
-    campaign.discountDelivery === 'auto_apply' && !campaign.integrationId
+    (campaign.discountDelivery === 'auto_apply' && !campaign.integrationId) || countryPricesIncomplete
   const toggleBlocked = nextStatus?.status === 'active' && cannotActivate
   // An arm of a running A/B test must stay active until the test ends.
   const pauseBlockedByTest = nextStatus?.status === 'paused' && runningExperiment !== null
@@ -297,7 +314,11 @@ curl "${snippetApiBase}/v1/banner/config/${publicKey}${productQuery}"
   const product = products.find((p) => p.id === campaign.productId)
   const TABS: { id: Tab; label: string }[] = [
     { id: 'setup', label: 'Setup' },
-    { id: 'deals', label: 'Holiday deals' },
+    // Dodo charges the country price: no deals (Dodo would charge the country
+    // price, not the deal), and the prices Dodo charges take their place.
+    campaign.discountDelivery === 'provider_price'
+      ? { id: 'prices', label: 'Prices at Dodo' }
+      : { id: 'deals', label: 'Holiday deals' },
     { id: 'settings', label: 'Settings' },
   ]
 
@@ -324,7 +345,7 @@ curl "${snippetApiBase}/v1/banner/config/${publicKey}${productQuery}"
             {linkedIntegration ? (
               <span className="inline-flex items-center gap-1.5">
                 <img src={providerLogo(linkedIntegration.provider)} alt="" className="h-3.5 w-3.5 object-contain" />
-                Codes in {linkedProviderLabel}
+                {campaign.discountDelivery === 'provider_price' ? 'Prices at' : 'Codes in'} {linkedProviderLabel}
               </span>
             ) : (
               !campaign.integrationId && <span>No payment platform</span>
@@ -342,7 +363,9 @@ curl "${snippetApiBase}/v1/banner/config/${publicKey}${productQuery}"
             disabled={toggleStatus.isPending || toggleBlocked || pauseBlockedByTest}
             title={
               toggleBlocked
-                ? 'Auto-apply needs a payment integration — link one in Settings first.'
+                ? countryPricesIncomplete
+                  ? 'Pick your Dodo Payments integration and the Dodo product in Settings first.'
+                  : 'Auto-apply needs a payment integration — link one in Settings first.'
                 : pauseBlockedByTest
                   ? AB_TEST_LOCK_REASON
                   : undefined
@@ -513,6 +536,18 @@ curl "${snippetApiBase}/v1/banner/config/${publicKey}${productQuery}"
         </div>
       )}
 
+      {/* Prices at Dodo Tab (components/country-prices.tsx) */}
+      {activeTab === 'prices' && (
+        <div className="max-w-3xl">
+          <CountryPricesPanel
+            teamId={teamId}
+            campaignId={campaignId}
+            canSync={can('campaigns.update')}
+            active={campaign.status === 'active'}
+          />
+        </div>
+      )}
+
       {/* Settings Tab */}
       {activeTab === 'settings' && (
         <div className="max-w-lg space-y-5">
@@ -523,6 +558,9 @@ curl "${snippetApiBase}/v1/banner/config/${publicKey}${productQuery}"
                 <SettingsCard label="Campaign Name" value={campaign.name} />
                 <SettingsCard label="Pricing Mode" value={PRICING_MODE_LABELS[campaign.pricingMode] ?? formatLabel(campaign.pricingMode)} />
                 <SettingsCard label="Delivery" value={DISCOUNT_DELIVERY_LABELS[campaign.discountDelivery] ?? formatLabel(campaign.discountDelivery)} />
+                {campaign.discountDelivery === 'provider_price' && (
+                  <SettingsCard label="Dodo product" value={campaign.providerProductId ?? 'Not picked'} />
+                )}
                 <SettingsCard
                   label="Integration"
                   value={
@@ -680,6 +718,7 @@ curl "${snippetApiBase}/v1/banner/config/${publicKey}${productQuery}"
                       <SelectGroup>
                         <SelectItem value="banner_coupon">Banner + Coupon Code</SelectItem>
                         <SelectItem value="auto_apply">Auto-apply at checkout</SelectItem>
+                        <SelectItem value="provider_price">Dodo charges the country price</SelectItem>
                       </SelectGroup>
                     </SelectContent>
                   </Select>
@@ -722,7 +761,9 @@ curl "${snippetApiBase}/v1/banner/config/${publicKey}${productQuery}"
                     </p>
                   ) : (
                     <p className="mt-1.5 text-[13px] text-text-secondary">
-                      Links the campaign to a provider so coupons are created automatically.
+                      {editCountryPrices
+                        ? 'GoPayLocal sets the country prices on a product in this Dodo account.'
+                        : 'Links the campaign to a provider so coupons are created automatically.'}
                     </p>
                   )}
                 </div>
@@ -764,15 +805,27 @@ curl "${snippetApiBase}/v1/banner/config/${publicKey}${productQuery}"
                       </SelectGroup>
                     </SelectContent>
                   </Select>
-                  <CharmHelp strategy={editCharm} provider={integrations.find((i) => i.id === editIntegrationId)?.provider} />
+                  <CharmHelp strategy={editCharm} provider={integrations.find((i) => i.id === editIntegrationId)?.provider} delivery={editDelivery} />
                 </div>
+
+                {editCountryPrices && editIsDodo && (
+                  <DodoProductSelect
+                    teamId={teamId}
+                    integrationId={editIntegrationId}
+                    env={campaign.environment}
+                    value={editProviderProductId}
+                    onChange={setEditProviderProductId}
+                    product={product}
+                  />
+                )}
+                {editCountryPricesProblem && <ErrorText>{editCountryPricesProblem}</ErrorText>}
               </div>
 
               <div className="flex items-center gap-3 pt-2">
                 <button
                   type="button"
                   onClick={handleSave}
-                  disabled={updateCampaign.isPending || !editName.trim() || editBlockedByIntegration}
+                  disabled={updateCampaign.isPending || !editName.trim() || editBlockedByIntegration || !!editCountryPricesProblem}
                   className={btnPrimary}
                 >
                   {updateCampaign.isPending ? 'Saving…' : 'Save changes'}

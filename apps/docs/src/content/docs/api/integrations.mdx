@@ -246,6 +246,8 @@ Disconnecting removes the integration and its stored keys, unlinks its campaigns
 
 If one of those auto-apply campaigns is an arm of a running A/B test, the disconnect is refused with `409` and `{ "error", "code": "integration_in_running_experiment", "experimentId" }`, and nothing changes, here or at the provider. End the test first.
 
+Dodo Payments with campaigns whose [country prices GoPayLocal sets](/integrations/dodo-payments/#dodo-charges-the-country-price): those campaigns are paused and their prices removed from Dodo with the key first. While some are left, the disconnect answers `409` with `"code": "country_prices_being_removed"`; disconnect again a minute later. Prices Dodo won't remove are left there, and the response then has `productsWithCountryPricesLeft`, the number of Dodo products to clean up in Dodo's dashboard.
+
 <Aside type="caution">
 Discount codes already created at the provider are **not** deleted there, because customers may already have them. `codesLeftAtProvider` says how many; remove them in the provider's dashboard if you need to.
 </Aside>
