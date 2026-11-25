@@ -367,6 +367,39 @@ describe("PATCH /v1/teams/:orgId/campaigns/:id (Dodo charges the country price)"
     expect(state.recorder.queries[2]!.params).toEqual(expect.arrayContaining([ORG_A, "int_1", "pdt_FAKE2", CAMPAIGN]));
   });
 
+  describe("a member limited to some products", () => {
+    const scoped: InjectedMember = { userId: "u_m", role: "member" };
+    const scopedPatch = (json: unknown) =>
+      createTestClient(mountRoutes(campaignsRoute, scoped)).request(`/v1/teams/${ORG_A}/campaigns/${CAMPAIGN}`, {
+        method: "PATCH",
+        json,
+      });
+    const grant = [{ memberId: "m1", allProducts: false, productId: "p1" }];
+
+    it("can't choose the Dodo product, even for a campaign of a product they can access", async () => {
+      state.recorder = createSqlRecorder([[{ ...charged, discountDelivery: "banner_coupon", providerProductId: null }], grant]);
+
+      const res = await scopedPatch({ discountDelivery: "provider_price", providerProductId: "pdt_FAKE9" });
+
+      expect(res.status).toBe(403);
+      expect(await res.json()).toMatchObject({ code: "country_prices_need_full_access" });
+      expect(updates()).toHaveLength(0);
+    });
+
+    it("can't move such a campaign to another Dodo product", async () => {
+      state.recorder = createSqlRecorder([[charged], grant]);
+      const res = await scopedPatch({ providerProductId: "pdt_FAKE9" });
+      expect(res.status).toBe(403);
+    });
+
+    it("can still edit the rest of it, sending the Dodo product it already has", async () => {
+      // existing row, product grants, running-test lookup, integration, other campaigns on the product, update
+      state.recorder = createSqlRecorder([[charged], grant, [], [dodoFacts], [], [{ ...charged, maxDiscountPercent: 40 }]]);
+      const res = await scopedPatch({ maxDiscountPercent: 40, providerProductId: "pdt_FAKE1", discountDelivery: "provider_price" });
+      expect(res.status).toBe(200);
+    });
+  });
+
   it("refuses switching a campaign with holiday deals that haven't ended", async () => {
     const withCodes = { ...charged, discountDelivery: "banner_coupon" };
     state.recorder = createSqlRecorder([[withCodes], [], [dodoFacts], [], [{ id: "deal_1" }]]);

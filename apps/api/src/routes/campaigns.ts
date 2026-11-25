@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { eq, and, gt, inArray, sql } from "drizzle-orm";
 import { ulid } from "ulid";
 import type { AppEnv } from "../bindings";
@@ -28,8 +28,11 @@ import { createCouponForCountry } from "../services/coupon.service";
 import { syncDealCouponsForCampaign } from "../services/deal.service";
 import {
   COUNTRY_PRICE_PROVIDERS,
+  countryPriceStatus,
   countryPricesLeft,
   productTakenByAnotherCampaign,
+  reconcileCampaignCountryPrices,
+  syncCampaignCountryPrices,
   syncCountryPricesAfterCampaignChange,
 } from "../services/campaign-country-prices.service";
 import {
@@ -192,6 +195,17 @@ const COUNTRY_PRICES_PRODUCT_TAKEN = {
   error:
     "Another campaign sets this Dodo product's country prices, or GoPayLocal is still removing them. Pick another product, or pause that campaign and try again once its prices are gone.",
   code: "country_prices_product_taken" as const,
+};
+
+/**
+ * Choosing the Dodo product whose prices GoPayLocal writes is for members with
+ * access to every product: GoPayLocal products and Dodo products are not
+ * linked, so a member limited to some products could otherwise change the
+ * prices of a Dodo product sold under one they can't see.
+ */
+const COUNTRY_PRICES_NEED_FULL_ACCESS = {
+  error: "Only members with access to every product can choose the Dodo product whose country prices GoPayLocal sets.",
+  code: "country_prices_need_full_access" as const,
 };
 
 const CAMPAIGN_HAS_DEALS = {
@@ -420,6 +434,9 @@ app.post("/v1/teams/:orgId/campaigns", requirePermission("campaigns.create"), as
     if (allowedForCreate && !allowedForCreate.has(parsed.data.productId)) {
       return c.json({ error: "No access to that product" }, 403);
     }
+    if (allowedForCreate && (parsed.data.discountDelivery === "provider_price" || parsed.data.providerProductId)) {
+      return c.json(COUNTRY_PRICES_NEED_FULL_ACCESS, 403);
+    }
 
     // Auto-apply needs a linked provider to apply the discount at checkout.
     // Drafting one without an integration is fine, but an ACTIVE auto-apply
@@ -569,6 +586,15 @@ app.patch("/v1/teams/:orgId/campaigns/:id", requirePermission("campaigns.update"
       if (upd.productId && !allowedForUpdate.has(upd.productId)) {
         return c.json({ error: "No access to that product" }, 403);
       }
+      // Which Dodo product (and Dodo account) gets the prices is set by a
+      // member with access to every product; others may edit the rest.
+      const choosesDodoProduct =
+        (parsed.data.providerProductId !== undefined && parsed.data.providerProductId !== existing.providerProductId) ||
+        (parsed.data.discountDelivery === "provider_price" && existing.discountDelivery !== "provider_price") ||
+        (upd.integrationId !== undefined &&
+          upd.integrationId !== existing.integrationId &&
+          (parsed.data.discountDelivery ?? existing.discountDelivery) === "provider_price");
+      if (choosesDodoProduct) return c.json(COUNTRY_PRICES_NEED_FULL_ACCESS, 403);
     }
 
     // An arm of a running A/B test must stay active and in the test's product
@@ -724,6 +750,53 @@ app.patch("/v1/teams/:orgId/campaigns/:id", requirePermission("campaigns.update"
   } catch (err) {
     console.error("campaigns: failed to update campaign", { error: errorSummary(err) });
     return c.json({ error: "Failed to update campaign" }, 500);
+  }
+});
+
+/** The campaign when it is in the org and inside the caller's product scope. */
+async function scopedCampaign(c: Context<AppEnv>, db: Database, orgId: string, campaignId: string) {
+  const [campaign] = await db
+    .select()
+    .from(campaigns)
+    .where(and(eq(campaigns.id, campaignId), eq(campaigns.organizationId, orgId)))
+    .limit(1);
+  if (!campaign) return null;
+  const allowed = await allowedProductIdsFor(c, db, orgId);
+  return allowed && !allowed.has(campaign.productId) ? null : campaign;
+}
+
+// The prices Dodo charges for a campaign it prices, and how the last sync went
+// (services/campaign-country-prices).
+app.get("/v1/teams/:orgId/campaigns/:id/country-prices", requirePermission("campaigns.view"), async (c) => {
+  const orgId = c.req.param("orgId");
+  const db = createDb(c.env);
+  try {
+    const campaign = await scopedCampaign(c, db, orgId, c.req.param("id"));
+    if (!campaign) return c.json({ error: "Campaign not found" }, 404);
+    return c.json({ data: await countryPriceStatus(db, campaign.id) });
+  } catch (err) {
+    console.error("campaigns: failed to read country prices", { error: errorSummary(err) });
+    return c.json({ error: "Failed to read the country prices" }, 500);
+  }
+});
+
+// Sync now: one batch of the campaign's country prices with Dodo, in the
+// request, then the same answer as the GET. The scheduled job does the rest.
+app.post("/v1/teams/:orgId/campaigns/:id/country-prices/sync", requirePermission("campaigns.update"), async (c) => {
+  const orgId = c.req.param("orgId");
+  const db = createDb(c.env);
+  try {
+    const campaign = await scopedCampaign(c, db, orgId, c.req.param("id"));
+    if (!campaign) return c.json({ error: "Campaign not found" }, 404);
+    if (campaign.discountDelivery !== "provider_price") {
+      return c.json({ error: "This campaign doesn't let Dodo charge the country price.", code: "not_country_prices" }, 400);
+    }
+    const ids = await reconcileCampaignCountryPrices(db, campaign.id, campaign);
+    await syncCampaignCountryPrices(db, c.env, ids, "manual");
+    return c.json({ data: await countryPriceStatus(db, campaign.id) });
+  } catch (err) {
+    console.error("campaigns: country price sync failed", { error: errorSummary(err) });
+    return c.json({ error: "Failed to sync the country prices" }, 500);
   }
 });
 

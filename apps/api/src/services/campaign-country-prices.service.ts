@@ -589,16 +589,66 @@ async function rebuildBanner(db: Database, env: CountryPriceEnv, organizationId:
   }
 }
 
-/** Sync a campaign's rows after a change, within one budget. */
-export async function syncCampaignCountryPrices(db: Database, env: CountryPriceEnv, rowIds: readonly string[]): Promise<void> {
+/** Sync a campaign's rows after a change (or from the dashboard's Sync now), within one budget. */
+export async function syncCampaignCountryPrices(
+  db: Database,
+  env: CountryPriceEnv,
+  rowIds: readonly string[],
+  trigger: CountryPriceSyncRecord["trigger"] = "change",
+): Promise<void> {
   let budget = CHANGE_SYNC_BUDGET;
   for (const id of rowIds) {
     if (budget < 3) break;
-    const result = await syncCountryPriceRow(db, env, id, { budget, trigger: "change" });
+    const result = await syncCountryPriceRow(db, env, id, { budget, trigger });
     if (result.outcome === "synced") {
       budget -= 3 + result.record.created + result.record.updated + result.record.archived + result.record.failures.length;
     } else budget -= 1;
   }
+}
+
+// ── What the dashboard shows ────────────────────────────────────────────────
+
+/** A campaign's country prices as the dashboard shows them. */
+export interface CountryPriceStatus {
+  /**
+   * The row of the campaign's current Dodo product: the prices Dodo charges
+   * (the ones GoPayLocal wrote), and how the last sync went. Null when the
+   * campaign doesn't want prices now (draft, paused, incomplete).
+   */
+  current: {
+    providerProductId: string;
+    environment: "live" | "test";
+    prices: Array<{ country: string; currency: string; minorAmount: number; discount: number }>;
+    lastSync: CountryPriceSyncRecord | null;
+    remaining: number;
+    syncedAt: string | null;
+    /** The product passed the checks and GoPayLocal has written to it. */
+    verified: boolean;
+  } | null;
+  /** Products whose prices GoPayLocal is still removing. */
+  removing: number;
+}
+
+export async function countryPriceStatus(db: Database, campaignId: string): Promise<CountryPriceStatus> {
+  const rows = await db.select().from(campaignCountryPrices).where(eq(campaignCountryPrices.campaignId, campaignId));
+  const row = rows.find((r) => r.wanted === "prices");
+  return {
+    current: row
+      ? {
+          providerProductId: row.providerProductId,
+          environment: row.environment === "test" ? "test" : "live",
+          prices: Object.entries(row.published ?? {})
+            .filter((entry): entry is [string, PublishedPrice & { discount: number }] => entry[1].discount !== null)
+            .map(([country, p]) => ({ country, currency: p.currency, minorAmount: p.minorAmount, discount: p.discount }))
+            .sort((a, b) => a.country.localeCompare(b.country)),
+          lastSync: (row.lastSync as CountryPriceSyncRecord | null) ?? null,
+          remaining: row.remaining,
+          syncedAt: row.syncedAt ? new Date(row.syncedAt).toISOString() : null,
+          verified: !!row.verifiedAt,
+        }
+      : null,
+    removing: rows.filter((r) => r.wanted === "none").length,
+  };
 }
 
 // ── The scheduled job ───────────────────────────────────────────────────────
