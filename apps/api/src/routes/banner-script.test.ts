@@ -9,6 +9,7 @@ import { assignVariant, visitorKey } from "../services/banner-selection";
 import type { BannerConfig } from "@gopaylocal/shared/types";
 import type { CachedBannerConfig, CachedDeal } from "../services/banner-cache.service";
 import { TEST_BANNER, TEST_COUNTRIES, bannerDocForCampaign, cachedCampaign } from "../services/banner-doc-test-helpers";
+import type { CachedCountryData } from "../services/banner-cache.service";
 import { resetFxCacheForTests } from "../services/fx-cache";
 import { FX_RATES_KEY } from "../services/fx-refresh.service";
 import type { UsageRow } from "../services/usage-meter";
@@ -843,6 +844,59 @@ describe("local prices", () => {
     expect(priceFields(india)).toEqual(priceFields(us));
     expect(india).not.toHaveProperty("fxAsOf");
     expect(india).toMatchObject({ show: true, country: "IN", currencyCode: "USD", fxRate: 1, localPrice: 11.4 });
+  });
+
+  describe("a campaign whose payment platform charges each country's price", () => {
+    /** The document of such a campaign: each country carries the price the platform charges. */
+    async function chargedEnv(countries: Record<string, CachedCountryData>) {
+      const e = await seededEnv({
+        doc: bannerDocForCampaign({ pricing: { currency: "USD", basePrice: 19, charm: "round_x9" }, countries }),
+      });
+      return withRates(e, fxDoc());
+    }
+
+    it("serves the price charged in the visitor's currency, exact, with no code", async () => {
+      const { body } = await call(
+        await chargedEnv({ IN: { discount: 40, tier: 3, code: null, countryName: "India", charge: { currency: "INR", amount: 999 } } }),
+      );
+      expect(body).toMatchObject({ show: true, discount: 40, code: null, priceCharged: true });
+      expect(priceFields(body)).toEqual({
+        baseCurrencyCode: "USD",
+        baseCurrencySymbol: "$",
+        currencyCode: "INR",
+        currencySymbol: "₹",
+        fxRate: 93.32614706,
+        // No fxAsOf: the platform charges exactly this. The original price stays the converted one.
+        localPrice: 999,
+        localOriginalPrice: 1769,
+        charmPricingStrategy: "round_x9",
+      });
+    });
+
+    it("serves a price charged in the product's own currency against the product's price", async () => {
+      const { body } = await call(
+        await chargedEnv({ IN: { discount: 40, tier: 3, code: null, countryName: "India", charge: { currency: "USD", amount: 10.99 } } }),
+      );
+      expect(priceFields(body)).toEqual({
+        baseCurrencyCode: "USD",
+        baseCurrencySymbol: "$",
+        currencyCode: "USD",
+        currencySymbol: "$",
+        fxRate: 1,
+        localPrice: 10.99,
+        localOriginalPrice: 19,
+        charmPricingStrategy: "round_x9",
+      });
+      expect(body.priceCharged).toBe(true);
+    });
+
+    it("answers no_discount for a country the document doesn't list (no price recorded for its discount)", async () => {
+      const { body } = await call(
+        await chargedEnv({ IN: { discount: 40, tier: 3, code: null, countryName: "India", charge: { currency: "INR", amount: 999 } } }),
+        { country: "BR" },
+      );
+      expect(body).toEqual({ show: false, reason: "no_discount" });
+    });
   });
 
   it("control: the same seeding converts when the rate is usable (so the cases above are not vacuous)", async () => {

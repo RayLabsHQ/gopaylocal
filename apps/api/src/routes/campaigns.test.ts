@@ -12,7 +12,7 @@ const state = vi.hoisted(() => ({ recorder: null as unknown as SqlRecorder }));
 vi.mock("../db", () => ({ createDb: () => state.recorder.db }));
 vi.mock("../services/banner-cache.service", () => ({ pushBannerConfigForOrg: async () => {} }));
 
-const { default: campaignsRoute, deleteCampaignCascade, insertCampaignWithBanner } = await import("./campaigns");
+const { default: campaignsRoute, countryPriceConflict, deleteCampaignCascade, insertCampaignWithBanner } = await import("./campaigns");
 const { CampaignInRunningExperimentError } = await import("../services/experiment.service");
 
 const ORG_A = "org_a";
@@ -259,6 +259,123 @@ describe("PATCH /v1/teams/:orgId/campaigns/:id (A/B test guard)", () => {
 
     expect(res.status).toBe(200);
     expect(state.recorder.queries.filter((q) => q.sql.startsWith("update"))).toHaveLength(1);
+  });
+});
+
+describe("countryPriceConflict", () => {
+  const base = { status: "active", delivery: "provider_price", provider: "dodopayments", providerProductId: "pdt_FAKE1" };
+
+  it("lets a complete Dodo campaign through, and ignores other deliveries", () => {
+    expect(countryPriceConflict(base)).toBeNull();
+    expect(countryPriceConflict({ ...base, delivery: "banner_coupon", provider: "stripe" })).toBeNull();
+  });
+
+  it("refuses any platform but Dodo Payments, even for a draft", () => {
+    expect(countryPriceConflict({ ...base, provider: "stripe" })?.code).toBe("country_prices_unsupported");
+    expect(countryPriceConflict({ ...base, status: "draft", provider: "paddle" })?.code).toBe("country_prices_unsupported");
+  });
+
+  it("lets a draft wait for its integration and product, but not an active campaign", () => {
+    expect(countryPriceConflict({ ...base, status: "draft", provider: null, providerProductId: null })).toBeNull();
+    expect(countryPriceConflict({ ...base, provider: null })?.code).toBe("country_prices_incomplete");
+    expect(countryPriceConflict({ ...base, providerProductId: null })?.code).toBe("country_prices_incomplete");
+  });
+});
+
+describe("PATCH /v1/teams/:orgId/campaigns/:id (Dodo charges the country price)", () => {
+  const owner: InjectedMember = { userId: "u_a", role: "owner" };
+  const charged = {
+    status: "active",
+    discountDelivery: "provider_price",
+    integrationId: "int_1",
+    providerProductId: "pdt_FAKE1",
+    productId: "p1",
+    environment: "live",
+  };
+  const dodoFacts = { provider: "dodopayments", hasLiveKey: true, hasTestKey: true };
+  const patch = (json: unknown) =>
+    createTestClient(mountRoutes(campaignsRoute, owner)).request(`/v1/teams/${ORG_A}/campaigns/${CAMPAIGN}`, {
+      method: "PATCH",
+      json,
+    });
+  const updates = () => state.recorder.queries.filter((q) => q.sql.startsWith("update"));
+
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("refuses discount codes on an active campaign while Dodo still charges its country prices", async () => {
+    const published = {
+      IN: { currency: "INR", minorAmount: 52900, discount: 70 },
+      BR: { currency: "BRL", minorAmount: 4900, discount: 50 },
+    };
+    state.recorder = createSqlRecorder([[charged], [{ published, verifiedAt: new Date() }]]);
+
+    const res = await patch({ discountDelivery: "banner_coupon" });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: "country_prices_still_at_dodo", remaining: 2 });
+    expect(updates()).toHaveLength(0);
+  });
+
+  it("refuses activating a code campaign whose Dodo prices aren't removed yet", async () => {
+    const paused = { ...charged, status: "paused", discountDelivery: "banner_coupon" };
+    state.recorder = createSqlRecorder([
+      [paused],
+      [{ provider: "dodopayments", hasLiveKey: true, hasTestKey: true }], // key check for going active
+      [{ published: { IN: { currency: "INR", minorAmount: 52900, discount: 70 } }, verifiedAt: new Date() }],
+    ]);
+
+    const res = await patch({ status: "active" });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: "country_prices_still_at_dodo", remaining: 1 });
+    expect(updates()).toHaveLength(0);
+  });
+
+  it("refuses the delivery on a platform other than Dodo Payments", async () => {
+    const onStripe = { ...charged, discountDelivery: "banner_coupon", providerProductId: null };
+    state.recorder = createSqlRecorder([[onStripe], [], [{ provider: "stripe", hasLiveKey: true, hasTestKey: true }]]);
+
+    const res = await patch({ discountDelivery: "provider_price" });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ code: "country_prices_unsupported" });
+    expect(updates()).toHaveLength(0);
+  });
+
+  it("refuses going active without the Dodo product to price", async () => {
+    state.recorder = createSqlRecorder([[{ ...charged, status: "paused", providerProductId: null }], [dodoFacts], [dodoFacts]]);
+
+    const res = await patch({ status: "active" });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ code: "country_prices_incomplete" });
+  });
+
+  it("refuses a Dodo product another campaign prices", async () => {
+    state.recorder = createSqlRecorder([[charged], [dodoFacts], [{ id: "ccp_other" }]]);
+
+    const res = await patch({ providerProductId: "pdt_FAKE2" });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: "country_prices_product_taken" });
+    expect(state.recorder.queries[2]!.params).toEqual(expect.arrayContaining([ORG_A, "int_1", "pdt_FAKE2", CAMPAIGN]));
+  });
+
+  it("refuses switching a campaign with holiday deals that haven't ended", async () => {
+    const withCodes = { ...charged, discountDelivery: "banner_coupon" };
+    state.recorder = createSqlRecorder([[withCodes], [], [dodoFacts], [], [{ id: "deal_1" }]]);
+
+    const res = await patch({ discountDelivery: "provider_price" });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: "campaign_has_deals" });
+    expect(updates()).toHaveLength(0);
   });
 });
 

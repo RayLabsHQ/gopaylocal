@@ -110,6 +110,7 @@ export async function createExperiment(
           productId: campaigns.productId,
           environment: campaigns.environment,
           status: campaigns.status,
+          discountDelivery: campaigns.discountDelivery,
         })
         .from(campaigns)
         .where(
@@ -149,6 +150,17 @@ export async function createExperiment(
           409,
           `Both campaigns must be active to start an A/B test; "${inactive.name}" is ${inactive.status}.`,
           "campaign_not_active",
+        );
+      }
+      // A campaign whose payment platform charges the country price can't be
+      // an arm: the platform charges that price to every buyer of the product,
+      // whichever arm they saw.
+      const charged = [armA, armB].find((a) => a.discountDelivery === "provider_price");
+      if (charged) {
+        throw new ExperimentError(
+          409,
+          `"${charged.name}" lets Dodo charge each country's price, which every buyer of the product pays whichever arm they see. A/B tests need two campaigns with discount codes.`,
+          "campaign_charges_country_prices",
         );
       }
       // banner_configs has no organization_id; both ids were just verified to
@@ -598,6 +610,8 @@ function conflictFor(experiment: { id: string; name: string }, action: string): 
  *    serves active campaigns, so the split would silently stop;
  *  - a different productId or environment: both arms must stay in the
  *    experiment's product and environment.
+ *  - its discount delivery can't become provider_price (the platform would
+ *    charge that price to every buyer, whichever arm they saw).
  * Every other field (name, discounts, delivery, ...) can change mid-test.
  * Runs no query when the update touches none of those fields.
  */
@@ -605,14 +619,18 @@ export async function campaignUpdateBlockedByExperiment(
   db: Queryable,
   orgId: string,
   campaignId: string,
-  update: { status?: string; productId?: string; environment?: string },
+  update: { status?: string; productId?: string; environment?: string; discountDelivery?: string },
 ): Promise<CampaignExperimentConflict | null> {
   const touchesStatus = update.status !== undefined && update.status !== "active";
-  if (!touchesStatus && update.productId === undefined && update.environment === undefined) return null;
+  const chargesCountryPrices = update.discountDelivery === "provider_price";
+  if (!touchesStatus && !chargesCountryPrices && update.productId === undefined && update.environment === undefined) {
+    return null;
+  }
 
   const running = await findRunningExperimentForCampaign(db, orgId, campaignId);
   if (!running) return null;
   if (touchesStatus) return conflictFor(running, "pause it or move it back to draft");
+  if (chargesCountryPrices) return conflictFor(running, "let Dodo charge each country's price");
   if (update.productId !== undefined && update.productId !== running.productId) {
     return conflictFor(running, "move it to another product");
   }

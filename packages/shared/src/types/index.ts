@@ -106,6 +106,12 @@ export type BannerResponse = {
   localOriginalPrice?: number;
   /** The campaign's charm strategy, so the SDKs round other prices the same way. */
   charmPricingStrategy?: CharmPricingStrategy;
+  /**
+   * Present when the payment platform charges `localPrice` itself (a campaign
+   * whose discount delivery is `provider_price`): the price is exact, the
+   * buyer enters nothing at checkout, and `code` is null.
+   */
+  priceCharged?: true;
   // Echoed back so the banner can attribute analytics events to the campaign
   // (the client sends campaignId + the resolved country on /v1/events).
   // With an A/B experiment this is the visitor's assigned arm's campaign.

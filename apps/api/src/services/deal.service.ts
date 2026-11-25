@@ -211,8 +211,11 @@ export async function syncDealCouponsForCampaign(
 
     const dealIds = open.map((deal) => deal.id);
     const before = await activeCouponIds(db, dealIds);
+    // A campaign whose payment platform charges the country price offers no
+    // deals (routes/deals.ts refuses them), so any code left is retired.
+    const codesWanted = campaign.discountDelivery !== "provider_price";
     for (const deal of open) {
-      if (integration && integration.status === "active") {
+      if (codesWanted && integration && integration.status === "active") {
         await createDealCode(db, env, campaign, integration, deal).catch(() => {});
       } else {
         await retireDealCoupons(db, env, deal.id, organizationId);

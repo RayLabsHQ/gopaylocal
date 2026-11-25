@@ -43,6 +43,7 @@ import type { Database } from "../db";
 import {
   apiKeys,
   campaigns,
+  campaignCountryPrices,
   bannerConfigs,
   products,
   parityGroups,
@@ -61,7 +62,8 @@ import {
   type WorkspaceParityGroups,
 } from "@gopaylocal/shared/parity";
 import { COUNTRY_NAMES } from "@gopaylocal/shared/constants";
-import { isCharmStrategy, type CharmStrategy } from "@gopaylocal/shared/currency";
+import { isCharmStrategy, minorUnitExponent, type CharmStrategy } from "@gopaylocal/shared/currency";
+import type { PublishedPrice } from "./dodo-country-prices";
 import type { BannerConfig } from "@gopaylocal/shared/types";
 import type { DealCodeSource } from "@gopaylocal/shared/deals";
 import { isDisplayableCoupon, COUPON_STATUS } from "./coupon.service";
@@ -96,6 +98,14 @@ export interface CachedCountryData {
    * banner"), instead of showing a discount without a working code.
    */
   resolve?: true;
+  /**
+   * A campaign whose payment platform charges each country's price itself
+   * (discountDelivery 'provider_price'): the price it charges here, major
+   * units, as the last sync recorded it. Such a campaign lists only the
+   * countries whose recorded price is for the current discount, never with a
+   * code: the banner shows exactly what checkout charges.
+   */
+  charge?: { currency: string; amount: number };
 }
 
 /**
@@ -238,6 +248,14 @@ export interface ServingCampaign extends SelectableCampaign {
   pricing: CampaignPricing;
   /** The campaign's deals that have not ended, with their active coupon rows. */
   deals?: ServingDeal[];
+  /** banner_coupon (the default when absent), auto_apply or provider_price. */
+  discountDelivery?: string;
+  /**
+   * provider_price only: the prices the payment platform charges, as the last
+   * sync of the campaign's current product recorded them
+   * (campaign_country_prices.published); null when nothing was recorded.
+   */
+  countryPrices?: Record<string, PublishedPrice> | null;
 }
 
 /** A deal row with what decides whether it can be shown. */
@@ -329,6 +347,43 @@ export async function loadServingInputs(
       .where(and(eq(deals.organizationId, organizationId), gt(deals.endsAt, now))),
   ]);
 
+  // The prices the payment platform charges, only for workspaces with a
+  // campaign it prices (no query otherwise). A campaign uses the row of its
+  // current product, integration and environment.
+  const charged = campaignRows.filter(({ campaign }) => campaign.discountDelivery === "provider_price");
+  const priceRows =
+    charged.length > 0
+      ? await db
+          .select({
+            campaignId: campaignCountryPrices.campaignId,
+            integrationId: campaignCountryPrices.integrationId,
+            environment: campaignCountryPrices.environment,
+            providerProductId: campaignCountryPrices.providerProductId,
+            published: campaignCountryPrices.published,
+          })
+          .from(campaignCountryPrices)
+          .where(
+            and(
+              eq(campaignCountryPrices.organizationId, organizationId),
+              eq(campaignCountryPrices.wanted, "prices"),
+              inArray(
+                campaignCountryPrices.campaignId,
+                charged.map(({ campaign }) => campaign.id),
+              ),
+            ),
+          )
+      : [];
+  const countryPricesOf = (campaign: typeof campaigns.$inferSelect): Record<string, PublishedPrice> | null => {
+    const row = priceRows.find(
+      (r) =>
+        r.campaignId === campaign.id &&
+        r.providerProductId === campaign.providerProductId &&
+        r.integrationId === campaign.integrationId &&
+        r.environment === (campaign.environment === "test" ? "test" : "live"),
+    );
+    return row?.published ?? null;
+  };
+
   // Campaign id -> its deals, each with its coupon rows.
   const dealsByCampaign = new Map<string, Map<string, ServingDeal>>();
   for (const { deal, coupon } of dealRows) {
@@ -372,6 +427,9 @@ export async function loadServingInputs(
         charm: isCharmStrategy(campaign.charmPricingStrategy) ? campaign.charmPricingStrategy : "none",
       },
       deals: [...(dealsByCampaign.get(campaign.id)?.values() ?? [])],
+      ...(campaign.discountDelivery === "provider_price"
+        ? { discountDelivery: campaign.discountDelivery, countryPrices: countryPricesOf(campaign) }
+        : {}),
     })),
     experiments: experimentRows.map((e) => ({
       id: e.id,
@@ -409,16 +467,28 @@ export interface BannerDocInput {
   parityGroups: WorkspaceParityGroups;
   /** Active coupons of the referenced campaigns, newest first. */
   coupons: CouponForDisplay[];
+  /**
+   * Every discounted country of a campaign its payment platform charges,
+   * without the recorded prices: the input of the country-price sync. Never
+   * set for a document that is stored.
+   */
+  unchargedCountryPrices?: boolean;
 }
 
 function campaignEnvironmentOf(value: string): BannerEnvironment {
   return value === "test" ? "test" : "live";
 }
 
+/** The campaign's payment platform charges each country's price itself (no codes, no deals). */
+export function isChargedByProvider(campaign: { discountDelivery?: string | null }): boolean {
+  return campaign.discountDelivery === "provider_price";
+}
+
 function campaignCountries(
   campaign: ServingCampaign,
   parityGroups: WorkspaceParityGroups,
   couponsForCampaign: CouponForDisplay[],
+  opts: { unchargedCountryPrices?: boolean } = {},
 ): Record<string, CachedCountryData> {
   const overrides =
     campaign.pricingMode === "custom" &&
@@ -449,6 +519,25 @@ function campaignCountries(
       code: null,
       countryName: COUNTRY_NAMES[cc] ?? cc,
     };
+  }
+
+  // The payment platform charges the price itself: no codes. Only a country
+  // whose recorded price is for its current discount is offered, with that
+  // price (a discount changed since the last sync waits for the next one).
+  // `unchargedCountryPrices` returns every discounted country instead: what
+  // the sync prices (campaignCountryPriceTable).
+  if (isChargedByProvider(campaign)) {
+    if (opts.unchargedCountryPrices) return out;
+    const prices = campaign.countryPrices ?? {};
+    for (const cc of Object.keys(out)) {
+      const price = Object.hasOwn(prices, cc) ? prices[cc] : undefined;
+      if (!price || price.discount !== out[cc]!.discount) {
+        delete out[cc];
+        continue;
+      }
+      out[cc]!.charge = { currency: price.currency, amount: price.minorAmount / 10 ** minorUnitExponent(price.currency) };
+    }
+    return out;
   }
 
   // Codes: only a coupon of this campaign's integration and environment for
@@ -493,8 +582,10 @@ function campaignCountries(
  *  - `none`: without a code.
  */
 export function servableDeals(
-  campaign: Pick<ServingCampaign, "integrationId" | "environment" | "deals">,
+  campaign: Pick<ServingCampaign, "integrationId" | "environment" | "deals" | "discountDelivery">,
 ): CachedDeal[] {
+  // The payment platform charges the country price, never a deal's.
+  if (isChargedByProvider(campaign)) return [];
   const environment = campaignEnvironmentOf(campaign.environment);
   const out: CachedDeal[] = [];
   for (const deal of campaign.deals ?? []) {
@@ -561,7 +652,9 @@ export function buildBannerDoc(input: BannerDocInput): CachedBannerConfig {
       allowedDomains: campaign.allowedDomains,
       banner: campaign.banner,
       pricing: campaign.pricing,
-      countries: campaignCountries(campaign, input.parityGroups, couponsByCampaign.get(id) ?? []),
+      countries: campaignCountries(campaign, input.parityGroups, couponsByCampaign.get(id) ?? [], {
+        unchargedCountryPrices: input.unchargedCountryPrices,
+      }),
     };
     const dealsOfCampaign = servableDeals(campaign);
     if (dealsOfCampaign.length > 0) cachedCampaigns[id]!.deals = dealsOfCampaign;
@@ -658,22 +751,24 @@ async function writeBannerDocs(
 /**
  * The organization's document as a rebuild would write it now, without writing
  * it. Null when the organization has no public key. Used by the house pricing
- * sync, which must price Pro exactly as the config endpoint serves it.
+ * sync, which must price Pro exactly as the config endpoint serves it, and,
+ * with `unchargedCountryPrices`, by the country-price sync of merchant campaigns.
  */
 export async function buildBannerDocNow(
   db: Database,
   organizationId: string,
   env: DeploymentEnv,
+  opts: { unchargedCountryPrices?: boolean } = {},
 ): Promise<CachedBannerConfig | null> {
   const source = await loadBannerDocSource(db, organizationId, env);
-  return source ? source.build("preview", Date.now()) : null;
+  return source ? source.build("preview", Date.now(), opts) : null;
 }
 
 /** The rows of one organization's document, read once; `build` is pure. */
 interface BannerDocSource {
   /** Ids of the organization's public keys (one stored document each). */
   keyIds: string[];
-  build(epoch: string, builtAt: number): CachedBannerConfig;
+  build(epoch: string, builtAt: number, opts?: { unchargedCountryPrices?: boolean }): CachedBannerConfig;
 }
 
 /** Read every row the document is built from. Null when the organization has no public key. */
@@ -742,8 +837,17 @@ async function loadBannerDocSource(
   const groups = workspaceParityGroups(groupRows);
   return {
     keyIds: orgApiKeys.map((key) => key.id),
-    build: (epoch, builtAt) =>
-      buildBannerDoc({ organizationId, epoch, builtAt, showBranding, inputs, parityGroups: groups, coupons: couponRows }),
+    build: (epoch, builtAt, opts) =>
+      buildBannerDoc({
+        organizationId,
+        epoch,
+        builtAt,
+        showBranding,
+        inputs,
+        parityGroups: groups,
+        coupons: couponRows,
+        unchargedCountryPrices: opts?.unchargedCountryPrices,
+      }),
   };
 }
 

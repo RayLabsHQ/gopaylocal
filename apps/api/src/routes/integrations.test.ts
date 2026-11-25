@@ -594,6 +594,7 @@ describe("DELETE /integrations/:id", () => {
     const existing = row({ webhookEndpointId: "we_live" });
     state.recorder = createSqlRecorder([
       [existing],
+      [], // no country prices set at Dodo with this key
       [{ id: "cmp_auto" }], // A/B guard: lock the integration's active auto-apply campaigns
       [], // A/B guard: no running experiment uses one of them
       [{ id: "cmp_auto" }], // paused auto-apply campaigns
@@ -607,7 +608,8 @@ describe("DELETE /integrations/:id", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ success: true, pausedCampaigns: 1, codesLeftAtProvider: 2 });
     expect(state.recorder.transactions).toEqual(["commit"]);
-    const sqls = state.recorder.queries.slice(1).map((q) => q.sql);
+    expect(state.recorder.queries[1]!.sql).toMatch(/^select "id" from "campaign_country_prices" where/);
+    const sqls = state.recorder.queries.slice(2).map((q) => q.sql);
     expect(sqls[0]).toMatch(/^select "id" from "campaigns" where .* for update$/);
     expect(sqls[1]).toMatch(/^select "experiments"."id", "experiments"."name" from "experiments" inner join "campaigns"/);
     expect(sqls[2]).toMatch(/^update "campaigns" set "status" = \$1/);
@@ -621,6 +623,7 @@ describe("DELETE /integrations/:id", () => {
   it("refuses (409) a disconnect that would pause an arm of a running A/B test: nothing changes, no provider call", async () => {
     state.recorder = createSqlRecorder([
       [row({ webhookEndpointId: "we_live" })],
+      [],
       [{ id: "cmp_auto" }],
       [{ id: "01JEXPERIMENTXXXXXXXXXXXXX", name: "India 30 vs 45" }],
     ]);
@@ -633,8 +636,8 @@ describe("DELETE /integrations/:id", () => {
       experimentId: "01JEXPERIMENTXXXXXXXXXXXXX",
     });
     expect(state.recorder.transactions).toEqual(["rollback"]);
-    expect(state.recorder.queries).toHaveLength(3);
-    expect(state.recorder.queries[2]!.params).toEqual([ORG, "running", ORG, ID, "active", "auto_apply", 1]);
+    expect(state.recorder.queries).toHaveLength(4);
+    expect(state.recorder.queries[3]!.params).toEqual([ORG, "running", ORG, ID, "active", "auto_apply", 1]);
     expect(state.recorder.queries.some((q) => /^(update|delete)/.test(q.sql))).toBe(false);
     expect(state.create).not.toHaveBeenCalled();
     expect(providers.live.deleteWebhook).not.toHaveBeenCalled();
@@ -642,7 +645,7 @@ describe("DELETE /integrations/:id", () => {
   });
 
   it("keeps the webhook when the database delete fails (no connected-looking integration with dead tracking)", async () => {
-    state.recorder = createSqlRecorder([[row({ webhookEndpointId: "we_live" })], new Error("deadlock detected")]);
+    state.recorder = createSqlRecorder([[row({ webhookEndpointId: "we_live" })], [], new Error("deadlock detected")]);
 
     const res = await client().request(`${BASE}/${ID}`, { method: "DELETE" });
 

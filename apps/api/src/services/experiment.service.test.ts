@@ -258,7 +258,7 @@ describe("createExperiment", () => {
     await createExperiment(r.db, { orgId: ORG, input, allowedProductIds: null, now: NOW });
     const q = r.queries[1]!;
     expect(q.sql).toBe(
-      'select "id", "name", "product_id", "environment", "status" from "campaigns" where ("campaigns"."organization_id" = $1 and "campaigns"."id" in ($2, $3)) order by "campaigns"."id" for update',
+      'select "id", "name", "product_id", "environment", "status", "discount_delivery" from "campaigns" where ("campaigns"."organization_id" = $1 and "campaigns"."id" in ($2, $3)) order by "campaigns"."id" for update',
     );
     expect(q.params).toEqual([ORG, A, B]);
   });
@@ -289,6 +289,16 @@ describe("createExperiment", () => {
       400,
       "campaign_environment_mismatch",
     );
+  });
+
+  it("refuses an arm whose payment platform charges each country's price (it would charge every buyer)", async () => {
+    const r = createSqlRecorder([[{ id: PRODUCT }], [arm(A), arm(B, { discountDelivery: "provider_price" })]]);
+    await expectExperimentError(
+      createExperiment(r.db, { orgId: ORG, input, allowedProductIds: null }),
+      409,
+      "campaign_charges_country_prices",
+    );
+    expect(r.queries.some((q) => q.sql.startsWith("insert"))).toBe(false);
   });
 
   for (const status of ["paused", "draft"]) {
@@ -591,7 +601,15 @@ describe("campaignUpdateBlockedByExperiment", () => {
     const r = createSqlRecorder();
     expect(await campaignUpdateBlockedByExperiment(r.db, ORG, A, { status: "active" })).toBeNull();
     expect(await campaignUpdateBlockedByExperiment(r.db, ORG, A, {})).toBeNull();
+    expect(await campaignUpdateBlockedByExperiment(r.db, ORG, A, { discountDelivery: "banner_coupon" })).toBeNull();
     expect(r.queries).toHaveLength(0);
+  });
+
+  it("refuses letting Dodo charge the country price on an arm of a running test", async () => {
+    const r = createSqlRecorder([[running]]);
+    const conflict = await campaignUpdateBlockedByExperiment(r.db, ORG, A, { discountDelivery: "provider_price" });
+    expect(conflict).toMatchObject({ code: "campaign_in_running_experiment", experimentId: EXP });
+    expect(conflict?.error).toMatch(/End the test before you let Dodo charge each country's price\.$/);
   });
 
   for (const status of ["paused", "draft"]) {

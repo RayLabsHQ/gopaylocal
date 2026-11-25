@@ -141,8 +141,14 @@ export function wantsCountryPrices(campaign: CampaignForPrices, provider: string
 
 /**
  * After a campaign is created, changed or deleted (`campaign` null): mark its
- * rows. The row for its current product is 'prices' while it wants them;
- * every other row of the campaign is 'none'. Returns the ids of rows to sync.
+ * rows. The row for its current product, integration and environment is
+ * 'prices' while it wants them; every other row of the campaign is 'none'.
+ * Returns the ids of rows to sync.
+ *
+ * A Dodo product id has one row per campaign (the unique index). When the
+ * campaign keeps the product id but moves to another integration or
+ * environment, the old row is removed first and the new one is added by the
+ * reconcile that follows its removal (syncCountryPriceRow).
  */
 export async function reconcileCampaignCountryPrices(
   db: Database,
@@ -158,38 +164,58 @@ export async function reconcileCampaignCountryPrices(
       .limit(1);
     provider = integration?.provider ?? null;
   }
-  const keep = campaign && wantsCountryPrices(campaign, provider) ? campaign.providerProductId! : null;
+  const keep = campaign && wantsCountryPrices(campaign, provider) ? campaign : null;
+  const environment = campaign?.environment === "test" ? "test" : "live";
+  const isKept = (row: { providerProductId: string; integrationId: string; environment: string }) =>
+    !!keep &&
+    row.providerProductId === keep.providerProductId &&
+    row.integrationId === keep.integrationId &&
+    row.environment === environment;
   const now = new Date();
 
   const rows = await db
-    .select({ id: campaignCountryPrices.id, providerProductId: campaignCountryPrices.providerProductId, wanted: campaignCountryPrices.wanted })
+    .select({
+      id: campaignCountryPrices.id,
+      providerProductId: campaignCountryPrices.providerProductId,
+      integrationId: campaignCountryPrices.integrationId,
+      environment: campaignCountryPrices.environment,
+      wanted: campaignCountryPrices.wanted,
+    })
     .from(campaignCountryPrices)
     .where(eq(campaignCountryPrices.campaignId, campaignId));
   const touched: string[] = [];
   for (const row of rows) {
-    const wanted = row.providerProductId === keep ? "prices" : "none";
+    const wanted = isKept(row) ? "prices" : "none";
     if (row.wanted !== wanted) {
       await db.update(campaignCountryPrices).set({ wanted, updatedAt: now }).where(eq(campaignCountryPrices.id, row.id));
     }
     touched.push(row.id);
   }
-  if (keep && campaign && !rows.some((r) => r.providerProductId === keep)) {
+  if (keep && !rows.some(isKept) && !rows.some((r) => r.providerProductId === keep.providerProductId)) {
     const id = ulid();
-    await db.insert(campaignCountryPrices).values({
-      id,
-      campaignId,
-      organizationId: campaign.organizationId,
-      integrationId: campaign.integrationId!,
-      environment: campaign.environment === "test" ? "test" : "live",
-      providerProductId: keep,
-      wanted: "prices",
-    });
-    touched.push(id);
+    const inserted = await db
+      .insert(campaignCountryPrices)
+      .values({
+        id,
+        campaignId,
+        organizationId: keep.organizationId,
+        integrationId: keep.integrationId!,
+        environment,
+        providerProductId: keep.providerProductId!,
+        wanted: "prices",
+      })
+      .onConflictDoNothing()
+      .returning({ id: campaignCountryPrices.id });
+    if (inserted.length > 0) touched.push(id);
   }
   return touched;
 }
 
-/** Another campaign of the workspace already prices this Dodo product. */
+/**
+ * Another campaign of the workspace sets this Dodo product's country prices,
+ * or its prices there are still being removed: a product carries one
+ * campaign's prices at a time.
+ */
 export async function productTakenByAnotherCampaign(
   db: Database,
   input: { organizationId: string; campaignId: string | null; integrationId: string; providerProductId: string },
@@ -202,12 +228,55 @@ export async function productTakenByAnotherCampaign(
         eq(campaignCountryPrices.organizationId, input.organizationId),
         eq(campaignCountryPrices.integrationId, input.integrationId),
         eq(campaignCountryPrices.providerProductId, input.providerProductId),
-        eq(campaignCountryPrices.wanted, "prices"),
         input.campaignId ? ne(campaignCountryPrices.campaignId, input.campaignId) : sql`true`,
       ),
     )
     .limit(1);
   return !!row;
+}
+
+const campaignForPricesColumns = {
+  id: campaigns.id,
+  organizationId: campaigns.organizationId,
+  status: campaigns.status,
+  discountDelivery: campaigns.discountDelivery,
+  integrationId: campaigns.integrationId,
+  providerProductId: campaigns.providerProductId,
+  environment: campaigns.environment,
+};
+
+/**
+ * After a campaign changed (or was deleted: `campaign` null): mark its rows and
+ * sync them within one budget. For waitUntil: never throws.
+ */
+export async function syncCountryPricesAfterCampaignChange(
+  db: Database,
+  env: CountryPriceEnv,
+  campaignId: string,
+  campaign: CampaignForPrices | null,
+): Promise<void> {
+  try {
+    const ids = await reconcileCampaignCountryPrices(db, campaignId, campaign);
+    if (ids.length > 0) await syncCampaignCountryPrices(db, env, ids);
+  } catch (err) {
+    console.error("[country-prices] sync after a campaign change failed:", err instanceof Error ? err.message : String(err));
+  }
+}
+
+/**
+ * Something that sets discounts changed for the whole workspace (its parity
+ * groups, a product's price): its prices are due at the next scheduled run,
+ * not six hours later. One update, and none without such a campaign.
+ */
+export async function markCountryPricesDue(db: Database, organizationId: string): Promise<void> {
+  try {
+    await db
+      .update(campaignCountryPrices)
+      .set({ syncedAt: null })
+      .where(and(eq(campaignCountryPrices.organizationId, organizationId), eq(campaignCountryPrices.wanted, "prices")));
+  } catch (err) {
+    console.error("[country-prices] marking prices due failed:", err instanceof Error ? err.message : String(err));
+  }
 }
 
 // ── The prices ──────────────────────────────────────────────────────────────
@@ -223,7 +292,7 @@ export async function campaignCountryPriceTable(
   campaign: Pick<typeof campaigns.$inferSelect, "id" | "organizationId">,
   now: number = Date.now(),
 ): Promise<{ ok: true; rows: CountryPriceRow[]; basePrice: number; currency: string } | { ok: false; problem: string }> {
-  const doc = await buildBannerDocNow(db, campaign.organizationId, env);
+  const doc = await buildBannerDocNow(db, campaign.organizationId, env, { unchargedCountryPrices: true });
   if (!doc) return { ok: false, problem: "The workspace has no public key. Create one under Settings, API keys." };
   const served = Object.hasOwn(doc.campaigns, campaign.id) ? doc.campaigns[campaign.id]! : null;
   if (!served) return { ok: false, problem: "The campaign isn't being served. It must be active and set on a product." };
@@ -318,7 +387,7 @@ export async function syncCountryPriceRow(
   // Never verified means GoPayLocal never wrote a rule on this product: there
   // is nothing of ours to remove, and whatever is there is the merchant's.
   if (row.wanted === "none" && !row.verifiedAt) {
-    await db.delete(campaignCountryPrices).where(eq(campaignCountryPrices.id, row.id));
+    await dropRow(db, row);
     return {
       outcome: "synced",
       removed: true,
@@ -331,7 +400,7 @@ export async function syncCountryPriceRow(
     // Prices to remove with no integration left to remove them with: nothing
     // more GoPayLocal can do (removing the integration removes them first).
     if (row.wanted === "none" && dodo.missingIntegration) {
-      await db.delete(campaignCountryPrices).where(eq(campaignCountryPrices.id, row.id));
+      await dropRow(db, row);
       console.error(`[country-prices] integration gone, prices left at Dodo for campaign ${row.campaignId}`);
       return { outcome: "problem", problem: dodo.problem };
     }
@@ -381,7 +450,7 @@ export async function syncCountryPriceRow(
   if (!applied.ok) {
     // A product deleted in Dodo has no prices left to remove.
     if (row.wanted === "none" && applied.status === 404) {
-      await db.delete(campaignCountryPrices).where(eq(campaignCountryPrices.id, row.id));
+      await dropRow(db, row);
       return {
         outcome: "synced",
         removed: true,
@@ -402,7 +471,7 @@ export async function syncCountryPriceRow(
   };
 
   if (row.wanted === "none" && result.remaining === 0 && result.failures.length === 0) {
-    await db.delete(campaignCountryPrices).where(eq(campaignCountryPrices.id, row.id));
+    await dropRow(db, row);
     if (row.published && Object.keys(row.published).length > 0) await rebuildBanner(db, env, row.organizationId);
     return { outcome: "synced", record, removed: true };
   }
@@ -422,6 +491,94 @@ export async function syncCountryPriceRow(
     .where(eq(campaignCountryPrices.id, row.id));
   if (JSON.stringify(published) !== JSON.stringify(row.published ?? {})) await rebuildBanner(db, env, row.organizationId);
   return { outcome: "synced", record, removed: false };
+}
+
+/**
+ * Delete a row whose removal is done, then reconcile its campaign again: a
+ * campaign that kept the product id but moved to another integration or
+ * environment gets its new row now (the unique index held it back).
+ */
+async function dropRow(db: Database, row: Pick<CountryPriceRowRecord, "id" | "campaignId">): Promise<void> {
+  await db.delete(campaignCountryPrices).where(eq(campaignCountryPrices.id, row.id));
+  const [campaign] = await db.select(campaignForPricesColumns).from(campaigns).where(eq(campaigns.id, row.campaignId)).limit(1);
+  if (campaign) await reconcileCampaignCountryPrices(db, campaign.id, campaign);
+}
+
+/**
+ * How many of a campaign's country prices may still be charged at Dodo: the
+ * rules GoPayLocal wrote and hasn't removed yet (a product whose first write
+ * was never recorded counts as one). Codes must not be offered on top of them.
+ */
+export async function countryPricesLeft(db: Database, campaignId: string): Promise<number> {
+  const rows = await db
+    .select({ published: campaignCountryPrices.published, verifiedAt: campaignCountryPrices.verifiedAt })
+    .from(campaignCountryPrices)
+    .where(eq(campaignCountryPrices.campaignId, campaignId));
+  return rows.reduce((n, r) => n + (r.verifiedAt ? (r.published ? ownedCountries(r.published).size : 1) : 0), 0);
+}
+
+/**
+ * Before an integration is disconnected: remove the country prices
+ * GoPayLocal set with its key, one batch per call. The campaigns that set
+ * them are paused first (the disconnect pauses them anyway), so nothing adds
+ * the prices back while they are being removed. `pending` rows still have
+ * prices to remove (the disconnect waits for them); `stuck` rows can't be
+ * removed (Dodo refused), are dropped, and their prices stay at Dodo;
+ * `paused` counts the campaigns paused here.
+ */
+export async function removeCountryPricesBeforeDisconnect(
+  db: Database,
+  env: CountryPriceEnv,
+  organizationId: string,
+  integrationId: string,
+  opts: { beforeRemoving?: () => Promise<void> } = {},
+): Promise<{ pending: number; stuck: number; paused: number }> {
+  const ofIntegration = and(
+    eq(campaignCountryPrices.organizationId, organizationId),
+    eq(campaignCountryPrices.integrationId, integrationId),
+  );
+  const rows = await db.select({ id: campaignCountryPrices.id }).from(campaignCountryPrices).where(ofIntegration);
+  if (rows.length === 0) return { pending: 0, stuck: 0, paused: 0 };
+  await opts.beforeRemoving?.();
+  const now = new Date();
+  const paused = await db
+    .update(campaigns)
+    .set({ status: "paused", updatedAt: now })
+    .where(
+      and(
+        eq(campaigns.organizationId, organizationId),
+        eq(campaigns.integrationId, integrationId),
+        eq(campaigns.status, "active"),
+        eq(campaigns.discountDelivery, "provider_price"),
+      ),
+    )
+    .returning({ id: campaigns.id });
+  await db.update(campaignCountryPrices).set({ wanted: "none", updatedAt: now }).where(ofIntegration);
+
+  let budget = CHANGE_SYNC_BUDGET;
+  let stuck = 0;
+  for (const { id } of rows) {
+    if (budget < 3) break;
+    const result = await syncCountryPriceRow(db, env, id, { budget, trigger: "change" });
+    if (result.outcome === "synced") {
+      budget -= 3 + result.record.created + result.record.updated + result.record.archived + result.record.failures.length;
+    } else {
+      budget -= 1;
+      // Dodo refused (the key, the product): nothing more can be done with
+      // this integration, which is about to go.
+      const [still] = await db
+        .select({ id: campaignCountryPrices.id })
+        .from(campaignCountryPrices)
+        .where(eq(campaignCountryPrices.id, id))
+        .limit(1);
+      if (still) {
+        await db.delete(campaignCountryPrices).where(eq(campaignCountryPrices.id, id));
+        stuck += 1;
+      }
+    }
+  }
+  const [left] = await db.select({ n: sql<number>`count(*)::int` }).from(campaignCountryPrices).where(ofIntegration);
+  return { pending: left?.n ?? 0, stuck, paused: paused.length };
 }
 
 async function rebuildBanner(db: Database, env: CountryPriceEnv, organizationId: string): Promise<void> {

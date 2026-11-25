@@ -35,6 +35,7 @@ import admin from "./routes/admin";
 import adminInsights from "./routes/admin-insights";
 import adminHousePricing from "./routes/admin-house-pricing";
 import { runScheduledHouseSync } from "./services/house-pricing.service";
+import { runScheduledCountryPriceSync } from "./services/campaign-country-prices.service";
 
 const app = new Hono<AppEnv>();
 
@@ -124,7 +125,8 @@ app.onError((err, c) => {
 //  - anything else (the */10 usage cron): recompute per-org API-hit usage snapshots
 //    (services/usage.service.ts). Kept as the default so its behavior is unchanged.
 //    It also retries unfinished redemption webhooks and removes the codes of
-//    holiday deals that have ended (retireEndedDealCoupons).
+//    holiday deals that have ended (retireEndedDealCoupons), and keeps the
+//    country prices of Dodo products in line (runScheduledCountryPriceSync).
 //    The run scheduled at 03:00 UTC also deletes old data
 //    (services/retention.service.ts). It is here, not on the daily VPN cron,
 //    because that run cannot finish on Workers Free.
@@ -159,6 +161,11 @@ export default {
         // exchange rates (services/house-pricing.service.ts).
         runScheduledHouseSync(db, env, controller.scheduledTime).catch((err) => {
           console.error("House pricing sync failed:", err);
+        }),
+        // Country prices merchants' Dodo products charge follow their
+        // campaigns and the exchange rates (services/campaign-country-prices).
+        runScheduledCountryPriceSync(db, env, controller.scheduledTime).catch((err) => {
+          console.error("Country price sync failed:", err);
         }),
         isRetentionRun(controller.scheduledTime)
           ? runRetention(db, env).catch((err) => {

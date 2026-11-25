@@ -803,3 +803,83 @@ describe("buildBannerDoc: holiday deals", () => {
     expect(withDeal(DEAL_END + 1).campaigns.C1!.deals).toHaveLength(1);
   });
 });
+
+// ── Campaigns whose payment platform charges the price ──────────────────────
+
+describe("buildBannerDoc: a campaign whose payment platform charges each country's price", () => {
+  const charged = (overrides: Partial<ServingCampaign> = {}) =>
+    campaign("C1", {
+      integrationId: "int_1",
+      discountDelivery: "provider_price",
+      countryPrices: {
+        IN: { currency: "INR", minorAmount: 89900, discount: 40 },
+        // Recorded for an older discount (BR is 25% now): not offered until the next sync.
+        BR: { currency: "USD", minorAmount: 1499, discount: 20 },
+        // A rule GoPayLocal didn't write.
+        DE: { currency: "EUR", minorAmount: 1500, discount: null },
+      },
+      ...overrides,
+    });
+
+  it("offers only the countries whose recorded price is for the current discount, with that price and no code", () => {
+    const doc = buildBannerDoc(input({ inputs: { campaigns: [charged()], experiments: [] }, coupons: [coupon()] }));
+    expect(doc.campaigns.C1!.countries).toEqual({
+      IN: { discount: 40, tier: 3, code: null, countryName: "India", charge: { currency: "INR", amount: 899 } },
+    });
+  });
+
+  it("offers nothing before the first sync recorded a price", () => {
+    const doc = buildBannerDoc(input({ inputs: { campaigns: [charged({ countryPrices: null })], experiments: [] } }));
+    expect(doc.campaigns.C1!.countries).toEqual({});
+  });
+
+  it("gives the sync every discounted country, without prices, when asked for uncharged prices", () => {
+    const doc = buildBannerDoc(
+      input({ inputs: { campaigns: [charged()], experiments: [] }, coupons: [coupon()], unchargedCountryPrices: true }),
+    );
+    expect(doc.campaigns.C1!.countries).toEqual({
+      BR: { discount: 25, tier: expect.any(Number), code: null, countryName: "Brazil" },
+      IN: { discount: 40, tier: 3, code: null, countryName: "India" },
+    });
+  });
+
+  it("offers no holiday deal: the platform charges the country price", () => {
+    expect(servableDeals({ ...charged(), deals: [servingDeal({ codeSource: "none" })] })).toEqual([]);
+  });
+});
+
+describe("pushBannerConfigForOrg: a campaign whose payment platform charges each country's price", () => {
+  it("reads the prices of the campaign's current product, integration and environment only", async () => {
+    const { kv } = recordingKV();
+    const org = fullOrg();
+    const r = routedRecorder({
+      ...org,
+      campaigns: [
+        {
+          ...org.campaigns[0]!,
+          campaign: { ...campaignRow, integrationId: "int_1", discountDelivery: "provider_price", providerProductId: "pdt_FAKE1" },
+        },
+      ],
+      campaign_country_prices: [
+        // Another product of the campaign, prices being removed: ignored.
+        { campaignId: "C1", integrationId: "int_1", environment: "live", providerProductId: "pdt_FAKE0", published: { IN: { currency: "INR", minorAmount: 100, discount: 40 } } },
+        { campaignId: "C1", integrationId: "int_1", environment: "live", providerProductId: "pdt_FAKE1", published: { IN: { currency: "EUR", minorAmount: 1199, discount: 40 } } },
+      ],
+    });
+
+    await pushBannerConfigForOrg(r.db, kv, "org_1", {});
+
+    const doc = JSON.parse((await kv.get(bannerDocKey("K1")))!);
+    expect(doc.campaigns.C1.countries).toEqual({
+      IN: { discount: 40, tier: expect.any(Number), code: null, countryName: "India", charge: { currency: "EUR", amount: 11.99 } },
+    });
+    const priceQuery = r.queries.find((q) => q.sql.includes(' from "campaign_country_prices"'))!;
+    expect(priceQuery.params).toEqual(expect.arrayContaining(["org_1", "prices", "C1"]));
+  });
+
+  it("doesn't read prices for a workspace without such a campaign", async () => {
+    const r = routedRecorder(fullOrg());
+    await pushBannerConfigForOrg(r.db, recordingKV().kv, "org_1", {});
+    expect(r.queries.some((q) => q.sql.includes(' from "campaign_country_prices"'))).toBe(false);
+  });
+});

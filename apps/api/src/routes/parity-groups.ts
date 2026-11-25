@@ -11,6 +11,7 @@ import {
 } from "@gopaylocal/shared/validation";
 import { DEFAULT_PARITY_TIERS } from "@gopaylocal/shared/parity";
 import { pushBannerConfigForOrg } from "../services/banner-cache.service";
+import { markCountryPricesDue } from "../services/campaign-country-prices.service";
 import { requirePermission } from "../middleware/permissions";
 import { errorSummary, logBannerPushFailure } from "../lib/log";
 
@@ -85,6 +86,8 @@ app.post("/v1/teams/:orgId/parity-groups", requirePermission("parityGroups.manag
     c.executionCtx.waitUntil(
       pushBannerConfigForOrg(db, c.env.CACHE, orgId, c.env).catch(logBannerPushFailure(orgId)),
     );
+    // Discounts changed: the country prices Dodo charges are due again.
+    c.executionCtx.waitUntil(markCountryPricesDue(db, orgId));
 
     return c.json({ data: { ...group, countries: [] } }, 201);
   } catch (err) {
@@ -121,6 +124,8 @@ app.patch("/v1/teams/:orgId/parity-groups/:id", requirePermission("parityGroups.
     c.executionCtx.waitUntil(
       pushBannerConfigForOrg(db, c.env.CACHE, orgId, c.env).catch(logBannerPushFailure(orgId)),
     );
+    // Discounts changed: the country prices Dodo charges are due again.
+    c.executionCtx.waitUntil(markCountryPricesDue(db, orgId));
 
     return c.json({ data: group });
   } catch (err) {
@@ -148,6 +153,8 @@ app.delete("/v1/teams/:orgId/parity-groups/:id", requirePermission("parityGroups
     c.executionCtx.waitUntil(
       pushBannerConfigForOrg(db, c.env.CACHE, orgId, c.env).catch(logBannerPushFailure(orgId)),
     );
+    // Discounts changed: the country prices Dodo charges are due again.
+    c.executionCtx.waitUntil(markCountryPricesDue(db, orgId));
 
     return c.json({ success: true });
   } catch (err) {
@@ -209,6 +216,8 @@ app.put("/v1/teams/:orgId/parity-groups/:id/countries", requirePermission("parit
     c.executionCtx.waitUntil(
       pushBannerConfigForOrg(db, c.env.CACHE, orgId, c.env).catch(logBannerPushFailure(orgId)),
     );
+    // Discounts changed: the country prices Dodo charges are due again.
+    c.executionCtx.waitUntil(markCountryPricesDue(db, orgId));
 
     return c.json({ data: { ...group, countries } });
   } catch (err) {
@@ -273,6 +282,8 @@ app.post("/v1/teams/:orgId/parity-groups/seed-defaults", requirePermission("pari
     c.executionCtx.waitUntil(
       pushBannerConfigForOrg(db, c.env.CACHE, orgId, c.env).catch(logBannerPushFailure(orgId)),
     );
+    // Discounts changed: the country prices Dodo charges are due again.
+    c.executionCtx.waitUntil(markCountryPricesDue(db, orgId));
 
     return c.json({ data: createdGroups }, 201);
   } catch (err) {

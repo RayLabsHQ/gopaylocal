@@ -9,12 +9,13 @@ import { kvGet } from "../lib/kv";
 import { getQuotaState, usageKey, type QuotaState } from "../services/usage.service";
 import { bannerShowsBranding, resolveEntitlements } from "../lib/entitlements";
 import { COUNTRY_NAMES } from "@gopaylocal/shared/constants";
-import { localPricing } from "@gopaylocal/shared/currency";
+import { currencySymbolOf, localPricing, minorUnitExponent, type LocalPricing } from "@gopaylocal/shared/currency";
 import type { BannerConfig, BannerDeal, BannerResponse } from "@gopaylocal/shared/types";
 import { dealReplacesCountryDiscount, fillDealMessage, pickActiveDeal } from "@gopaylocal/shared/deals";
 import {
   bannerDocKey,
   bannerDocRefreshDue,
+  isChargedByProvider,
   isCurrentBannerDoc,
   loadServingInputs,
   pushApiKeyToKV,
@@ -25,6 +26,7 @@ import {
   type CachedBannerConfig,
   type CachedDeal,
   type CampaignPricing,
+  type ServingCampaign,
   type ServingInputs,
 } from "../services/banner-cache.service";
 import { loadFxRates, parseExcludedCurrencies } from "../services/fx-cache";
@@ -239,6 +241,26 @@ interface CountryOffer {
   discount: number;
   code: string | null;
   countryName: string;
+  /** The price the payment platform charges here (CachedCountryData.charge). */
+  charge?: { currency: string; amount: number };
+}
+
+/**
+ * A campaign its payment platform prices: the country's offer only when the
+ * last sync recorded a price for exactly this discount, with that price.
+ */
+function chargedOffer(
+  prices: ServingCampaign["countryPrices"],
+  countryCode: string,
+  offer: CountryOffer,
+): CountryOffer | null {
+  const price = prices && Object.hasOwn(prices, countryCode) ? prices[countryCode] : undefined;
+  if (!price || price.discount !== offer.discount) return null;
+  return {
+    ...offer,
+    code: null,
+    charge: { currency: price.currency, amount: price.minorAmount / 10 ** minorUnitExponent(price.currency) },
+  };
 }
 
 interface Resolver {
@@ -281,7 +303,14 @@ function documentResolver(doc: CachedBannerConfig, deps: ResolverDeps): Resolver
       const campaign = doc.campaigns[campaignId];
       if (!campaign || !Object.hasOwn(campaign.countries, countryCode)) return null;
       const info = campaign.countries[countryCode]!;
-      if (!info.resolve) return { discount: info.discount, code: info.code, countryName: info.countryName };
+      if (!info.resolve) {
+        return {
+          discount: info.discount,
+          code: info.code,
+          countryName: info.countryName,
+          ...(info.charge ? { charge: info.charge } : {}),
+        };
+      }
       // Provider-backed campaign without a stored code for this percent yet:
       // resolve (and create) it exactly like the database path does.
       const result = await getDiscountForCountry(
@@ -336,11 +365,12 @@ function databaseResolver(inputs: ServingInputs, deps: ResolverDeps): Resolver {
         deps.c.env.CACHE,
       );
       if (!result) return null;
-      return {
+      const offer: CountryOffer = {
         discount: result.discount,
         code: result.code,
         countryName: COUNTRY_NAMES[countryCode] ?? countryCode,
       };
+      return isChargedByProvider(row) ? chargedOffer(row.countryPrices, countryCode, offer) : offer;
     },
     async showBranding() {
       // Plan-derived branding (Free shows "Powered by GoPayLocal").
@@ -381,6 +411,7 @@ async function priceFields(
   pricing: CampaignPricing,
   discount: number,
   countryCode: string,
+  charge?: { currency: string; amount: number },
 ): Promise<Partial<BannerResponse>> {
   const local = localPricing({
     basePrice: pricing.basePrice,
@@ -394,7 +425,33 @@ async function priceFields(
   });
   // Only an impossible product (base_price is validated positive) has no prices.
   if (!local) return { charmPricingStrategy: pricing.charm };
+  if (charge) return { ...chargedPriceFields(local, charge, pricing.basePrice), charmPricingStrategy: pricing.charm };
   return { ...local, charmPricingStrategy: pricing.charm };
+}
+
+/**
+ * The price fields when the payment platform charges the price itself: the
+ * charged amount, exact (no fxAsOf). Charged in the visitor's currency, the
+ * original price stays the converted one; charged in the product's own
+ * currency (no price in the visitor's), it is the product's price.
+ */
+export function chargedPriceFields(
+  local: LocalPricing,
+  charge: { currency: string; amount: number },
+  basePrice: number,
+): Partial<BannerResponse> {
+  const { fxAsOf: _estimate, ...exact } = local;
+  if (charge.currency === local.currencyCode) return { ...exact, localPrice: charge.amount, priceCharged: true };
+  return {
+    baseCurrencyCode: local.baseCurrencyCode,
+    baseCurrencySymbol: local.baseCurrencySymbol,
+    currencyCode: charge.currency,
+    currencySymbol: currencySymbolOf(charge.currency),
+    fxRate: 1,
+    localPrice: charge.amount,
+    localOriginalPrice: basePrice,
+    priceCharged: true,
+  };
 }
 
 /** Origin/Referer host must equal an allowed domain or be a subdomain of one. */
@@ -638,7 +695,14 @@ app.get("/v1/banner/config/:publicKey", async (c) => {
     const countryOffer = dealWinsOutright ? null : await resolver.country(campaignId, countryCode);
     const countryPercent = countryOffer && countryOffer.discount > 0 ? countryOffer.discount : 0;
 
-    let offer: { discount: number; code: string | null; countryName: string; banner: BannerConfig; deal?: BannerDeal };
+    let offer: {
+      discount: number;
+      code: string | null;
+      countryName: string;
+      banner: BannerConfig;
+      deal?: BannerDeal;
+      charge?: CountryOffer["charge"];
+    };
     if (deal && (dealWinsOutright || dealReplacesCountryDiscount(deal.discount, countryPercent))) {
       offer = {
         discount: deal.discount,
@@ -655,6 +719,7 @@ app.get("/v1/banner/config/:publicKey", async (c) => {
         code: countryOffer.code,
         countryName: countryOffer.countryName,
         banner: campaign.banner,
+        charge: countryOffer.charge,
       };
     } else {
       return c.json({ show: false, reason: "no_discount", ...(experiment ?? {}) });
@@ -667,7 +732,7 @@ app.get("/v1/banner/config/:publicKey", async (c) => {
       discount: offer.discount,
       code: offer.code,
       banner: offer.banner,
-      ...(await priceFields(c, campaign.pricing, offer.discount, countryCode)),
+      ...(await priceFields(c, campaign.pricing, offer.discount, countryCode, offer.charge)),
       campaignId,
       ...(offer.deal ? { deal: offer.deal } : {}),
       ...(experiment ?? {}),

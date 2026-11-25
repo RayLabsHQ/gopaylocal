@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, and, gt, inArray, sql } from "drizzle-orm";
 import { ulid } from "ulid";
 import type { AppEnv } from "../bindings";
 import { createDb } from "../db";
@@ -9,6 +9,7 @@ import {
   campaigns,
   bannerConfigs,
   coupons,
+  deals,
   integrations,
   products,
   parityGroups,
@@ -20,11 +21,17 @@ import {
   PROVIDERS_WITHOUT_TEST_MODE,
   providerHasTestMode,
 } from "@gopaylocal/shared/validation";
-import { DEFAULT_BANNER_MESSAGE, DEFAULT_CTA_TEXT } from "@gopaylocal/shared/constants";
+import { DEFAULT_BANNER_MESSAGE, DEFAULT_BANNER_MESSAGE_CHARGED, DEFAULT_CTA_TEXT } from "@gopaylocal/shared/constants";
 import { countryDiscount, workspaceParityGroups } from "@gopaylocal/shared/parity";
 import { pushBannerConfigForOrg } from "../services/banner-cache.service";
 import { createCouponForCountry } from "../services/coupon.service";
 import { syncDealCouponsForCampaign } from "../services/deal.service";
+import {
+  COUNTRY_PRICE_PROVIDERS,
+  countryPricesLeft,
+  productTakenByAnotherCampaign,
+  syncCountryPricesAfterCampaignChange,
+} from "../services/campaign-country-prices.service";
 import {
   assertCampaignNotInRunningExperiment,
   campaignUpdateBlockedByExperiment,
@@ -153,6 +160,59 @@ function liveOnlyProviderConflict(
 }
 
 /**
+ * The rules of a campaign whose payment platform charges each country's price
+ * itself (discountDelivery 'provider_price', services/campaign-country-prices):
+ * only Dodo Payments can, and an active one needs the integration and the Dodo
+ * product to price. 400 body, or null when fine.
+ */
+export function countryPriceConflict(input: {
+  status: string;
+  delivery: string;
+  provider: string | null;
+  providerProductId: string | null | undefined;
+}): { error: string; code: "country_prices_unsupported" | "country_prices_incomplete" } | null {
+  if (input.delivery !== "provider_price") return null;
+  if (input.provider && !COUNTRY_PRICE_PROVIDERS.has(input.provider)) {
+    return {
+      error: "Only Dodo Payments can charge each country's price itself. Link a Dodo Payments integration, or use discount codes.",
+      code: "country_prices_unsupported",
+    };
+  }
+  if (input.status === "active" && (!input.provider || !input.providerProductId)) {
+    return {
+      error:
+        "A campaign where Dodo charges the country price needs a Dodo Payments integration and the Dodo product to price before it can go active.",
+      code: "country_prices_incomplete",
+    };
+  }
+  return null;
+}
+
+const COUNTRY_PRICES_PRODUCT_TAKEN = {
+  error:
+    "Another campaign sets this Dodo product's country prices, or GoPayLocal is still removing them. Pick another product, or pause that campaign and try again once its prices are gone.",
+  code: "country_prices_product_taken" as const,
+};
+
+const CAMPAIGN_HAS_DEALS = {
+  error:
+    "This campaign has holiday deals that haven't ended, and Dodo would charge the country price, not the deal. Delete the deals first.",
+  code: "campaign_has_deals" as const,
+};
+
+/** 409 body: codes would be offered while Dodo still charges this campaign's country prices. */
+function countryPricesLeftBody(left: number) {
+  return {
+    error:
+      `Dodo still charges the country prices this campaign set in ${left} ${left === 1 ? "country" : "countries"}, ` +
+      "and a code on top would discount twice. Pause the campaign first: GoPayLocal removes its prices from Dodo " +
+      "within a few minutes, then switch it to discount codes.",
+    code: "country_prices_still_at_dodo" as const,
+    remaining: left,
+  };
+}
+
+/**
  * Create the coupon codes of a campaign that just became active with an
  * integration linked. Runs in waitUntil, so it doesn't block the response.
  *
@@ -179,7 +239,8 @@ export async function generateCouponsForCampaign(
     .where(and(eq(campaigns.id, campaignId), eq(campaigns.organizationId, orgId)))
     .limit(1);
 
-  if (!campaign || !campaign.integrationId) return;
+  // A campaign whose payment platform charges the country price has no codes.
+  if (!campaign || !campaign.integrationId || campaign.discountDelivery === "provider_price") return;
 
   // Tenant-scoped integration lookup
   const [integration] = await db
@@ -252,6 +313,7 @@ export async function insertCampaignWithBanner(
   db: Pick<Database, "transaction">,
   values: typeof campaigns.$inferInsert & { id: string },
   bannerId: string,
+  messageTemplate: string = DEFAULT_BANNER_MESSAGE,
 ): Promise<typeof campaigns.$inferSelect> {
   const now = values.createdAt ?? new Date();
   return db.transaction(async (tx) => {
@@ -261,7 +323,7 @@ export async function insertCampaignWithBanner(
       id: bannerId,
       campaignId: values.id,
       position: "bottom",
-      messageTemplate: DEFAULT_BANNER_MESSAGE,
+      messageTemplate,
       ctaText: DEFAULT_CTA_TEXT,
       backgroundColor: "#1a1a2e",
       textColor: "#ffffff",
@@ -333,6 +395,25 @@ app.post("/v1/teams/:orgId/campaigns", requirePermission("campaigns.create"), as
       liveOnlyProviderConflict(environment, refs.integration?.provider ?? null) ??
       missingKeyConflict(parsed.data.status, environment, refs.integration);
     if (conflict) return c.json(conflict, 400);
+    const priceConflict = countryPriceConflict({
+      status: parsed.data.status,
+      delivery: parsed.data.discountDelivery,
+      provider: refs.integration?.provider ?? null,
+      providerProductId: parsed.data.providerProductId,
+    });
+    if (priceConflict) return c.json(priceConflict, 400);
+    if (
+      parsed.data.status === "active" &&
+      parsed.data.discountDelivery === "provider_price" &&
+      (await productTakenByAnotherCampaign(db, {
+        organizationId: orgId,
+        campaignId: null,
+        integrationId: parsed.data.integrationId!,
+        providerProductId: parsed.data.providerProductId!,
+      }))
+    ) {
+      return c.json(COUNTRY_PRICES_PRODUCT_TAKEN, 409);
+    }
 
     // Scoped members can only create campaigns for products they can access.
     const allowedForCreate = await allowedProductIdsFor(c, db, orgId);
@@ -370,6 +451,7 @@ app.post("/v1/teams/:orgId/campaigns", requirePermission("campaigns.create"), as
         status: parsed.data.status,
         pricingMode: parsed.data.pricingMode,
         discountDelivery: parsed.data.discountDelivery,
+        providerProductId: parsed.data.providerProductId ?? null,
         charmPricingStrategy: parsed.data.charmPricingStrategy,
         maxDiscountPercent: parsed.data.maxDiscountPercent,
         discountOverrides: parsed.data.discountOverrides ?? null,
@@ -380,12 +462,18 @@ app.post("/v1/teams/:orgId/campaigns", requirePermission("campaigns.create"), as
         updatedAt: now,
       },
       bannerId,
+      parsed.data.discountDelivery === "provider_price" ? DEFAULT_BANNER_MESSAGE_CHARGED : DEFAULT_BANNER_MESSAGE,
     );
 
     // Push pre-computed banner config to KV (fire-and-forget)
     c.executionCtx.waitUntil(
       pushBannerConfigForOrg(db, c.env.CACHE, orgId, c.env).catch(logBannerPushFailure(orgId)),
     );
+
+    // Dodo charges the country prices: write them (services/campaign-country-prices).
+    if (campaign.discountDelivery === "provider_price") {
+      c.executionCtx.waitUntil(syncCountryPricesAfterCampaignChange(db, c.env, campaignId, campaign));
+    }
 
     // Auto-generate coupons if campaign is active and linked to a provider
     if (campaign.status === "active" && campaign.integrationId) {
@@ -462,6 +550,7 @@ app.patch("/v1/teams/:orgId/campaigns/:id", requirePermission("campaigns.update"
         status: campaigns.status,
         discountDelivery: campaigns.discountDelivery,
         integrationId: campaigns.integrationId,
+        providerProductId: campaigns.providerProductId,
         productId: campaigns.productId,
         environment: campaigns.environment,
       })
@@ -536,6 +625,52 @@ app.patch("/v1/teams/:orgId/campaigns/:id", requirePermission("campaigns.update"
       );
     }
 
+    // A campaign whose payment platform charges the country price: Dodo only,
+    // complete before it goes active, one campaign per Dodo product, no deals.
+    const effectiveProviderProductId =
+      parsed.data.providerProductId !== undefined ? parsed.data.providerProductId : existing.providerProductId;
+    if (effectiveDelivery === "provider_price") {
+      const provider = !effectiveIntegrationId
+        ? null
+        : integrationChanged
+          ? (refs.integration?.provider ?? null)
+          : ((await loadIntegrationFacts(db, orgId, effectiveIntegrationId))?.provider ?? null);
+      const priceConflict = countryPriceConflict({
+        status: effectiveStatus,
+        delivery: effectiveDelivery,
+        provider,
+        providerProductId: effectiveProviderProductId,
+      });
+      if (priceConflict) return c.json(priceConflict, 400);
+      if (
+        effectiveStatus === "active" &&
+        (await productTakenByAnotherCampaign(db, {
+          organizationId: orgId,
+          campaignId,
+          integrationId: effectiveIntegrationId!,
+          providerProductId: effectiveProviderProductId!,
+        }))
+      ) {
+        return c.json(COUNTRY_PRICES_PRODUCT_TAKEN, 409);
+      }
+      if (existing.discountDelivery !== "provider_price") {
+        const [openDeal] = await db
+          .select({ id: deals.id })
+          .from(deals)
+          .where(and(eq(deals.campaignId, campaignId), eq(deals.organizationId, orgId), gt(deals.endsAt, new Date())))
+          .limit(1);
+        if (openDeal) return c.json(CAMPAIGN_HAS_DEALS, 409);
+      }
+    } else if (
+      effectiveStatus === "active" &&
+      (existing.discountDelivery === "provider_price" || existing.status !== "active")
+    ) {
+      // Codes on an active campaign: never while Dodo may still charge the
+      // country prices it set (a code on top would discount twice).
+      const left = await countryPricesLeft(db, campaignId);
+      if (left > 0) return c.json(countryPricesLeftBody(left), 409);
+    }
+
     // Previous status drives the active-transition coupon generation below.
     const previousStatus = existing.status;
 
@@ -554,6 +689,12 @@ app.patch("/v1/teams/:orgId/campaigns/:id", requirePermission("campaigns.update"
     c.executionCtx.waitUntil(
       pushBannerConfigForOrg(db, c.env.CACHE, orgId, c.env).catch(logBannerPushFailure(orgId)),
     );
+
+    // Dodo charges the country prices: bring them in line, or remove them once
+    // the campaign no longer wants them (services/campaign-country-prices).
+    if (existing.discountDelivery === "provider_price" || campaign.discountDelivery === "provider_price") {
+      c.executionCtx.waitUntil(syncCountryPricesAfterCampaignChange(db, c.env, campaignId, campaign));
+    }
 
     // The codes of the campaign's holiday deals belong to its integration and
     // environment: after either changed, they are created there (and the old
@@ -665,6 +806,8 @@ app.delete("/v1/teams/:orgId/campaigns/:id", requirePermission("campaigns.delete
     c.executionCtx.waitUntil(
       pushBannerConfigForOrg(db, c.env.CACHE, orgId, c.env).catch(logBannerPushFailure(orgId)),
     );
+    // Country prices it set at Dodo are removed (nothing when it set none).
+    c.executionCtx.waitUntil(syncCountryPricesAfterCampaignChange(db, c.env, campaignId, null));
 
     return c.json({ success: true });
   } catch (err) {

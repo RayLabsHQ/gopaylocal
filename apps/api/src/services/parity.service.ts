@@ -137,9 +137,10 @@ export async function getDiscountForCountry(
   const { discount, tier } = computeCountryDiscount(campaign, countryCode, group);
   let code: string | null = null;
 
-  // No discount, or no payment integration (codes aren't expected): nothing to
-  // resolve at a provider.
-  if (discount <= 0 || !campaign.integrationId) {
+  // No discount, no payment integration (codes aren't expected), or a payment
+  // platform that charges the country's price itself (no codes at all; the
+  // caller offers only the price it recorded): nothing to resolve at a provider.
+  if (discount <= 0 || !campaign.integrationId || campaign.discountDelivery === "provider_price") {
     const result: DiscountResult = { discount, tier, code: null };
     await cachePut(cache, cacheKey, result, DISCOUNT_CACHE_TTL_SECONDS);
     return result;

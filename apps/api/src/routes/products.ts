@@ -14,6 +14,7 @@ import { getProductLimitInfo } from "../lib/limits";
 import { allowedProductIdsFor } from "../lib/product-access";
 import { requirePermission } from "../middleware/permissions";
 import { pushBannerConfigForOrg } from "../services/banner-cache.service";
+import { markCountryPricesDue } from "../services/campaign-country-prices.service";
 
 // Products. Owners and admins manage the catalog (create, delete); members
 // view and edit the products in their product access (lib/product-access.ts).
@@ -205,6 +206,10 @@ app.patch("/v1/teams/:orgId/products/:id", requirePermission("products.update"),
     c.executionCtx.waitUntil(
       pushBannerConfigForOrg(db, c.env.CACHE, orgId, c.env).catch(logBannerPushFailure(orgId)),
     );
+    // A new price or currency: the country prices Dodo charges are due again.
+    if (newPrice !== undefined || newCurrency !== undefined) {
+      c.executionCtx.waitUntil(markCountryPricesDue(db, orgId));
+    }
 
     return c.json({ data: product });
   } catch (err) {

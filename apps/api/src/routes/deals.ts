@@ -83,6 +83,16 @@ const INTEGRATION_UNAVAILABLE_BODY = {
   code: "integration_unavailable" as const,
 };
 
+/**
+ * A campaign whose payment platform charges each country's price itself has no
+ * deals: the platform charges the country price, never a deal's percentage.
+ */
+const COUNTRY_PRICES_BODY = {
+  error:
+    "This campaign lets Dodo charge each country's price, and Dodo would charge that price, not the deal. Holiday deals need a campaign with discount codes.",
+  code: "deals_unavailable_with_country_prices" as const,
+};
+
 function providerRefusedBody(err: DealCodeError) {
   return {
     error: `Couldn't create the deal's code at ${err.provider}: ${err.message}`,
@@ -121,6 +131,7 @@ app.post("/v1/teams/:orgId/campaigns/:campaignId/deals", requirePermission("camp
     }
     const campaign = await loadCampaign(c, db, orgId, c.req.param("campaignId"));
     if (!campaign) return c.json({ error: "Campaign not found" }, 404);
+    if (campaign.discountDelivery === "provider_price") return c.json(COUNTRY_PRICES_BODY, 409);
 
     const now = new Date();
     const startsAt = new Date(parsed.data.startsAt);
@@ -206,6 +217,7 @@ app.patch("/v1/teams/:orgId/campaigns/:campaignId/deals/:dealId", requirePermiss
     if (!campaign) return c.json({ error: "Campaign not found" }, 404);
     const deal = await loadDeal(db, orgId, campaign.id, c.req.param("dealId"));
     if (!deal) return c.json({ error: "Deal not found" }, 404);
+    if (campaign.discountDelivery === "provider_price") return c.json(COUNTRY_PRICES_BODY, 409);
 
     const now = new Date();
     const startsAt = parsed.data.startsAt ? new Date(parsed.data.startsAt) : new Date(deal.startsAt);

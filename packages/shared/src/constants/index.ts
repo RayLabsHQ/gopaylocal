@@ -185,6 +185,13 @@ export const API_KEY_PREFIX_SECRET = 'gpl_sk_';
 export const DEFAULT_BANNER_MESSAGE =
   'It looks like you\'re visiting from {{country}}! Use code {{code}} for {{discount}}% off.';
 
+/**
+ * The default message of a campaign whose payment platform charges each
+ * country's price itself (discount delivery `provider_price`): no code to copy.
+ */
+export const DEFAULT_BANNER_MESSAGE_CHARGED =
+  'Visiting from {{countryName}}? Your price is {{localPrice}}, {{discount}}% off. Nothing to enter at checkout.';
+
 export const DEFAULT_CTA_TEXT = 'Copy Code';
 
 // ── Known Datacenter / VPN Networks ─────────────────────────────────────────

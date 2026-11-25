@@ -1,5 +1,5 @@
 import { Hono, type Context } from "hono";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { ulid } from "ulid";
 import type { AppEnv } from "../bindings";
 import { createDb, type Database } from "../db";
@@ -39,6 +39,7 @@ import {
   IntegrationInRunningExperimentError,
 } from "../services/experiment.service";
 import { pushBannerConfigForOrg } from "../services/banner-cache.service";
+import { removeCountryPricesBeforeDisconnect } from "../services/campaign-country-prices.service";
 
 const app = new Hono<AppEnv>();
 
@@ -708,6 +709,33 @@ app.delete("/v1/teams/:orgId/integrations/:id", requirePermission("integrations.
       return c.json({ error: "Integration not found" }, 404);
     }
 
+    // The country prices GoPayLocal set on Dodo products with this key are
+    // removed first: once the key is gone they couldn't be, and Dodo would keep
+    // charging them. One batch per request; the disconnect waits for the rest
+    // (the scheduled job carries on meanwhile). Prices Dodo refuses to remove
+    // are reported and stay there. One query when there are none.
+    const countryPrices = await removeCountryPricesBeforeDisconnect(db, c.env, orgId, integrationId, {
+      // The A/B test rule, before anything is removed (and again in the transaction below).
+      beforeRemoving: () => assertIntegrationDisconnectKeepsExperiments(db, orgId, integrationId),
+    });
+    if (countryPrices.pending > 0) {
+      // Its campaigns were paused: the banner must stop serving them now.
+      const paused = pushBannerConfigForOrg(db, c.env.CACHE, orgId, c.env).catch(logBannerPushFailure(orgId));
+      try {
+        c.executionCtx.waitUntil(paused);
+      } catch {
+        await paused;
+      }
+      return c.json(
+        {
+          error:
+            "GoPayLocal is removing the country prices it set on your Dodo products with this key, and some are left. Disconnect again in a minute.",
+          code: "country_prices_being_removed",
+        },
+        409,
+      );
+    }
+
     // Database first, in one transaction. (Tearing the webhooks down first and
     // then failing here used to leave a connected-looking integration whose
     // redemptions no longer arrived.) The foreign keys would null
@@ -719,9 +747,9 @@ app.delete("/v1/teams/:orgId/integrations/:id", requirePermission("integrations.
       // the pause below would hit an arm of a running A/B test
       // (services/experiment.service.ts).
       await assertIntegrationDisconnectKeepsExperiments(tx, orgId, integrationId);
-      // An active auto-apply campaign can't work without a provider (the
-      // campaigns route refuses that state), so pause it rather than leave it
-      // active but unwired.
+      // An active auto-apply campaign, or one whose payment platform charges
+      // the country price, can't work without a provider (the campaigns route
+      // refuses that state), so pause it rather than leave it active but unwired.
       const paused = await tx
         .update(campaigns)
         .set({ status: "paused", updatedAt: now })
@@ -730,7 +758,7 @@ app.delete("/v1/teams/:orgId/integrations/:id", requirePermission("integrations.
             eq(campaigns.organizationId, orgId),
             eq(campaigns.integrationId, integrationId),
             eq(campaigns.status, "active"),
-            eq(campaigns.discountDelivery, "auto_apply"),
+            inArray(campaigns.discountDelivery, ["auto_apply", "provider_price"]),
           ),
         )
         .returning({ id: campaigns.id });
@@ -746,7 +774,7 @@ app.delete("/v1/teams/:orgId/integrations/:id", requirePermission("integrations.
         .delete(integrations)
         .where(and(eq(integrations.id, integrationId), eq(integrations.organizationId, orgId)));
       return {
-        pausedCampaigns: paused.length,
+        pausedCampaigns: paused.length + countryPrices.paused,
         codesLeftAtProvider: removed.filter((r) => r.status !== "deleted").length,
       };
     });
@@ -766,7 +794,12 @@ app.delete("/v1/teams/:orgId/integrations/:id", requirePermission("integrations.
 
     // Discount codes already created in the provider are left there (they may
     // be in customers' hands); the dashboard tells the merchant.
-    return c.json({ success: true, pausedCampaigns, codesLeftAtProvider });
+    return c.json({
+      success: true,
+      pausedCampaigns,
+      codesLeftAtProvider,
+      ...(countryPrices.stuck > 0 ? { productsWithCountryPricesLeft: countryPrices.stuck } : {}),
+    });
   } catch (err) {
     if (err instanceof IntegrationInRunningExperimentError) return c.json(err.body, 409);
     console.error("Failed to delete integration:", describeError(err));
