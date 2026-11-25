@@ -71,7 +71,7 @@ describe("email templates", () => {
       inviteUrl: "https://app.gopaylocal.com/invite/inv_1",
       links: hosted,
     });
-    expect(email.subject).toBe("Owner invited you to a workspace on GoPayLocal");
+    expect(email.subject).toBe("You've been invited to a workspace on GoPayLocal");
     expect(email.html).toContain("Join a workspace on GoPayLocal");
     expect(email.text).toContain("https://app.gopaylocal.com/invite/inv_1");
   });

@@ -80,3 +80,14 @@ export function workspaceNameForEmail(stored: unknown): string | null {
   if (!checked.ok || DOMAIN_LIKE.test(checked.name)) return null;
   return checked.name;
 }
+
+/**
+ * A person's display name (from sign-in or a profile edit, so anyone's choice)
+ * as an email to someone else may print it, or null when it must be left out:
+ * the same rules as workspaceNameForEmail. Without this, an account named
+ * "Your account is locked, verify at evil.example" could have GoPayLocal mail
+ * that text from its own domain to any address it invites.
+ */
+export function personNameForEmail(stored: unknown): string | null {
+  return workspaceNameForEmail(stored);
+}

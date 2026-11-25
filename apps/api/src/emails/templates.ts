@@ -9,6 +9,7 @@
 // (48 hours).
 
 import { PLAN_LIMITS, PLAN_PRICES_USD } from "@gopaylocal/shared/constants";
+import { personNameForEmail } from "../lib/workspace-name";
 import { button, callout, type Email, type EmailLinks, facts, layout, meter, note, para, steps } from "./layout";
 
 /** A count or a plan limit (null = unlimited), as the emails write it. */
@@ -239,10 +240,13 @@ export function invitationEmail(input: {
   links: EmailLinks;
 }): Email {
   const { workspace } = input;
-  const inviter = input.inviterName?.trim() || input.inviterEmail;
-  const who = input.inviterName?.trim() ? `${input.inviterName.trim()} (${input.inviterEmail})` : input.inviterEmail;
+  // The inviter's name is anyone's choice and this goes to any address: never
+  // in the subject, and in the body only when it reads as a name (else their
+  // sign-in email, which their sign-in provider verified).
+  const name = personNameForEmail(input.inviterName);
+  const who = name ? `${name} (${input.inviterEmail})` : input.inviterEmail;
   return layout({
-    subject: workspace ? `${inviter} invited you to the ${workspace} workspace` : `${inviter} invited you to a workspace on GoPayLocal`,
+    subject: workspace ? `You've been invited to the ${workspace} workspace on GoPayLocal` : "You've been invited to a workspace on GoPayLocal",
     preheader: `Join ${workspace ?? "the workspace"} on GoPayLocal. The invitation is valid for 48 hours.`,
     eyebrow: "Invitation",
     heading: workspace ? `Join the ${workspace} workspace` : "Join a workspace on GoPayLocal",

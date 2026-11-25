@@ -426,11 +426,13 @@ describe("invitation email", () => {
     expect(html).not.toContain("<img src=x"); // the layout's own logo is an <img>; the inviter's never is
     expect(html).not.toContain("<script>");
     expect(html).toContain("Join the Acme &lt;a href=&quot;https://evil.example&quot;&gt;Verify your account&lt;/a&gt; workspace");
-    expect(html).toContain("&lt;img src=x onerror=alert(1)&gt; (owner@acme.example)</strong> invited you");
+    // An inviter name that isn't a plain name is left out: only their sign-in email is shown.
+    expect(html).not.toContain("onerror");
+    expect(html).toContain("owner@acme.example</strong> invited you");
     expect(html).toContain('href="https://app.gopaylocal.com/invite/inv%22%3E%3Cscript%3E"');
     // The subject is plain text: no escaping, but no line breaks either.
     expect(subject).toBe(
-      `<img src=x onerror=alert(1)> invited you to the Acme <a href="https://evil.example">Verify your account</a> workspace`,
+      `You've been invited to the Acme <a href="https://evil.example">Verify your account</a> workspace on GoPayLocal`,
     );
   });
 
@@ -463,13 +465,45 @@ describe("invitation email", () => {
     await invite("Cal.com"); // a valid name, but a mail client would link it
     await invite("Acme Inc.");
     expect(sentEmails.map((e) => e.subject)).toEqual([
-      "Owner invited you to a workspace on GoPayLocal",
-      "Owner invited you to the Acme Labs workspace",
-      "Owner invited you to a workspace on GoPayLocal",
-      "Owner invited you to the Acme Inc. workspace",
+      "You've been invited to a workspace on GoPayLocal",
+      "You've been invited to the Acme Labs workspace on GoPayLocal",
+      "You've been invited to a workspace on GoPayLocal",
+      "You've been invited to the Acme Inc. workspace on GoPayLocal",
     ]);
     expect(sentEmails[0]!.html).not.toContain("evil.example");
     expect(sentEmails[2]!.html).not.toContain("Cal.com");
+  });
+});
+
+describe("invitation email: the inviter's name", () => {
+  const build = (inviterName: string) =>
+    buildInvitationEmail({
+      organizationName: "Acme Labs",
+      inviterName,
+      inviterEmail: "owner@acme.example",
+      appUrl: "https://app.gopaylocal.com",
+      invitationId: "inv_1",
+    });
+
+  it("is never in the subject", () => {
+    expect(build("Ada Lovelace").subject).toBe("You've been invited to the Acme Labs workspace on GoPayLocal");
+  });
+
+  it("is shown in the body when it reads as a name", () => {
+    expect(build("Ada Lovelace").text).toContain("Ada Lovelace (owner@acme.example) invited you");
+  });
+
+  it.each([
+    "Your account is locked, verify at evil.example",
+    "Visit https://evil.example now",
+    "Call support@evil.example",
+    "Ada\u202eLovelace",
+    "x".repeat(80),
+  ])("is left out when it doesn't (%s): only the inviter's email is shown", (name) => {
+    const { subject, html, text } = build(name);
+    expect(subject).not.toContain("evil");
+    expect(html).not.toContain("evil.example");
+    expect(text).toContain("owner@acme.example invited you");
   });
 });
 
