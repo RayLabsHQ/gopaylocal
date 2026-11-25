@@ -168,7 +168,9 @@ const pricingCards: PricingCard[] = [
     price: `$${PRO_MONTHLY}/mo`,
     subtitle: 'One plan, never metered\nBilled monthly',
     cta: 'Start Pro',
-    href: APP_URL,
+    // Straight to Dodo's checkout, through sign-in and a workspace if needed
+    // (apps/dashboard/src/routes/upgrade.tsx).
+    href: `${APP_URL}/upgrade`,
     highlighted: true,
     features: [
       'Unlimited products',

@@ -5,6 +5,10 @@ import { useSession, organization } from '~/lib/auth'
 import { ErrorText } from '~/components/ui/status'
 
 export const Route = createFileRoute('/onboarding')({
+  // next=upgrade: the visitor came from the website's "Start Pro" (routes/upgrade.tsx);
+  // once the workspace exists they go on to checkout instead of the invite step.
+  validateSearch: (search: Record<string, unknown>): { next?: 'upgrade' } =>
+    search.next === 'upgrade' ? { next: 'upgrade' } : {},
   component: OnboardingPage,
 })
 
@@ -12,6 +16,7 @@ type Step = 'workspace' | 'invite' | 'done'
 
 function OnboardingPage() {
   const navigate = useNavigate()
+  const { next } = Route.useSearch()
   const { data: session, isPending } = useSession()
   const [step, setStep] = useState<Step>('workspace')
   const [orgId, setOrgId] = useState<string | null>(null)
@@ -35,7 +40,8 @@ function OnboardingPage() {
   }
 
   if (!session) {
-    navigate({ to: '/login' })
+    // On the way to checkout, /upgrade brings them back here after sign-in.
+    navigate({ to: '/login', search: next === 'upgrade' ? { redirect: '/upgrade' } : {} })
     return null
   }
 
@@ -58,6 +64,11 @@ function OnboardingPage() {
       if (data) {
         setOrgId(data.id)
         await organization.setActive({ organizationId: data.id })
+        if (next === 'upgrade') {
+          // A fresh page load, so the session carries the new workspace.
+          window.location.href = '/upgrade'
+          return
+        }
         setStep('invite')
       }
     } catch (e: any) {

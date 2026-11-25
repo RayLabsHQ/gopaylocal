@@ -33,6 +33,8 @@ function LoginPage() {
   // Where to land after sign-in (e.g. an invite link). Defaults to the dashboard.
   // Already validated to be a same-origin relative path by validateSearch.
   const redirectTo = search.redirect ?? '/dashboard'
+  // From the website's "Start Pro" (routes/upgrade.tsx): checkout comes next.
+  const toCheckout = redirectTo === '/upgrade'
   const { data: session, isPending } = useSession()
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -114,9 +116,14 @@ function LoginPage() {
 
         {/* Auth Card */}
         <div className="border border-border bg-surface p-8">
-          <h2 className="mb-6 text-center font-display text-lg font-semibold text-text-primary">
-            Sign in to your account
+          <h2 className={`text-center font-display text-lg font-semibold text-text-primary ${toCheckout ? '' : 'mb-6'}`}>
+            {toCheckout ? 'Sign in to start Pro' : 'Sign in to your account'}
           </h2>
+          {toCheckout && (
+            <p className="mb-6 mt-2 text-center text-[13px] text-text-secondary">
+              New here? Continuing creates your account. Then you'll go straight to checkout.
+            </p>
+          )}
 
           {error && (
             <div className="mb-4 border border-error-border bg-error-light p-3 text-sm text-text-primary">

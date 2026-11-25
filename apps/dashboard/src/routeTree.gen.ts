@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
+import { Route as UpgradeRouteImport } from './routes/upgrade'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
 import { Route as InviteIdRouteImport } from './routes/invite.$id'
 import { Route as DashboardCampaignsIndexRouteImport } from './routes/dashboard/campaigns/index'
@@ -44,6 +45,11 @@ const LoginRoute = LoginRouteImport.update({
 const OnboardingRoute = OnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UpgradeRoute = UpgradeRouteImport.update({
+  id: '/upgrade',
+  path: '/upgrade',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardIndexRoute = DashboardIndexRouteImport.update({
@@ -114,6 +120,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRouteWithChildren
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
+  '/upgrade': typeof UpgradeRoute
   '/invite/$id': typeof InviteIdRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/campaigns/$id': typeof DashboardCampaignsIdRoute
@@ -131,6 +138,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
+  '/upgrade': typeof UpgradeRoute
   '/invite/$id': typeof InviteIdRoute
   '/dashboard': typeof DashboardIndexRoute
   '/dashboard/campaigns/$id': typeof DashboardCampaignsIdRoute
@@ -150,6 +158,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRouteWithChildren
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
+  '/upgrade': typeof UpgradeRoute
   '/invite/$id': typeof InviteIdRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/campaigns/$id': typeof DashboardCampaignsIdRoute
@@ -170,6 +179,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/login'
     | '/onboarding'
+    | '/upgrade'
     | '/invite/$id'
     | '/dashboard/'
     | '/dashboard/campaigns/$id'
@@ -187,6 +197,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/onboarding'
+    | '/upgrade'
     | '/invite/$id'
     | '/dashboard'
     | '/dashboard/campaigns/$id'
@@ -205,6 +216,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/login'
     | '/onboarding'
+    | '/upgrade'
     | '/invite/$id'
     | '/dashboard/'
     | '/dashboard/campaigns/$id'
@@ -224,6 +236,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRouteWithChildren
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRoute
+  UpgradeRoute: typeof UpgradeRoute
   InviteIdRoute: typeof InviteIdRoute
 }
 
@@ -255,6 +268,13 @@ declare module '@tanstack/react-router' {
       path: '/onboarding'
       fullPath: '/onboarding'
       preLoaderRoute: typeof OnboardingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/upgrade': {
+      id: '/upgrade'
+      path: '/upgrade'
+      fullPath: '/upgrade'
+      preLoaderRoute: typeof UpgradeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard/': {
@@ -381,6 +401,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRouteWithChildren,
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRoute,
+  UpgradeRoute: UpgradeRoute,
   InviteIdRoute: InviteIdRoute,
 }
 export const routeTree = rootRouteImport
