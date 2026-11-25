@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { ClipboardIcon } from '~/components/ui/clipboard-icon'
 
 /**
  * The hosted service's support address. Only pages of the hosted service show
@@ -7,8 +8,10 @@ import { toast } from 'sonner'
 export const SUPPORT_EMAIL = 'support@gopaylocal.com'
 
 /**
- * The support address as an email link, with a button that copies it for
- * people whose browser has no mail app set up.
+ * The support address as an email link, with the dashboard's copy button for
+ * people whose browser has no mail app set up. The address stays on screen so
+ * it can be read and typed even when neither works. The link and the button
+ * never wrap apart.
  */
 export function ContactEmail({ subject }: { subject?: string }) {
   const href = `mailto:${SUPPORT_EMAIL}${subject ? `?subject=${encodeURIComponent(subject)}` : ''}`
@@ -19,7 +22,7 @@ export function ContactEmail({ subject }: { subject?: string }) {
     )
   }
   return (
-    <span className="inline-flex flex-wrap items-baseline gap-x-2">
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
       <a href={href} className="font-medium text-text-primary underline underline-offset-2 hover:text-brand-text">
         {SUPPORT_EMAIL}
       </a>
@@ -27,9 +30,10 @@ export function ContactEmail({ subject }: { subject?: string }) {
         type="button"
         onClick={copy}
         aria-label={`Copy ${SUPPORT_EMAIL}`}
-        className="text-text-muted underline-offset-2 hover:text-text-primary hover:underline"
+        title="Copy email address"
+        className="-m-1 p-1 text-text-secondary transition-colors hover:text-text-primary"
       >
-        Copy
+        <ClipboardIcon />
       </button>
     </span>
   )

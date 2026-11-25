@@ -905,7 +905,7 @@ function BillingTab({ returnedFromCheckout }: { returnedFromCheckout: boolean })
             note={
               isPro ? (
                 <>
-                  Need more than {PRO_FAIR_USE_API_HITS_PER_MONTH / 1_000_000} million a month? Write to{' '}
+                  Need more than {PRO_FAIR_USE_API_HITS_PER_MONTH / 1_000_000} million a month? Email{' '}
                   <ContactEmail subject="More than 20 million API calls" />
                 </>
               ) : meters.apiHits.max !== null
