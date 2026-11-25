@@ -104,6 +104,36 @@ app.get("/v1/teams/:orgId/billing/usage", requirePermission("billing.view"), asy
   }
 });
 
+/**
+ * Why a new checkout is refused for a workspace, or null when it may check out.
+ * Pro is the only paid plan, so a second checkout while a subscription still
+ * bills would charge twice; changes go through the billing portal. A cancelled
+ * subscription bills no more: its workspace keeps Pro until the paid period
+ * ends and may subscribe again before then (Dodo starts a new monthly period
+ * that day). A failed payment is fixed by updating the payment method, not by
+ * a second subscription.
+ */
+export function checkoutRefusal(
+  existing: Parameters<typeof resolveEntitlements>[0],
+  env: Parameters<typeof resolveEntitlements>[1],
+): { error: string; code: "already_subscribed" | "payment_method_needed" } | null {
+  if (resolveEntitlements(existing, env).plan !== "pro") return null;
+  switch (existing?.status) {
+    case "canceled":
+    case "cancelled":
+    case "expired":
+      return null;
+    case "past_due":
+    case "on_hold":
+      return {
+        error: "The last payment for Pro didn't go through. Update the payment method in Manage billing.",
+        code: "payment_method_needed",
+      };
+    default:
+      return { error: "This organization already has Pro. Use Manage Billing to change it.", code: "already_subscribed" };
+  }
+}
+
 // Create Dodo checkout session for upgrade to Pro (the only paid plan).
 // Body: { plan: "pro" }. Pro is billed monthly; there is no yearly plan.
 app.post("/v1/teams/:orgId/billing/checkout", requirePermission("billing.manage"), async (c) => {
@@ -135,8 +165,6 @@ app.post("/v1/teams/:orgId/billing/checkout", requirePermission("billing.manage"
       );
     }
 
-    // Pro is the only paid plan, so a second checkout while Pro is still in
-    // effect would just double-bill. Changes go through the billing portal.
     const db = createDb(c.env);
     const existing = await db
       .select({
@@ -149,15 +177,8 @@ app.post("/v1/teams/:orgId/billing/checkout", requirePermission("billing.manage"
       .where(eq(subscriptions.organizationId, orgId))
       .limit(1)
       .then((rows) => rows[0] ?? null);
-    if (resolveEntitlements(existing, c.env).plan === "pro") {
-      return c.json(
-        {
-          error: "This organization already has Pro. Use Manage Billing to change it.",
-          code: "already_subscribed",
-        },
-        409,
-      );
-    }
+    const refusal = checkoutRefusal(existing, c.env);
+    if (refusal) return c.json(refusal, 409);
 
     // Derive redirect base from request origin or env var, falling back to production
     const appBaseUrl = c.env.APP_BASE_URL

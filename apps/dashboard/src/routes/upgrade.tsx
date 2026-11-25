@@ -10,8 +10,9 @@ import { api } from '~/lib/api'
 //   no workspace    -> /onboarding, which comes back here once one exists
 //   a workspace     -> POST /billing/checkout, then Dodo's checkout page
 // It lands on the Billing tab instead when there is nothing to buy: already
-// Pro, a self-hosted server, or a member who isn't the owner (the API refuses
-// them, and the Billing tab explains who can upgrade).
+// Pro (a cancelled Pro may subscribe again), a self-hosted server, or a member
+// who isn't the owner (the API refuses them, and the Billing tab explains who
+// can upgrade).
 export const Route = createFileRoute('/upgrade')({
   component: UpgradePage,
 })
@@ -51,7 +52,10 @@ function UpgradePage() {
         navigate(BILLING)
         return
       }
-      if (billing.effectivePlan === 'pro') {
+      // A cancelled subscription still has Pro until its paid month ends, and
+      // may subscribe again (routes/billing.ts checkoutRefusal).
+      const cancelled = billing.status === 'canceled' || billing.status === 'cancelled'
+      if (billing.effectivePlan === 'pro' && !cancelled) {
         toast.success('This workspace is already on Pro')
         navigate(BILLING)
         return

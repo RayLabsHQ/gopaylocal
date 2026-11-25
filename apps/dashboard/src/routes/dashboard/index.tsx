@@ -271,8 +271,11 @@ function SetupChecklist({ steps }: { steps: SetupStep[] }) {
             {step.done
               ? step.doneNote && <span className="truncate text-[13px] text-text-muted">{step.doneNote}</span>
               : step.todoNote && <span className="text-[13px] text-text-muted">{step.todoNote}</span>}
+            {/* mt-auto pins every button to the bottom of its cell (the cells of a
+                row share its height), so a title that wraps doesn't push one
+                button lower than its neighbours. */}
             {!step.done && step.action && (
-              <div className="mt-1.5">
+              <div className="mt-auto pt-3">
                 <Link to={step.action.to} className={i === next ? `${btnPrimary} h-9` : `${btnSecondary} h-9`}>
                   {step.action.label}
                 </Link>

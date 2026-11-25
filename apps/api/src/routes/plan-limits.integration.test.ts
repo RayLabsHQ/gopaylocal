@@ -529,6 +529,57 @@ describe("Plan limits (full Worker)", () => {
       expect(await refused.json()).toMatchObject({ plan: "free", maxProducts: 1, currentCount: 2 });
     });
 
+    it("a workspace that cancelled can subscribe again, and a late event for the old subscription changes nothing", async () => {
+      const client = billingDeployment();
+      const t = await seedTenant(client, "Returning Org");
+      const metadata = { organizationId: t.orgId, plan: "pro" };
+      const active = (id: string, subId: string) =>
+        signedDelivery(client, id, {
+          type: "subscription.active",
+          data: { product_id: PRO_MONTHLY, subscription_id: subId, next_billing_date: inDays(30).toISOString(), metadata },
+        });
+
+      expect((await active("msg_return_1", "sub_old")).status).toBe(200);
+      const cancel = await signedDelivery(client, "msg_return_2", {
+        type: "subscription.cancelled",
+        data: { product_id: PRO_MONTHLY, subscription_id: "sub_old", metadata },
+      });
+      expect(cancel.status).toBe(200);
+      let [row] = await getTestDb().select().from(subscriptions).where(eq(subscriptions.organizationId, t.orgId));
+      expect(row).toMatchObject({ status: "canceled", dodoSubId: "sub_old" });
+      // Cancelled but inside the paid month: still Pro, and checkout is allowed (routes/billing.ts checkoutRefusal).
+      expect((await usage(client, t)).plan).toBe("pro");
+
+      // The new subscription replaces the old one on the row.
+      expect((await active("msg_return_3", "sub_new")).status).toBe(200);
+      [row] = await getTestDb().select().from(subscriptions).where(eq(subscriptions.organizationId, t.orgId));
+      expect(row).toMatchObject({ status: "active", dodoSubId: "sub_new" });
+
+      // Late events about the old subscription leave the new one alone.
+      for (const [id, type] of [
+        ["msg_return_4", "subscription.expired"],
+        ["msg_return_5", "subscription.cancelled"],
+        ["msg_return_6", "subscription.on_hold"],
+        ["msg_return_7", "payment.failed"],
+      ] as const) {
+        const res = await signedDelivery(client, id, {
+          type,
+          data: { product_id: PRO_MONTHLY, subscription_id: "sub_old", metadata },
+        });
+        expect(res.status).toBe(200);
+      }
+      [row] = await getTestDb().select().from(subscriptions).where(eq(subscriptions.organizationId, t.orgId));
+      expect(row).toMatchObject({ status: "active", dodoSubId: "sub_new" });
+
+      // An event about the current subscription still applies.
+      await signedDelivery(client, "msg_return_8", {
+        type: "subscription.cancelled",
+        data: { product_id: PRO_MONTHLY, subscription_id: "sub_new", metadata },
+      });
+      [row] = await getTestDb().select().from(subscriptions).where(eq(subscriptions.organizationId, t.orgId));
+      expect(row).toMatchObject({ status: "canceled", dodoSubId: "sub_new" });
+    });
+
     it("another product's events in the same Dodo business change nothing and are not stored", async () => {
       const client = billingDeployment();
       const t = await seedTenant(client, "Shared Business Org");

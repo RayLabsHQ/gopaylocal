@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Hono } from "hono";
 import type { AppEnv, Bindings } from "../bindings";
 import { createTestBindings } from "../test/helpers";
-import billingRoute from "./billing";
+import billingRoute, { checkoutRefusal } from "./billing";
 
 // Only paths that return before touching the database are exercised here
 // (self-hosted gating and request validation). Plan/limit resolution behind
@@ -88,5 +88,35 @@ describe("checkout validation (hosted)", () => {
   it("is owner-only", async () => {
     const res = await post(appWith(hostedEnv(), "admin"), "/v1/teams/org1/billing/checkout", { plan: "pro" });
     expect(res.status).toBe(403);
+  });
+});
+
+describe("checkoutRefusal: who may start a checkout", () => {
+  const env = { SELF_HOSTED: "false" };
+  const inDays = (d: number) => new Date(Date.now() + d * 24 * 3600 * 1000);
+  const sub = (status: string, periodEnd: Date | null = inDays(20)) => ({
+    plan: "pro",
+    status,
+    currentPeriodEnd: periodEnd,
+    environment: "live" as const,
+  });
+
+  it("lets a workspace without Pro check out", () => {
+    expect(checkoutRefusal(null, env)).toBeNull();
+    expect(checkoutRefusal(sub("canceled", inDays(-1)), env)).toBeNull();
+  });
+
+  it("refuses a second subscription while Pro is active", () => {
+    expect(checkoutRefusal(sub("active"), env)).toMatchObject({ code: "already_subscribed" });
+  });
+
+  it("lets a cancelled workspace subscribe again while it still has Pro", () => {
+    expect(checkoutRefusal(sub("canceled"), env)).toBeNull();
+    expect(checkoutRefusal(sub("cancelled"), env)).toBeNull();
+  });
+
+  it("sends a failed payment to the payment method instead of a second subscription", () => {
+    expect(checkoutRefusal(sub("past_due"), env)).toMatchObject({ code: "payment_method_needed" });
+    expect(checkoutRefusal(sub("on_hold"), env)).toMatchObject({ code: "payment_method_needed" });
   });
 });

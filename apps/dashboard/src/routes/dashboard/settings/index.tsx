@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { api, type ApiKey, type Product, type TeamMember, type UsageInfo } from '~/lib/api'
 import { getActiveTeamId, useSession, organization } from '~/lib/auth'
@@ -19,6 +19,7 @@ import { ErrorText, ToneIcon } from '~/components/ui/status'
 import { btnPrimary, btnSecondary, PageHeader } from '~/components/ui/page'
 import { minorToMajor } from '@gopaylocal/shared/currency'
 import { formatCharge, useRegionalProPrice } from '~/lib/regional-price'
+import { ContactEmail } from '~/components/contact-email'
 
 type Tab = 'team' | 'billing' | 'api-keys'
 
@@ -683,6 +684,11 @@ const PLAN_METADATA = {
 /** How long the page keeps checking for Pro after the buyer comes back from checkout. */
 const CONFIRM_WINDOW_MS = 120_000
 
+/** Pro on an active subscription (not one cancelled or failing that still has Pro). */
+function isActivePro(billing: { effectivePlan?: string; status?: string } | undefined): boolean {
+  return billing?.effectivePlan === 'pro' && billing.status === 'active'
+}
+
 function BillingTab({ returnedFromCheckout }: { returnedFromCheckout: boolean }) {
   const { data: session } = useSession()
   const teamId = getActiveTeamId(session)
@@ -701,7 +707,7 @@ function BillingTab({ returnedFromCheckout }: { returnedFromCheckout: boolean })
     queryKey: ['billing', teamId],
     queryFn: () => api.billing.get(teamId),
     enabled: !!teamId,
-    refetchInterval: (query) => (confirming && query.state.data?.effectivePlan !== 'pro' ? 3000 : false),
+    refetchInterval: (query) => (confirming && !isActivePro(query.state.data) ? 3000 : false),
   })
 
   const { data: usage } = useQuery({
@@ -710,7 +716,9 @@ function BillingTab({ returnedFromCheckout }: { returnedFromCheckout: boolean })
     enabled: !!teamId,
   })
 
-  const confirmedPro = billing?.effectivePlan === 'pro'
+  // Active, not just Pro: a workspace resubscribing after a cancellation is
+  // still Pro (until its paid month ends) before the new subscription lands.
+  const confirmedPro = isActivePro(billing)
   useEffect(() => {
     if (!returnedFromCheckout) return
     if (confirmedPro) {
@@ -756,8 +764,15 @@ function BillingTab({ returnedFromCheckout }: { returnedFromCheckout: boolean })
   const planData = PLAN_METADATA[plan]
   const isPro = plan === 'pro'
   const hasBillingAccount = !!billing?.dodoCustId
+  // A cancelled subscription keeps Pro until its paid month ends; the owner can
+  // subscribe again before then (routes/billing.ts checkoutRefusal).
+  const cancelled = isPro && (billing?.status === 'canceled' || billing?.status === 'cancelled')
+  const paymentFailed = isPro && (billing?.status === 'past_due' || billing?.status === 'on_hold')
+  const proUntil = billing?.currentPeriodEnd
+    ? new Date(billing.currentPeriodEnd).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' })
+    : null
   // The visitor's Pro price where it is lower than the list price (useRegionalProPrice).
-  const regional = useRegionalProPrice(!isPending && !isPro)
+  const regional = useRegionalProPrice(!isPending && (!isPro || cancelled))
   const proLabel = regional ? formatCharge(regional.amount, regional.currency) : `$${PRO_MONTHLY}`
   // What a Pro workspace pays, as Dodo reported it.
   const paying =
@@ -789,7 +804,12 @@ function BillingTab({ returnedFromCheckout }: { returnedFromCheckout: boolean })
           <p className="text-[13px] text-text-primary">
             {confirming
               ? 'Payment received. Waiting for Dodo Payments to confirm it; this page updates on its own, usually within a minute.'
-              : "Dodo Payments hasn't confirmed the payment yet. Refresh this page in a few minutes. If you still see Free, contact us and include the email you paid with."}
+              : (
+                <>
+                  Dodo Payments hasn't confirmed the payment yet. Refresh this page in a few minutes. If you still see
+                  Free, write to <ContactEmail subject="Payment not confirmed" /> with the email address you paid with.
+                </>
+              )}
           </p>
         </div>
       )}
@@ -802,28 +822,60 @@ function BillingTab({ returnedFromCheckout }: { returnedFromCheckout: boolean })
               <h2 id="plan-title" className="font-display text-[28px] font-semibold text-text-primary">
                 {planData.name}
               </h2>
-              <span className="text-sm text-text-secondary">{isPro ? `${paying ?? `$${PRO_MONTHLY}`} a month` : '$0'}</span>
+              {!cancelled && (
+                <span className="text-sm text-text-secondary">{isPro ? `${paying ?? `$${PRO_MONTHLY}`} a month` : '$0'}</span>
+              )}
               {!isPending && billing?.status && isPro && (
-                <span className="inline-flex items-center gap-1.5 text-[13px] capitalize text-text-secondary">
+                <span className="inline-flex items-center gap-1.5 text-[13px] text-text-secondary">
                   <ToneIcon tone={billing.status === 'active' ? 'ok' : 'warn'} />
-                  {billing.status}
+                  {cancelled
+                    ? proUntil
+                      ? `Canceled, Pro until ${proUntil}`
+                      : 'Canceled'
+                    : paymentFailed
+                      ? 'Payment failed'
+                      : billing.status === 'active'
+                        ? 'Active'
+                        : billing.status}
                 </span>
               )}
             </div>
             <p className="text-[13px] text-text-secondary">{planData.description}</p>
           </div>
           {canManageBilling && (isPro || hasBillingAccount) && (
-            <button type="button" onClick={() => openPortal.mutate()} disabled={openPortal.isPending || !teamId} className={btnSecondary}>
-              Manage billing
-            </button>
+            <div className="flex flex-wrap gap-2">
+              {cancelled && (
+                <button type="button" onClick={() => createCheckout.mutate()} disabled={createCheckout.isPending || !teamId} className={btnPrimary}>
+                  Resubscribe · {proLabel}/mo
+                </button>
+              )}
+              <button type="button" onClick={() => openPortal.mutate()} disabled={openPortal.isPending || !teamId} className={btnSecondary}>
+                {paymentFailed ? 'Update payment method' : 'Manage billing'}
+              </button>
+            </div>
           )}
         </div>
-        {isPro && (
+        {cancelled ? (
+          <p className="border-t border-border px-6 py-3 text-[13px] text-text-muted">
+            You canceled Pro. It stays on {proUntil ? `until ${proUntil}` : 'until the paid month ends'}, then this
+            workspace moves to Free; nothing is deleted.{' '}
+            {canManageBilling
+              ? 'Resubscribing starts a new monthly period today.'
+              : 'The workspace owner can resubscribe.'}
+          </p>
+        ) : paymentFailed ? (
+          <p className="border-t border-border px-6 py-3 text-[13px] text-text-muted">
+            The last payment for Pro didn't go through. Pro stays on {proUntil ? `until ${proUntil}` : 'for now'}.{' '}
+            {canManageBilling
+              ? 'Update the payment method in the Dodo Payments portal to keep it.'
+              : 'The workspace owner can update the payment method.'}
+          </p>
+        ) : isPro ? (
           <p className="border-t border-border px-6 py-3 text-[13px] text-text-muted">
             Billed monthly through Dodo Payments. Manage billing opens their billing portal, where you change or cancel
             the subscription.
           </p>
-        )}
+        ) : null}
         {error && (
           <div className="border-t border-border px-6 py-3">
             <ErrorText>Couldn't load the billing details. Refresh the page to try again.</ErrorText>
@@ -851,9 +903,12 @@ function BillingTab({ returnedFromCheckout }: { returnedFromCheckout: boolean })
             max={meters.apiHits.max}
             included={isPro ? PRO_FAIR_USE_API_HITS_PER_MONTH : undefined}
             note={
-              isPro
-                ? `Need more than ${PRO_FAIR_USE_API_HITS_PER_MONTH / 1_000_000} million a month? Contact us.`
-                : meters.apiHits.max !== null
+              isPro ? (
+                <>
+                  Need more than {PRO_FAIR_USE_API_HITS_PER_MONTH / 1_000_000} million a month? Write to{' '}
+                  <ContactEmail subject="More than 20 million API calls" />
+                </>
+              ) : meters.apiHits.max !== null
                   ? `Live calls only. At ${formatLimit(meters.apiHits.max)} the banner shows nothing until the 1st (UTC).`
                   : undefined
             }
@@ -962,7 +1017,7 @@ function UsageMeter({
    * API calls). Shown like a cap; reaching it blocks nothing.
    */
   included?: number
-  note?: string
+  note?: ReactNode
   warnAtLimit?: boolean
 }) {
   const max = cap ?? included ?? null

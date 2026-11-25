@@ -1,5 +1,5 @@
 import { Hono, type Context } from "hono";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { ulid } from "ulid";
 import type { AppEnv, Bindings } from "../bindings";
 import { createDb, type Database } from "../db";
@@ -173,6 +173,18 @@ app.post("/v1/webhooks/dodo", async (c) => {
 });
 
 /**
+ * An event about one subscription changes the workspace's row only while that
+ * subscription is the one on the row. A workspace that cancelled and then
+ * subscribed again has a new subscription id there, and a late event for the
+ * old one (its cancellation, expiry or a failed retry) must not end the new
+ * one. Events without a subscription id, and rows without one, still match.
+ */
+function sameSubscription(data: Record<string, any>) {
+  const subId = typeof data.subscription_id === "string" && data.subscription_id ? data.subscription_id : null;
+  return subId ? or(isNull(subscriptions.dodoSubId), eq(subscriptions.dodoSubId, subId)) : undefined;
+}
+
+/**
  * Process a Dodo Payments webhook event.
  * Event names per Dodo docs: subscription.active, subscription.renewed,
  * subscription.plan_changed, subscription.on_hold, subscription.cancelled,
@@ -292,7 +304,7 @@ async function processWebhookEvent(
       await db
         .update(subscriptions)
         .set({ status: "past_due", updatedAt: new Date() })
-        .where(eq(subscriptions.organizationId, orgId));
+        .where(and(eq(subscriptions.organizationId, orgId), sameSubscription(data)));
       break;
     }
 
@@ -302,7 +314,7 @@ async function processWebhookEvent(
       await db
         .update(subscriptions)
         .set({ status: "canceled", updatedAt: new Date() })
-        .where(eq(subscriptions.organizationId, orgId));
+        .where(and(eq(subscriptions.organizationId, orgId), sameSubscription(data)));
       break;
     }
 
@@ -312,7 +324,7 @@ async function processWebhookEvent(
       await db
         .update(subscriptions)
         .set({ status: "expired", updatedAt: new Date() })
-        .where(eq(subscriptions.organizationId, orgId));
+        .where(and(eq(subscriptions.organizationId, orgId), sameSubscription(data)));
       break;
     }
 
@@ -322,7 +334,7 @@ async function processWebhookEvent(
       await db
         .update(subscriptions)
         .set({ status: "past_due", updatedAt: new Date() })
-        .where(eq(subscriptions.organizationId, orgId));
+        .where(and(eq(subscriptions.organizationId, orgId), sameSubscription(data)));
       break;
     }
 
