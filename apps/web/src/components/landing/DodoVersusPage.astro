@@ -1,0 +1,161 @@
+---
+import { Button } from '../ui/button';
+import ComparisonTable from './ComparisonTable.astro';
+import ComparisonSources from './ComparisonSources.astro';
+import FinalCTASection from './FinalCTASection.astro';
+import { CTA_SUBTITLE, DODO_CHECKED_ON, competitorList, dodoComparison } from '@/lib/comparison-data';
+
+// Dodo Payments' built-in PPP next to GoPayLocal on top of Dodo. The content is
+// dodoComparison in src/lib/comparison-data.ts (Dodo's facts are dated).
+const d = dodoComparison;
+const GUIDE = 'https://docs.gopaylocal.com/integrations/dodo-payments/#dodo-charges-the-country-price';
+---
+
+<!-- Hero -->
+<section class="pt-24 pb-16">
+  <div class="max-w-7xl mx-auto px-6 md:px-20">
+    <div class="flex items-center gap-2 mb-6">
+      <span class="h-2 w-2 bg-accent-500 inline-block"></span>
+      <span class="text-sm font-medium text-text-secondary">Comparison, checked {DODO_CHECKED_ON}</span>
+    </div>
+
+    <h1 class="font-display text-4xl sm:text-5xl md:text-6xl font-bold tracking-[-2px] leading-[1.05]">
+      Dodo Payments' PPP, or GoPayLocal with Dodo
+    </h1>
+
+    <p class="mt-6 text-base sm:text-lg text-text-secondary leading-[1.7] max-w-2xl">
+      {d.summary} GoPayLocal works on top of Dodo: it shows each visitor their price on your site, and has Dodo charge
+      exactly that price. This page puts the two side by side, including when Dodo's own PPP is all you need.
+    </p>
+
+    <div class="mt-8 flex flex-wrap items-center gap-4">
+      <Button href="https://app.gopaylocal.com" variant="primary" size="md" client:load>
+        Start Free
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+        </svg>
+      </Button>
+      <Button href={GUIDE} variant="secondary" size="md" client:load>
+        Read the setup guide
+      </Button>
+    </div>
+  </div>
+</section>
+
+<!-- The short version -->
+<section class="border-y border-border bg-bg-surface">
+  <div class="max-w-7xl mx-auto px-6 py-16 md:py-24 md:px-20">
+    <h2 class="font-display text-3xl md:text-4xl font-semibold tracking-tight leading-tight text-text-primary">The short version</h2>
+    <div class="mt-12 grid grid-cols-1 gap-10 md:grid-cols-3 md:gap-0">
+      {d.differences.map((difference, index) => (
+        <div class:list={[index === 0 ? 'md:pr-8' : 'md:px-8 md:border-l border-border']}>
+          <p class="font-mono text-sm text-accent-text tabular-nums">0{index + 1}</p>
+          <h3 class="mt-3 font-display text-xl font-semibold leading-snug text-text-primary">{difference.title}</h3>
+          <p class="mt-3 text-base text-text-secondary leading-relaxed">{difference.body}</p>
+          {difference.link && (
+            <p class="mt-3">
+              <a href={difference.link.href} class="text-sm font-medium text-text-primary underline underline-offset-4">{difference.link.label}</a>
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<!-- Side by side -->
+<section>
+  <div class="max-w-7xl mx-auto px-6 py-16 md:py-24 md:px-20">
+    <h2 class="font-display text-3xl md:text-4xl font-semibold tracking-tight leading-tight text-text-primary">Side by side</h2>
+    <p class="mt-4 max-w-prose text-base text-text-secondary leading-relaxed">
+      The GoPayLocal column is a campaign whose delivery is "Dodo charges the country price". Every GoPayLocal feature
+      is on every plan, including Free. The Dodo column is from Dodo's own documentation.
+    </p>
+    <div class="mt-10">
+      <ComparisonTable
+        caption="GoPayLocal with Dodo compared with Dodo Payments' built-in PPP"
+        columns={['GoPayLocal with Dodo', "Dodo's PPP alone"]}
+        rows={d.rows.map((row) => ({ label: row.label, cells: [row.gopaylocal, row.dodo] }))}
+      />
+    </div>
+  </div>
+</section>
+
+<!-- Using both -->
+<section class="border-y border-border bg-bg-surface">
+  <div class="max-w-7xl mx-auto px-6 py-16 md:py-24 md:px-20">
+    <h2 class="font-display text-3xl md:text-4xl font-semibold tracking-tight leading-tight text-text-primary">Using both</h2>
+    <p class="mt-4 max-w-prose text-base text-text-secondary leading-relaxed">
+      GoPayLocal decides and shows the price; Dodo charges it. GoPayLocal's own Pro plan is sold this way.
+    </p>
+    <ol class="mt-10 grid grid-cols-1 gap-10 md:grid-cols-3 md:gap-0">
+      {d.steps.map((step, index) => (
+        <li class:list={[index === 0 ? 'md:pr-8' : 'md:px-8 md:border-l border-border']}>
+          <p class="font-mono text-sm text-accent-text tabular-nums">0{index + 1}</p>
+          <h3 class="mt-3 font-display text-xl font-semibold leading-snug text-text-primary">{step.title}</h3>
+          <p class="mt-3 text-base text-text-secondary leading-relaxed">{step.body}</p>
+        </li>
+      ))}
+    </ol>
+    <p class="mt-10 text-base text-text-secondary">
+      The steps in detail: <a href={GUIDE} class="font-medium text-text-primary underline underline-offset-4">Dodo charges the country price</a>.
+    </p>
+  </div>
+</section>
+
+<!-- Billing country -->
+<section>
+  <div class="max-w-7xl mx-auto px-6 py-16 md:py-24 md:px-20">
+    <h2 class="font-display text-3xl md:text-4xl font-semibold tracking-tight leading-tight text-text-primary max-w-3xl">
+      What about a buyer with another country's billing details?
+    </h2>
+    <p class="mt-6 max-w-prose text-base text-text-secondary leading-relaxed">
+      With Dodo's PPP or with GoPayLocal's country prices, Dodo charges the price of the billing country it records at
+      checkout. Someone who enters another country's billing details gets that country's price either way. We think
+      that is a fair cost of pricing by country. GoPayLocal's VPN check does something narrower: it keeps the banner
+      from advertising a price to traffic that hides where it comes from.
+    </p>
+  </div>
+</section>
+
+<!-- When Dodo alone is better -->
+<section class="border-y border-border bg-bg-surface">
+  <div class="max-w-7xl mx-auto px-6 py-16 md:py-24 md:px-20">
+    <h2 class="font-display text-3xl md:text-4xl font-semibold tracking-tight leading-tight text-text-primary">
+      When Dodo's PPP alone is the better choice
+    </h2>
+    <p class="mt-4 max-w-prose text-base text-text-secondary leading-relaxed">
+      We make GoPayLocal, so weigh this page accordingly. These are the cases where we would tell you to use Dodo's
+      own setting.
+    </p>
+    <div class="mt-10 grid grid-cols-1 gap-x-12 gap-y-8 md:grid-cols-2">
+      {d.betterWhen.map((reason) => (
+        <div class="border-t-2 border-text-primary pt-5">
+          <h3 class="font-display text-lg font-semibold leading-snug text-text-primary">{reason.title}</h3>
+          <p class="mt-2 text-base text-text-secondary leading-relaxed">{reason.body}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<!-- More comparisons -->
+<section>
+  <div class="max-w-7xl mx-auto px-6 py-12 md:px-20">
+    <h2 class="text-[11px] font-semibold uppercase tracking-wider text-text-muted">More comparisons</h2>
+    <ul class="mt-4 flex flex-wrap gap-x-8 gap-y-3 text-base">
+      {competitorList.map((other) => (
+        <li><a href={`/vs/${other.slug}`} class="font-medium text-text-primary underline underline-offset-4">GoPayLocal vs {other.name}</a></li>
+      ))}
+      <li><a href="/compare" class="font-medium text-text-primary underline underline-offset-4">All comparisons</a></li>
+    </ul>
+  </div>
+</section>
+
+<ComparisonSources sources={d.sources.map((s) => ({ label: `Dodo Payments: ${s.label}`, href: s.href }))} checkedOn={DODO_CHECKED_ON} />
+
+<FinalCTASection
+  title={`Show the price.\nLet Dodo charge it.`}
+  subtitle={CTA_SUBTITLE}
+  dark={false}
+/>

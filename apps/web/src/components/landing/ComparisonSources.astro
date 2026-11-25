@@ -4,16 +4,18 @@ import { COMPARISON_CHECKED_ON } from '@/lib/comparison-data';
 interface Props {
   /** The pages the other products' facts were read from. */
   sources: { label: string; href: string }[];
+  /** When they were read; the other comparison pages share COMPARISON_CHECKED_ON. */
+  checkedOn?: string;
 }
 
-const { sources } = Astro.props;
+const { sources, checkedOn = COMPARISON_CHECKED_ON } = Astro.props;
 ---
 
 <section class="border-t border-border">
   <div class="max-w-7xl mx-auto px-6 py-12 md:px-20">
     <h2 class="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Sources</h2>
     <p class="mt-4 max-w-prose text-sm leading-relaxed text-text-secondary">
-      What this page says about other products comes from their own websites, read on {COMPARISON_CHECKED_ON}:
+      What this page says about other products comes from their own websites, read on {checkedOn}:
       {sources.map((source, index) => (
         <>
           <a href={source.href} rel="noopener nofollow" class="underline underline-offset-4 hover:text-text-primary">{source.label}</a>{index < sources.length - 1 ? ', ' : '.'}

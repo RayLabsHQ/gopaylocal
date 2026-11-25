@@ -123,7 +123,10 @@ Client-side JS on index checks UTM params and redirects. Cookie persists variant
 
 - `/vs/paritydeals`, `/vs/parityvend`, `/vs/parity-kit` — GoPayLocal next to one other product
 - `/alternatives/paritydeals`, `/alternatives/parityvend`, `/alternatives/parity-kit` — the other ways to do PPP pricing
-- `/compare` — the hub that links to all six
+- `/vs/dodo-payments` — Dodo Payments' built-in PPP next to GoPayLocal on top of Dodo
+  (`dodoComparison`; Dodo's facts come from its docs, dated `DODO_CHECKED_ON`). It describes
+  "Dodo charges the country price", so it ships only where that delivery is deployed
+- `/compare` — the hub that links to all of them
 
 All of their content is in `src/lib/comparison-data.ts`. What it says about GoPayLocal is
 computed from the shared plan constants. What it says about another product comes from that

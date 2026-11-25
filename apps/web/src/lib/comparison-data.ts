@@ -428,3 +428,142 @@ export const switchingSteps = [
   { title: 'Create a campaign', body: 'Pick the product and the maximum discount. The defaults cover every country with built-in data.' },
   { title: 'Swap the script tag', body: 'Replace the other tool\'s snippet with GoPayLocal\'s one script tag. Codes created by the other tool stay in your payment platform until you remove them.' },
 ];
+
+// ── Dodo Payments' built-in PPP (/vs/dodo-payments) ──────────────────────────
+//
+// Dodo Payments is a payment platform with PPP built in, not a PPP tool, so it
+// gets its own page: Dodo alone next to GoPayLocal on top of Dodo. Its facts
+// come from Dodo's own documentation (`dodoComparison.sources`), read on
+// DODO_CHECKED_ON. Update the facts and the date together.
+
+export const DODO_CHECKED_ON = '25 November 2026';
+
+const DODO_DOCS = 'https://docs.dodopayments.com/features';
+const OTHER_PLATFORMS = platformNames.filter((name) => name !== 'Dodo Payments');
+const COUNTRY_PRICES_GUIDE = 'https://docs.gopaylocal.com/integrations/dodo-payments/#dodo-charges-the-country-price';
+
+export const dodoComparison = {
+  name: 'Dodo Payments',
+  summary:
+    "Dodo Payments has purchasing power parity built in: you opt a product in, and Dodo charges a share of your price based on the buyer's billing country.",
+  differences: [
+    {
+      title: 'Visitors see their price before checkout',
+      body: 'Dodo\'s PPP adds "no banner and no script": the lower price first appears at checkout, so a visitor on your pricing page sees your full price and may not click through. GoPayLocal shows the price on your page, with a banner or the JavaScript and React SDKs.',
+    },
+    {
+      title: 'Discounts per product, not per business',
+      body: 'Dodo keeps one percentage per country for the whole business, and each product opts in or out. In GoPayLocal every campaign sets its own discounts: by parity group, by a PPP factor or country by country, with its own maximum.',
+    },
+    {
+      title: 'Dodo charges what the banner shows',
+      body: 'With the delivery "Dodo charges the country price", GoPayLocal writes each country\'s price into Dodo\'s Localized Pricing. Dodo charges that exact amount and skips its own PPP and Charm Pricing there, and the buyer enters no code.',
+      link: { label: 'How it works', href: COUNTRY_PRICES_GUIDE },
+    },
+  ],
+  rows: [
+    {
+      label: 'Where the lower price shows',
+      gopaylocal: 'On your site (banner or SDK), then at checkout',
+      dodo: 'At checkout. Dodo\'s PPP adds no banner and no script.',
+    },
+    {
+      label: 'Discount levels',
+      gopaylocal: 'Per campaign: parity groups, a PPP factor, or your own per country, up to a maximum you set',
+      dodo: 'One percentage per country for the whole business. The defaults come from World Bank price level data and can be edited.',
+    },
+    {
+      label: 'Largest discount',
+      gopaylocal: 'The campaign\'s maximum',
+      dodo: '70% (a country\'s percentage is between 30 and 100)',
+    },
+    {
+      label: 'Which country counts',
+      gopaylocal: 'The billing country at checkout; the visitor\'s location decides what the banner shows',
+      dodo: 'The billing country at checkout',
+    },
+    {
+      label: 'VPN and proxy traffic',
+      gopaylocal: 'No banner for VPN, datacenter or Tor traffic, so it never promises a price checkout won\'t charge',
+      dodo: 'Nothing to show: the billing country decides at checkout',
+    },
+    {
+      label: 'Rounding',
+      gopaylocal: 'Rounded down to a charm price, so the stated discount is never more than the real one',
+      dodo: 'Charm Pricing rounds the converted price after PPP; its Nearest and Ceiling types can round up',
+    },
+    {
+      label: 'Discount codes on top',
+      gopaylocal: 'No: a campaign uses country prices or codes, never both',
+      dodo: 'Yes: a code comes off the PPP price, so the two combine',
+    },
+    {
+      label: 'Currency conversion fee (2–4%)',
+      gopaylocal: 'Comes out of your payout when a country price applies',
+      dodo: 'Added to the buyer\'s price, unless you turn on Fees Inclusive',
+    },
+    {
+      label: 'Analytics',
+      gopaylocal: 'Banner views and clicks by country',
+      dodo: 'Not listed',
+    },
+    {
+      label: 'API',
+      gopaylocal: 'Campaigns, discounts and parity groups through GoPayLocal\'s API',
+      dodo: 'The opt-in per product; the country percentages are set in the dashboard only',
+    },
+    {
+      label: 'Usage-based prices',
+      gopaylocal: 'Not with country prices: Dodo\'s Localized Pricing doesn\'t support them',
+      dodo: 'The fixed fee of a usage-based product',
+    },
+    {
+      label: 'Other payment platforms',
+      gopaylocal: `The same campaigns work with ${OTHER_PLATFORMS.slice(0, -1).join(', ')} and ${OTHER_PLATFORMS[OTHER_PLATFORMS.length - 1]}, with discount codes`,
+      dodo: 'Dodo Payments only',
+    },
+    {
+      label: 'Price',
+      gopaylocal: `Free for ${FREE.products === 1 ? 'one product' : `${formatLimit(FREE.products)} products`}; Pro is $${PRO_MONTH} a month`,
+      dodo: 'No separate price listed',
+    },
+  ],
+  betterWhen: [
+    {
+      title: 'You want nothing added to your site',
+      body: 'Dodo\'s PPP needs no script. If adding one is a problem, or your buyers reach checkout from inside your app where you explain prices yourself, Dodo alone does the job.',
+    },
+    {
+      title: 'One table fits your whole catalogue',
+      body: 'If one percentage per country suits every product you sell, Dodo\'s business-wide table is less to set up than a campaign per product.',
+    },
+    {
+      title: 'You sell usage-based prices',
+      body: 'Dodo\'s PPP reduces the fixed fee of a usage-based product. Country prices, which GoPayLocal writes, don\'t apply to usage-based prices.',
+    },
+    {
+      title: 'You want the buyer to pay the currency fee',
+      body: 'When a country price applies, Dodo\'s 2–4% conversion fee comes out of your payout. With PPP and Adaptive Currency\'s default setting, the buyer pays it on top.',
+    },
+  ],
+  steps: [
+    {
+      title: 'Connect Dodo',
+      body: 'Connect your Dodo Payments account in GoPayLocal with an API key that has Products: Write.',
+    },
+    {
+      title: 'Point a campaign at the product',
+      body: 'Turn Dodo\'s PPP off on the product, set the campaign\'s delivery to "Dodo charges the country price" and pick the product. GoPayLocal checks it and writes one price per discounted country.',
+    },
+    {
+      title: 'Add the script tag',
+      body: 'The banner tells each visitor from those countries their price. Dodo charges that price at checkout, with no code to enter.',
+    },
+  ],
+  sources: [
+    { label: 'Purchasing Power Parity', href: `${DODO_DOCS}/purchasing-power-parity` },
+    { label: 'Localized Pricing', href: `${DODO_DOCS}/localized-pricing` },
+    { label: 'Charm Pricing', href: `${DODO_DOCS}/charm-pricing` },
+    { label: 'Adaptive Currency', href: `${DODO_DOCS}/adaptive-currency` },
+  ],
+};
