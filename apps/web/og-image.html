@@ -1,6 +1,7 @@
 <!doctype html>
 <!-- Source of public/og-image.png. Re-render: open this file in Chromium with a 1200x630 viewport at device scale 1, wait for the Google Fonts to load, screenshot the viewport and save it over public/og-image.png.
-     Numbers: 75 = entries in PPP_MULTIPLIERS, <4KB = gzip size of the banner bundle, $19 = PLAN_PRICES_USD.pro.month, 9 = integrations in src/lib/landing-data.ts, table rows = DEFAULT_PARITY_TIERS (packages/shared); update this file when they change. -->
+     Feeds show this image at about 500px wide (300px in chat apps), so nothing here is smaller than 28px. Keep it that way.
+     Numbers: $19 = PLAN_PRICES_USD.pro.month, 20M = PRO_FAIR_USE_API_HITS_PER_MONTH, 9 = integrations in src/lib/landing-data.ts, table rows = DEFAULT_PARITY_TIERS (packages/shared); update this file when they change. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -8,14 +9,14 @@
 <title>GoPayLocal OG image</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Space+Grotesk:wght@600;700&family=JetBrains+Mono:wght@500&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600&family=Space+Grotesk:wght@700&display=block">
 <style>
   :root {
     --bg: #0A0A0A;
     --surface: #161616;
-    --border: #2A2A2A;
+    --border: #333333;
     --text-1: #F5F5F5;
-    --text-2: #B8B8B8;
+    --text-2: #D0D0D0;
     --accent: #E42313;
     --accent-text: #FF3B2E;
   }
@@ -23,25 +24,20 @@
   html, body { width: 1200px; height: 630px; overflow: hidden; background: var(--bg); }
   body { position: relative; color: var(--text-1); font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
   .abs { position: absolute; }
-  .bar { left: 0; top: 0; width: 16px; height: 630px; background: var(--accent); }
-  .brand { left: 80px; top: 64px; display: flex; align-items: center; gap: 12px; }
-  .brand svg { width: 36px; height: 36px; display: block; }
-  .brand span { position: relative; top: -1px; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 24px; letter-spacing: -0.025em; line-height: 36px; }
-  .tag { left: 80px; top: 140px; font-family: 'JetBrains Mono', monospace; font-weight: 500; font-size: 14px; line-height: 20px; letter-spacing: 0.18em; color: var(--accent-text); white-space: nowrap; }
-  h1 { left: 80px; top: 179.5px; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 72px; line-height: 73.5px; letter-spacing: -0.04em; white-space: nowrap; }
-  .sub { left: 80px; top: 428.5px; font-size: 24px; line-height: 32px; color: var(--text-2); white-space: nowrap; }
-  .rule { left: 80px; top: 494px; width: 1040px; height: 1px; background: var(--border); }
-  .stats { left: 80px; top: 524px; display: flex; gap: 80.8px; }
-  .stat .num { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 37px; line-height: 44px; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
-  .stat .num.accent { color: var(--accent-text); }
-  .stat .label { margin-top: 3px; font-family: 'JetBrains Mono', monospace; font-weight: 500; font-size: 12px; line-height: 16px; letter-spacing: 0.14em; color: var(--text-2); white-space: nowrap; }
-  .table { left: 790px; top: 140px; width: 330px; border: 1px solid var(--border); background: var(--surface); }
-  .row { height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px 4px; }
-  .row + .row { border-top: 1px solid var(--border); height: 61px; }
-  .country { display: flex; align-items: center; gap: 10px; font-size: 20px; color: var(--text-1); }
-  .flag { font-size: 18px; line-height: 1; }
-  .pct { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 21px; color: var(--accent-text); font-variant-numeric: tabular-nums; }
-  .full { font-size: 20px; font-weight: 500; color: var(--text-2); }
+  .bar { left: 0; top: 0; width: 20px; height: 630px; background: var(--accent); }
+  .brand { left: 80px; top: 64px; display: flex; align-items: center; gap: 16px; }
+  .brand svg { width: 48px; height: 48px; display: block; }
+  .brand span { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 36px; letter-spacing: -0.025em; line-height: 48px; }
+  h1 { left: 80px; top: 164px; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 84px; line-height: 88px; letter-spacing: -0.04em; white-space: nowrap; }
+  .foot { left: 80px; top: 516px; font-size: 32px; line-height: 40px; font-weight: 500; color: var(--text-2); white-space: nowrap; }
+  .foot b { color: var(--accent-text); font-weight: 600; padding: 0 12px; }
+  .table { right: 80px; top: 172px; width: 340px; border: 2px solid var(--border); background: var(--surface); }
+  .row { height: 84px; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; }
+  .row + .row { border-top: 2px solid var(--border); }
+  .country { display: flex; align-items: center; gap: 14px; font-size: 30px; font-weight: 500; color: var(--text-1); }
+  .flag { font-size: 30px; line-height: 1; }
+  .pct { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 36px; color: var(--accent-text); font-variant-numeric: tabular-nums; }
+  .full { font-size: 28px; font-weight: 500; color: var(--text-2); }
 </style>
 </head>
 <body>
@@ -55,26 +51,14 @@
     <span>GoPayLocal</span>
   </div>
 
-  <p class="abs tag">PURCHASING POWER PARITY · SAAS PRICING</p>
-
   <h1 class="abs">Fair prices.<br>More customers.<br>Zero effort.</h1>
-
-  <p class="abs sub">Country-fair pricing, applied<br>automatically at the edge.</p>
-
-  <div class="abs rule"></div>
-
-  <div class="abs stats">
-    <div class="stat"><div class="num">75</div><div class="label">COUNTRIES WITH PPP DATA</div></div>
-    <div class="stat"><div class="num">&lt;4KB</div><div class="label">SCRIPT (GZIP)</div></div>
-    <div class="stat"><div class="num">$19</div><div class="label">PRO, NEVER METERED</div></div>
-    <div class="stat"><div class="num accent">9</div><div class="label">INTEGRATIONS</div></div>
-  </div>
 
   <div class="abs table">
     <div class="row"><span class="country"><span class="flag">🇮🇳</span>India</span><span class="pct">-65%</span></div>
     <div class="row"><span class="country"><span class="flag">🇧🇷</span>Brazil</span><span class="pct">-35%</span></div>
-    <div class="row"><span class="country"><span class="flag">🇲🇽</span>Mexico</span><span class="pct">-20%</span></div>
-    <div class="row"><span class="country"><span class="flag">🇺🇸</span>United States</span><span class="full">Full price</span></div>
+    <div class="row"><span class="country"><span class="flag">🇺🇸</span>USA</span><span class="full">Full price</span></div>
   </div>
+
+  <p class="abs foot">Open source<b>·</b>9 integrations<b>·</b>Pro $19/mo for 20M API calls</p>
 </body>
 </html>

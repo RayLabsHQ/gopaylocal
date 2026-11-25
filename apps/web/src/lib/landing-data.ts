@@ -205,7 +205,7 @@ const fullData: LandingData = {
     stats: [
       { value: String(PPP_COUNTRY_COUNT), label: 'Countries with PPP data' },
       { value: '<4KB', label: 'Script size (gzip)' },
-      { value: `$${PRO_MONTHLY}`, label: 'Pro, never metered' },
+      { value: `$${PRO_MONTHLY}`, label: `Pro, ${compactCount(PRO_FAIR_USE_API_HITS_PER_MONTH)} API calls/mo` },
       { value: String(INTEGRATION_COUNT), label: 'Integrations', accent: true },
     ],
   },
@@ -308,7 +308,7 @@ const revenueData: LandingData = {
     stats: [
       { value: String(PPP_COUNTRY_COUNT), label: 'Countries with PPP data' },
       { value: String(INTEGRATION_COUNT), label: 'Payment integrations' },
-      { value: `$${PRO_MONTHLY}`, label: 'Pro, never metered' },
+      { value: `$${PRO_MONTHLY}`, label: `Pro, ${compactCount(PRO_FAIR_USE_API_HITS_PER_MONTH)} API calls/mo` },
       { value: 'All', label: 'Features on Free', accent: true },
     ],
   },
