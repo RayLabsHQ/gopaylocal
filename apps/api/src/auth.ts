@@ -16,7 +16,10 @@ import {
 } from "@gopaylocal/shared/permissions";
 import { createDb, type Database } from "./db";
 import * as schema from "./db/schema";
-import { sendEmail, senderAddressFor } from "./lib/email";
+import { appUrlFor, subjectLine } from "./lib/email";
+import type { Email } from "./emails/layout";
+import { invitationEmail } from "./emails/templates";
+import { emailSetupProblem, mailerFor, quietly, sendWelcomeEmail } from "./services/notify";
 import { isSelfHosted, resolveEntitlements } from "./lib/entitlements";
 import { errorSummary } from "./lib/log";
 import { checkWorkspaceName, workspaceNameForEmail } from "./lib/workspace-name";
@@ -188,45 +191,30 @@ export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch]!);
 }
 
-/** Collapse control characters (CR/LF included) and cap length for a subject line. */
-function subjectText(value: string, max = 100): string {
-  const flat = value.replace(/[\u0000-\u001f\u007f]+/g, " ").trim();
-  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
-}
-
 /**
- * The invitation email. Organization and inviter names are user-controlled
- * (anyone can create an org with any name and invite any address), so every
- * interpolated value is escaped: otherwise GoPayLocal would send attacker
- * HTML (fake buttons, phishing links) from its own domain.
+ * The invitation email (emails/templates.ts invitationEmail). Organization and
+ * inviter names are user-controlled (anyone can create an org with any name
+ * and invite any address): the layout escapes every value, so GoPayLocal never
+ * sends attacker HTML (fake buttons, phishing links) from its own domain, and
+ * the subject is flattened to one line. A null organizationName (one that
+ * can't be printed safely, see workspaceNameForEmail) says "a workspace".
  */
 export function buildInvitationEmail(input: {
-  organizationName: string;
+  organizationName: string | null;
   inviterName: string | null | undefined;
   inviterEmail: string;
   appUrl: string;
   invitationId: string;
-}): { subject: string; html: string } {
-  const orgName = escapeHtml(input.organizationName);
-  const inviter = escapeHtml(input.inviterName || input.inviterEmail);
-  const inviteLink = escapeHtml(`${input.appUrl}/invite/${encodeURIComponent(input.invitationId)}`);
-  return {
-    subject: `You've been invited to ${subjectText(input.organizationName)} on GoPayLocal`,
-    html: `
-                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-                  <h2 style="margin: 0 0 8px; font-size: 20px; color: #0D0D0D;">Join ${orgName}</h2>
-                  <p style="margin: 0 0 24px; color: #666; font-size: 14px; line-height: 1.5;">
-                    ${inviter} invited you to collaborate on their PPP campaigns on GoPayLocal.
-                  </p>
-                  <a href="${inviteLink}" style="display: inline-block; background: #E42313; color: #fff; padding: 12px 24px; text-decoration: none; font-weight: 600; font-size: 14px;">
-                    Accept Invitation
-                  </a>
-                  <p style="margin: 24px 0 0; color: #999; font-size: 12px;">
-                    If you didn't expect this invitation, you can ignore this email.
-                  </p>
-                </div>
-              `,
-  };
+  support?: string | null;
+}): Email {
+  const email = invitationEmail({
+    workspace: input.organizationName,
+    inviterName: input.inviterName ?? null,
+    inviterEmail: input.inviterEmail,
+    inviteUrl: `${input.appUrl}/invite/${encodeURIComponent(input.invitationId)}`,
+    links: { app: input.appUrl, support: input.support ?? null },
+  });
+  return { ...email, subject: subjectLine(email.subject) };
 }
 
 // ── Deployment URLs ─────────────────────────────────────────────────────────
@@ -235,7 +223,6 @@ export function buildInvitationEmail(input: {
 // OAuth callbacks and invitation links must not point at gopaylocal.com.
 
 const HOSTED_API_BASE_URL = "https://api.gopaylocal.com";
-const HOSTED_APP_BASE_URL = "https://app.gopaylocal.com";
 
 /**
  * Better Auth's baseURL: API_BASE_URL, else the hosted API when hosted. Self-
@@ -252,7 +239,7 @@ export function authBaseURL(env: Pick<Bindings, "API_BASE_URL" | "SELF_HOSTED">)
  * owner can still copy the link from the dashboard).
  */
 export function invitationAppUrl(env: Pick<Bindings, "APP_BASE_URL" | "SELF_HOSTED">): string | null {
-  return env.APP_BASE_URL ?? (isSelfHosted(env) ? null : HOSTED_APP_BASE_URL);
+  return appUrlFor(env);
 }
 
 export interface CreateAuthOptions {
@@ -264,6 +251,12 @@ export interface CreateAuthOptions {
    * Worker (which always calls createAuth(env) with no options) cannot enable it.
    */
   enableTestUtils?: boolean;
+  /**
+   * The request's waitUntil, so emails Better Auth triggers (the welcome email)
+   * are sent after the response instead of delaying sign-in. Without it they
+   * are awaited.
+   */
+  waitUntil?: (promise: Promise<unknown>) => void;
 }
 
 export function createAuth(env: Bindings, opts?: CreateAuthOptions) {
@@ -389,6 +382,20 @@ export function createAuth(env: Bindings, opts?: CreateAuthOptions) {
       }),
     },
     databaseHooks: {
+      user: {
+        create: {
+          // BA extension point: databaseHooks.user.create.after runs once per
+          // new account, whatever the sign-in method. The welcome email
+          // (services/notify.ts) never fails or delays the sign-up.
+          after: async (user) => {
+            const job = quietly("welcome email", () =>
+              sendWelcomeEmail(db, env, mailerFor(env), { email: user.email, name: user.name }),
+            );
+            if (opts?.waitUntil) opts.waitUntil(job);
+            else await job;
+          },
+        },
+      },
       session: {
         create: {
           // BA extension point: databaseHooks.session.create.before. Throwing
@@ -454,32 +461,27 @@ export function createAuth(env: Bindings, opts?: CreateAuthOptions) {
         roles: orgRoles,
 
         async sendInvitationEmail(data) {
-          if (!env.ACS_CONNECTION_STRING) {
-            console.warn("ACS_CONNECTION_STRING not set, skipping invitation email.");
-            return;
-          }
-          const appUrl = invitationAppUrl(env);
-          if (!appUrl) {
-            console.warn("APP_BASE_URL not set on a self-hosted deployment, skipping invitation email.");
-            return;
-          }
-          const senderAddress = senderAddressFor(env);
-          if (!senderAddress) {
-            console.warn("EMAIL_FROM not set on a self-hosted deployment, skipping invitation email.");
+          // No ACS connection string, or self-hosted without EMAIL_FROM (ACS
+          // would refuse the hosted sender) or APP_BASE_URL (the link would
+          // point at gopaylocal.com): no email. The owner can copy the link.
+          const mailer = mailerFor(env);
+          if (!mailer) {
+            console.warn(`Skipping invitation email: ${emailSetupProblem(env)}.`);
             return;
           }
           // Never mail out a name a mail client would turn into a link
           // ("Cal.com"), or one stored before the naming rule existed that
           // breaks it (a link, invisible characters).
-          const { subject, html } = buildInvitationEmail({
-            organizationName: workspaceNameForEmail(data.organization.name) ?? "a workspace",
+          const email = buildInvitationEmail({
+            organizationName: workspaceNameForEmail(data.organization.name),
             inviterName: data.inviter.user.name,
             inviterEmail: data.inviter.user.email,
-            appUrl,
+            appUrl: mailer.links.app,
             invitationId: data.id,
+            support: mailer.links.support,
           });
           try {
-            await sendEmail(env.ACS_CONNECTION_STRING, { to: data.email, subject, html, senderAddress });
+            await mailer.send(data.email, email);
           } catch (err) {
             console.error("Failed to send invitation email:", errorSummary(err));
           }

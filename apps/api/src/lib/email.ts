@@ -21,12 +21,51 @@ export function senderAddressFor(env: Pick<Bindings, "EMAIL_FROM" | "SELF_HOSTED
   return isSelfHosted(env) ? null : HOSTED_SENDER_ADDRESS;
 }
 
+/** Where the hosted service's replies and help questions go. */
+export const HOSTED_SUPPORT_ADDRESS = "support@gopaylocal.com";
+
+/**
+ * Where replies to GoPayLocal's emails go, and the help address the emails
+ * show: SUPPORT_EMAIL when set, otherwise the hosted support address on the
+ * hosted service. Self-hosted with SUPPORT_EMAIL unset: null (no reply-to, no
+ * help line), never the hosted address.
+ */
+export function supportAddressFor(env: Pick<Bindings, "SUPPORT_EMAIL" | "SELF_HOSTED">): string | null {
+  const configured = env.SUPPORT_EMAIL?.trim();
+  if (configured) return configured;
+  return isSelfHosted(env) ? null : HOSTED_SUPPORT_ADDRESS;
+}
+
+const HOSTED_APP_BASE_URL = "https://app.gopaylocal.com";
+
+/**
+ * The dashboard's origin, for links in emails: APP_BASE_URL, else the hosted
+ * dashboard when hosted. Self-hosted with APP_BASE_URL unset: null, and no
+ * email is sent (a link to gopaylocal.com would be wrong there).
+ */
+export function appUrlFor(env: Pick<Bindings, "APP_BASE_URL" | "SELF_HOSTED">): string | null {
+  return env.APP_BASE_URL ?? (isSelfHosted(env) ? null : HOSTED_APP_BASE_URL);
+}
+
+/**
+ * A subject line from text that may hold user-controlled names: control
+ * characters (a CR/LF could start a header) become spaces, and it is capped.
+ */
+export function subjectLine(value: string, max = 120): string {
+  const flat = value.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s{2,}/g, " ").trim();
+  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
+}
+
 export async function sendEmail(
   connectionString: string,
   options: {
     to: string;
     subject: string;
     html: string;
+    /** The plain-text version, for clients that don't show HTML. */
+    text?: string;
+    /** Where a reply goes instead of the no-reply sender. */
+    replyTo?: string | null;
     /** From senderAddressFor(env). */
     senderAddress: string;
   },
@@ -39,10 +78,12 @@ export async function sendEmail(
     content: {
       subject: options.subject,
       html: options.html,
+      ...(options.text ? { plainText: options.text } : {}),
     },
     recipients: {
       to: [{ address: options.to }],
     },
+    ...(options.replyTo ? { replyTo: [{ address: options.replyTo }] } : {}),
   });
 
   const url = new URL("/emails:send?api-version=2023-03-31", endpoint);

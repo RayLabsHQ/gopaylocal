@@ -35,6 +35,7 @@ import { isSelfHosted, resolveEntitlements, type DeploymentEnv } from "../lib/en
 import { meteredApiCallsSince, utcMonthStart } from "../lib/limits";
 import { errorSummary } from "../lib/log";
 import { pushBannerConfigForOrg } from "./banner-cache.service";
+import type { UsageReading } from "./notify";
 
 export interface UsageSnapshot {
   /** Month-to-date live calls when the snapshot was last written (not kept current). */
@@ -131,7 +132,7 @@ export async function recomputeUsageForAllOrgs(
   db: Database,
   kv: KVNamespace,
   env?: DeploymentEnv | null,
-): Promise<void> {
+): Promise<UsageReading[]> {
   const now = new Date();
   const monthStart = utcMonthStart(now);
 
@@ -171,6 +172,7 @@ export async function recomputeUsageForAllOrgs(
   // pushBannerConfigForOrg needs an env; a missing one means hosted.
   const deployment: DeploymentEnv = env ?? {};
 
+  const readings: UsageReading[] = [];
   await Promise.all(
     usageRows.map(async (row) => {
       const ent = resolveEntitlements(
@@ -181,6 +183,7 @@ export async function recomputeUsageForAllOrgs(
       const limit = ent.limits.apiHitsPerMonth;
       const count = Number(row.calls) || 0;
 
+      readings.push({ organizationId: row.organizationId, count, limit });
       const over = hasReachedLimit(count, limit);
       const key = usageKey(row.organizationId, now);
       const previous = await readSnapshot(kv, key);
@@ -232,4 +235,6 @@ export async function recomputeUsageForAllOrgs(
       await kv.put(key, JSON.stringify(snapshot), { expirationTtl });
     }),
   );
+  // Each org's count and limit this run, for the usage emails (services/notify.ts).
+  return readings;
 }

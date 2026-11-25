@@ -268,6 +268,18 @@ describe an integration as verified beyond what it says.
   remembered in isolate memory only. Do not add a KV write that runs whether or not
   anything changed, or one that an anonymous request can cause.
 
+### Emails
+
+GoPayLocal's own emails are built in `apps/api/src/emails/templates.ts` (pure; the layout
+escapes every value) and sent by `apps/api/src/services/notify.ts` through ACS, replying to
+`SUPPORT_EMAIL` (hosted: support@gopaylocal.com). Welcome (sign-up, not for invitees),
+usage at 80% and 100% (Free's monthly cap), payment failed (Dodo webhook), Pro ended and
+key refused (the `*/10` job) go to a workspace's owners, each once: a row in `emails_sent`
+is claimed before sending and released when every send failed. Self-hosted sends only the
+invitation and key-refused emails. Sending never breaks the request or job behind it.
+The docs (`dashboard/billing.mdx`, `integrations/overview.mdx`, `self-hosting/*`) say which
+emails exist: change them together.
+
 ### Holiday deals
 
 A deal is a percentage with a start and an end on a campaign, with one code for every

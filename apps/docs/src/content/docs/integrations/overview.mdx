@@ -82,6 +82,8 @@ GoPayLocal encrypts each key (AES-256-GCM) before storing it. Only GoPayLocal's 
 
 When you connect, GoPayLocal first checks the key with the provider, using the same call as **Test connection**. A key the provider refuses is not saved, and the panel shows the provider's reason; a replacement key that is refused leaves the saved key in place. Then GoPayLocal sets up redemption tracking: it creates a webhook in your provider account that points back to GoPayLocal. If that step fails, the provider is still connected and its card says so, with a button to try again. **Test connection** on the card checks the saved keys again at any time.
 
+If the provider later refuses the saved live key when GoPayLocal calls it (the key was revoked or rolled, or its permissions changed), the workspace's owners get one email within about 10 minutes, with the provider's reason and a link to reconnect. Codes already at the provider keep working; new ones can't be created until you reconnect. Once the key works again, a later refusal sends a new email. A refused test key sends none.
+
 Only the workspace owner and admins can connect and disconnect providers. See [Team](/dashboard/team/).
 
 ## Disconnecting a Provider

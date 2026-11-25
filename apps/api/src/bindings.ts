@@ -18,10 +18,14 @@ export type Bindings = {
   ADMIN_BASE_URL?: string;
   CORS_ALLOWED_ORIGINS?: string; // extra comma-separated origins allowed credentialed CORS (see middleware/cors.ts)
   ACS_CONNECTION_STRING?: string;
-  // Sender for invitation emails, on a domain linked to the ACS resource. Unset:
-  // the hosted sender when hosted; when SELF_HOSTED="true", no email is sent
-  // (lib/email.ts senderAddressFor).
+  // Sender for GoPayLocal's emails, on a domain linked to the ACS resource.
+  // Unset: the hosted sender when hosted; when SELF_HOSTED="true", no email is
+  // sent (lib/email.ts senderAddressFor).
   EMAIL_FROM?: string;
+  // Where replies to those emails go, and the help address they show. Unset:
+  // support@gopaylocal.com when hosted, none when self-hosted
+  // (lib/email.ts supportAddressFor).
+  SUPPORT_EMAIL?: string;
   // Dodo product id for the one paid plan (Pro: $19/month).
   DODO_PRICE_ID_PRO_MONTHLY?: string;
   // "true" = self-hosted deployment: every org is unlimited with branding off,

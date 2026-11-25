@@ -23,8 +23,19 @@ app.on(["POST", "GET"], "/api/auth/*", async (c) => {
     : null;
   if (limited) return limited;
 
-  const auth = createAuth(c.env);
+  // Emails Better Auth triggers (the welcome email) go out after the response.
+  const auth = createAuth(c.env, { waitUntil: (promise) => backgroundOf(c)(promise) });
   return auth.handler(c.req.raw);
 });
 
 export default app;
+
+/** The request's waitUntil; awaiting nothing when there is no execution context (some tests). */
+function backgroundOf(c: { executionCtx: Pick<ExecutionContext, "waitUntil"> }): (promise: Promise<unknown>) => void {
+  try {
+    const ctx = c.executionCtx;
+    return (promise) => ctx.waitUntil(promise);
+  } catch {
+    return (promise) => void promise;
+  }
+}

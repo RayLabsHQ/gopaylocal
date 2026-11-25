@@ -637,6 +637,19 @@ export const internalOrganizations = pgTable("internal_organizations", {
   createdAt: t.timestamp("created_at").defaultNow().notNull(),
 });
 
+// ── Emails sent once ────────────────────────────────────────────────────────
+// One row per email that must go out at most once (services/notify.ts), keyed
+// by what it is about, e.g. "usage:80:<orgId>:2026-11". Inserting the row is
+// what claims the send, so two runs of a job can't both send it; a send that
+// fails deletes the row again so the next run retries.
+export const emailsSent = pgTable("emails_sent", {
+  key: t.text("key").primaryKey(),
+  organizationId: t
+    .text("organization_id")
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  sentAt: t.timestamp("sent_at").defaultNow().notNull(),
+});
+
 // ── Platform settings ───────────────────────────────────────────────────────
 // Deployment-wide settings changed from the admin, one JSON value per key
 // (e.g. "house_pricing": which campaign prices Pro, and the last Dodo sync).

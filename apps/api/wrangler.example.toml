@@ -216,10 +216,13 @@ ADMIN_BASE_URL = "https://admin.<YOUR_DOMAIN>"
 # credentialed requests, e.g. a second dashboard hostname. Not needed for banner sites:
 # the banner endpoints accept any origin.
 # CORS_ALLOWED_ORIGINS = "https://dashboard.<YOUR_DOMAIN>"
-# Needed for invitation emails (with ACS_CONNECTION_STRING below). Sender address on a
-# domain linked to your Azure Communication Services resource. If unset, no invitation
-# email is sent when SELF_HOSTED="true".
+# Needed for emails (with ACS_CONNECTION_STRING below). Sender address on a domain
+# linked to your Azure Communication Services resource. If unset, no email is sent
+# when SELF_HOSTED="true".
 # EMAIL_FROM = "DoNotReply@<YOUR_MAIL_DOMAIN>"
+# Optional. Where replies to those emails go, and the help address they show. If
+# unset: none when SELF_HOSTED="true".
+# SUPPORT_EMAIL = "help@<YOUR_DOMAIN>"
 # Required for self-hosting: "true" makes every organization unlimited, turns the
 # "Powered by GoPayLocal" banner link off, and disables billing (the checkout and
 # portal endpoints return 404 billing_disabled; the dashboard hides billing).
@@ -258,8 +261,9 @@ SELF_HOSTED = "true"
 # GITHUB_CLIENT_SECRET   At least one OAuth provider is needed: public email sign-up is
 #                        disabled, so OAuth is the only way to create an account.
 # ACS_CONNECTION_STRING  Optional. Azure Communication Services connection string for
-#                        team invitation emails; without it invitations are created but
-#                        no email is sent. Also set EMAIL_FROM (above).
+#                        emails (team invitations, a refused provider key); without it
+#                        invitations are created but no email is sent. Also set
+#                        EMAIL_FROM (above).
 # DODO_API_KEY           Hosted billing only. Not needed when SELF_HOSTED="true".
 # DODO_WEBHOOK_SECRET    Hosted billing only. Leave unset when self-hosting; the Dodo
 #                        webhook endpoint then rejects every request.

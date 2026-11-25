@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { AppEnv, Bindings } from "./bindings";
 import { createDb } from "./db";
 import { recomputeUsageForAllOrgs } from "./services/usage.service";
+import { mailerFor, notifyUsage, quietly, runScheduledEmails } from "./services/notify";
 import { retryPendingRedemptions } from "./services/redemption-webhook.service";
 import { retireEndedDealCoupons } from "./services/coupon.service";
 import { isRetentionRun, runRetention } from "./services/retention.service";
@@ -144,8 +145,16 @@ export default {
     const db = createDb(env);
     ctx.waitUntil(
       Promise.all([
-        recomputeUsageForAllOrgs(db, env.CACHE, env).catch((err) => {
-          console.error("Usage recompute failed:", err);
+        // Usage snapshots, then the 80% and 100% emails from the same counts.
+        recomputeUsageForAllOrgs(db, env.CACHE, env).then(
+          (readings) => quietly("usage emails", () => notifyUsage(db, mailerFor(env), readings)),
+          (err) => {
+            console.error("Usage recompute failed:", err);
+          },
+        ),
+        // Emails no event triggers: Pro that ended, keys a platform refuses.
+        runScheduledEmails(db, env).catch((err) => {
+          console.error("Scheduled emails failed:", err);
         }),
         // Redemption webhooks the request path couldn't finish (provider lookup
         // down, DB hiccup, Gumroad's 5s window): see redemption-webhook.service.

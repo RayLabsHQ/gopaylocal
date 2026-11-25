@@ -16,10 +16,15 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("./db", () => ({ createDb: () => state.recorder.db }));
-const sentEmails = vi.hoisted(() => [] as Array<{ to: string; subject: string; html: string; senderAddress: string }>);
+const sentEmails = vi.hoisted(
+  () => [] as Array<{ to: string; subject: string; html: string; text?: string; replyTo?: string | null; senderAddress: string }>,
+);
 vi.mock("./lib/email", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./lib/email")>()),
-  sendEmail: async (_conn: string, options: { to: string; subject: string; html: string; senderAddress: string }) => {
+  sendEmail: async (
+    _conn: string,
+    options: { to: string; subject: string; html: string; text?: string; replyTo?: string | null; senderAddress: string },
+  ) => {
     sentEmails.push(options);
   },
 }));
@@ -418,13 +423,15 @@ describe("invitation email", () => {
       invitationId: `inv"><script>`,
     });
     expect(html).not.toContain("<a href=\"https://evil.example\"");
-    expect(html).not.toContain("<img");
+    expect(html).not.toContain("<img src=x"); // the layout's own logo is an <img>; the inviter's never is
     expect(html).not.toContain("<script>");
-    expect(html).toContain("Join Acme &lt;a href=&quot;https://evil.example&quot;&gt;Verify your account&lt;/a&gt;");
-    expect(html).toContain("&lt;img src=x onerror=alert(1)&gt; invited you");
+    expect(html).toContain("Join the Acme &lt;a href=&quot;https://evil.example&quot;&gt;Verify your account&lt;/a&gt; workspace");
+    expect(html).toContain("&lt;img src=x onerror=alert(1)&gt; (owner@acme.example)</strong> invited you");
     expect(html).toContain('href="https://app.gopaylocal.com/invite/inv%22%3E%3Cscript%3E"');
     // The subject is plain text: no escaping, but no line breaks either.
-    expect(subject).toBe(`You've been invited to Acme <a href="https://evil.example">Verify your account</a> on GoPayLocal`);
+    expect(subject).toBe(
+      `<img src=x onerror=alert(1)> invited you to the Acme <a href="https://evil.example">Verify your account</a> workspace`,
+    );
   });
 
   it("falls back to the inviter's email, flattens control characters and caps the subject", () => {
@@ -437,7 +444,7 @@ describe("invitation email", () => {
     });
     expect(subject).not.toMatch(/[\r\n]/);
     expect(subject.length).toBeLessThan(140);
-    expect(html).toContain("a&amp;b@acme.example invited you");
+    expect(html).toContain("a&amp;b@acme.example</strong> invited you");
   });
 
   it("never mails out a stored workspace name that breaks the naming rule", async () => {
@@ -456,10 +463,10 @@ describe("invitation email", () => {
     await invite("Cal.com"); // a valid name, but a mail client would link it
     await invite("Acme Inc.");
     expect(sentEmails.map((e) => e.subject)).toEqual([
-      "You've been invited to a workspace on GoPayLocal",
-      "You've been invited to Acme Labs on GoPayLocal",
-      "You've been invited to a workspace on GoPayLocal",
-      "You've been invited to Acme Inc. on GoPayLocal",
+      "Owner invited you to a workspace on GoPayLocal",
+      "Owner invited you to the Acme Labs workspace",
+      "Owner invited you to a workspace on GoPayLocal",
+      "Owner invited you to the Acme Inc. workspace",
     ]);
     expect(sentEmails[0]!.html).not.toContain("evil.example");
     expect(sentEmails[2]!.html).not.toContain("Cal.com");
@@ -502,10 +509,12 @@ describe("hosted-domain fallbacks (self-hosting)", () => {
     expect(invitationAppUrl(selfHosted({ APP_BASE_URL: "https://app.example.com" }))).toBe("https://app.example.com");
   });
 
-  it("hosted with nothing set: unchanged (hosted sender, hosted dashboard link)", async () => {
+  it("hosted with nothing set: unchanged (hosted sender, hosted dashboard link), replies to support", async () => {
     const [email] = await inviteWith(hosted(ACS));
     expect(email!.senderAddress).toBe("DoNotReply@mail.gopaylocal.com");
     expect(email!.html).toContain('href="https://app.gopaylocal.com/invite/inv_1"');
+    expect(email!.text).toContain("https://app.gopaylocal.com/invite/inv_1");
+    expect(email!.replyTo).toBe("support@gopaylocal.com");
   });
 
   it("EMAIL_FROM and APP_BASE_URL are used when set", async () => {
@@ -515,6 +524,9 @@ describe("hosted-domain fallbacks (self-hosting)", () => {
     expect(email!.senderAddress).toBe("invites@mail.example.com");
     expect(email!.html).toContain('href="https://app.example.com/invite/inv_1"');
     expect(email!.html).not.toContain("gopaylocal.com/invite");
+    // Self-hosted without SUPPORT_EMAIL: no reply-to, never the hosted support address.
+    expect(email!.replyTo ?? null).toBeNull();
+    expect(email!.html).not.toContain("support@gopaylocal.com");
   });
 
   it("self-hosted without APP_BASE_URL: no email, with a warning (the link would point at gopaylocal.com)", async () => {

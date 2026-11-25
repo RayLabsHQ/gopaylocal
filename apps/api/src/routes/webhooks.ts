@@ -10,6 +10,7 @@ import { verifyStandardWebhook } from "../lib/standard-webhooks";
 import { decrypt, tokenEncryptionSecret } from "../lib/crypto";
 import { checkRateLimit } from "../lib/rate-limit";
 import { isSelfHosted } from "../lib/entitlements";
+import { mailerFor, notifyPaymentFailed, quietly } from "../services/notify";
 import { errorSummary, logBannerPushFailure } from "../lib/log";
 import {
   accessTokenEncFor,
@@ -305,6 +306,8 @@ async function processWebhookEvent(
         .update(subscriptions)
         .set({ status: "past_due", updatedAt: new Date() })
         .where(and(eq(subscriptions.organizationId, orgId), sameSubscription(data)));
+      // The owners hear about it once per paid period (services/notify.ts).
+      ctx.waitUntil(quietly("payment-failed email", () => notifyPaymentFailed(db, env, mailerFor(env), orgId, data)));
       break;
     }
 
@@ -335,6 +338,8 @@ async function processWebhookEvent(
         .update(subscriptions)
         .set({ status: "past_due", updatedAt: new Date() })
         .where(and(eq(subscriptions.organizationId, orgId), sameSubscription(data)));
+      // The owners hear about it once per paid period (services/notify.ts).
+      ctx.waitUntil(quietly("payment-failed email", () => notifyPaymentFailed(db, env, mailerFor(env), orgId, data)));
       break;
     }
 

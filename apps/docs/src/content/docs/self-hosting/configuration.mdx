@@ -49,7 +49,8 @@ Set in the `[vars]` section of `apps/api/wrangler.toml`.
 | `APP_BASE_URL` | Yes | `"https://app.example.com"` | Public URL of the dashboard. Allowed to make signed-in (credentialed) requests; used in invitation email links. | In self-hosted mode the dashboard's requests are refused by CORS, and no invitation email is sent |
 | `ADMIN_BASE_URL` | If you deploy the admin app | `"https://admin.example.com"` | Public URL of the admin app. Allowed to make signed-in requests. | In self-hosted mode the admin app's requests are refused by CORS |
 | `CORS_ALLOWED_ORIGINS` | No | `"https://dashboard.example.com"` | Extra comma-separated origins (exact `scheme://host[:port]`) allowed to make signed-in requests | None |
-| `EMAIL_FROM` | For invitation emails | `"DoNotReply@mail.example.com"` | Sender address for team invitation emails. It must be on a domain linked to your Azure Communication Services resource. See [Invitation emails](#invitation-emails). | In self-hosted mode no invitation email is sent |
+| `EMAIL_FROM` | For emails | `"DoNotReply@mail.example.com"` | Sender address for GoPayLocal's emails. It must be on a domain linked to your Azure Communication Services resource. See [Invitation emails](#invitation-emails). | In self-hosted mode no email is sent |
+| `SUPPORT_EMAIL` | No | `"help@example.com"` | Where replies to GoPayLocal's emails go, and the help address they show | Emails have no reply-to address and no help line |
 | `FX_RATES_URL` | No | `"https://rates.example.com/{date}.json"` or `"off"` | USD-based exchange-rate feed for local prices. `{date}` is replaced with today's, then yesterday's, UTC date. Accepted formats: fawazahmed0/exchange-api, Frankfurter v1 or v2, or `{"base": "USD", "date": "YYYY-MM-DD", "rates": {...}}`. `off` turns conversion off: visitors see exact prices in your product's currency. | fawazahmed0/exchange-api from jsDelivr, then its Cloudflare Pages mirror |
 | `FX_RATES_FALLBACK_URL` | No | `"https://frankfurter.example.com/v2/rates?base=usd"` or `"off"` | Second feed. It cross-checks the first: a currency gets a new rate only when the two agree within 5% (2% for a move over 15%); otherwise it keeps its last confirmed rate for up to 96 hours, then is not converted. It is also used when the first fails. `off` means one source with no cross-check: a new rate is accepted only within 15% of the last accepted one, and a bigger move is held until it comes back in range; to accept such a move, set this variable to a feed that confirms it, or delete the `fx:rates` key in the `CACHE` namespace so the next refresh starts over. A [self-hosted Frankfurter](https://frankfurter.dev/deploy/) works here. | Frankfurter v2 (`api.frankfurter.dev`) |
 | `FX_EXCLUDED_CURRENCIES` | No | `"VES,LBP"` | Comma-separated currencies that are never converted; visitors who use them see exact prices in your product's currency | None |
@@ -77,13 +78,15 @@ Set from `apps/api` with `pnpm wrangler secret put <NAME>`.
 
 ### Invitation emails
 
-Team invitation emails go out through Azure Communication Services and need three settings:
+Team invitation emails go out through Azure Communication Services and need three settings (`SUPPORT_EMAIL` is optional):
 
 - `ACS_CONNECTION_STRING` (secret): your Azure Communication Services resource;
 - `EMAIL_FROM` (variable): the sender address, on a domain linked to that resource;
 - `APP_BASE_URL` (variable): the dashboard URL that the invitation link points to.
 
 If any of them is missing, the invitation is still created but no email is sent, and the API logs a warning naming the missing setting. Invitations work without email: the team settings page in the dashboard has a copy-link button for each pending invitation, and you send that link yourself.
+
+The same settings send one other email on a self-hosted deployment: when a payment provider starts refusing a workspace's saved live key, its owners are told once, with a link to reconnect. The hosted service's other emails (welcome, usage, billing) are about its plans, so a self-hosted deployment never sends them.
 
 ## Frontend build variable
 

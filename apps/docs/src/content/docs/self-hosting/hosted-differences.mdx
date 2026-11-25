@@ -36,7 +36,7 @@ What self-hosted mode changes in practice:
 | Old analytics | Deleted once they are 24 months old | Kept until you delete them yourself |
 | VPN data refresh | Automatic (a daily GitHub Actions job) | Automatic on Workers Paid; on Workers Free, the same GitHub Actions job or by hand ([VPN detection](/guides/vpn-detection/#self-hosting-loading-the-data)) |
 | Sign-in | Google and GitHub | The OAuth apps you create ([OAuth setup](/self-hosting/oauth/)) |
-| Team invitation emails | Sent | Only with your own Azure Communication Services resource (`ACS_CONNECTION_STRING`, `EMAIL_FROM` and `APP_BASE_URL`); see [Invitation emails](/self-hosting/configuration/#invitation-emails). Invitation links can always be copied from the dashboard. |
+| Emails | Welcome, usage at 80% and 100%, a failed payment, Pro ending, a provider refusing a key, team invitations | A provider refusing a key and team invitations, only with your own Azure Communication Services resource (`ACS_CONNECTION_STRING`, `EMAIL_FROM` and `APP_BASE_URL`); see [Invitation emails](/self-hosting/configuration/#invitation-emails). Invitation links can always be copied from the dashboard. |
 
 ## Outbound connections
 

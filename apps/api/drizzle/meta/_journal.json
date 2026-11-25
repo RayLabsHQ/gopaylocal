@@ -64,6 +64,13 @@
       "when": 1795537083016,
       "tag": "0008_country_prices_verified",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795574430017,
+      "tag": "0009_emails_sent",
+      "breakpoints": true
     }
   ]
 }
