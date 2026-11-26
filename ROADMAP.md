@@ -8,8 +8,10 @@ checked against it, and the README and the docs do not describe these as availab
 
 - **Checkout links with the discount already applied.** The banner shows the visitor a
   code. "Auto-apply" means your own checkout applies that code, using the SDK; GoPayLocal
-  does not create hosted checkout links. A campaign's `discountDelivery` setting is
-  stored but does not yet change what the banner serves.
+  does not create hosted checkout links, and a campaign's `auto_apply` delivery setting
+  does not change what the banner serves. The one way to skip codes today is a Dodo
+  Payments campaign set to country prices at Dodo (`provider_price`), where Dodo charges
+  each country's price by billing country.
 - **A parity-group editor in the dashboard.** Parity groups (your own discount tiers)
   can be created and edited only through the API (`/v1/teams/:orgId/parity-groups`).
   A Group campaign in a workspace with no groups of its own uses the five default tiers.
@@ -26,9 +28,6 @@ checked against it, and the README and the docs do not describe these as availab
 - **Analytics filters.** Analytics come as an overview and as breakdowns by country and
   by campaign over a date range. They cannot be narrowed to one campaign or country, and
   there is no Test view: banner events are recorded as Live.
-- **Usage emails to merchants.** No email is sent when a workspace nears or reaches the
-  Free plan's monthly limit. The only usage alert (above 20M API calls in a month) goes
-  to GoPayLocal's admins.
 - **A country override for testing.** The visitor's country comes only from Cloudflare
   (`request.cf.country`); no query parameter or header changes it.
 - **Outgoing webhooks.** GoPayLocal receives webhooks from your payment platform; it
@@ -40,14 +39,15 @@ checked against it, and the README and the docs do not describe these as availab
   The dashboard can invite people, copy invitation links, set a member's product access
   and delete the workspace.
 - **Verification of every payment integration against a live merchant account.** Each of
-  the nine integrations has unit and contract tests, but none has been run against a real
-  account. Progress is recorded per provider in
+  the nine integrations has unit and contract tests. Stripe, Gumroad and Dodo Payments
+  have been checked against accounts kept for testing (creating, listing and deleting
+  codes, and checkout links), but not yet with a test purchase or a redemption webhook.
+  WooCommerce is checked end to end every night against a real store started in CI.
+  Paddle, Chargebee, Polar, Whop and Creem have not been run against a real account. Progress is recorded per provider in
   [`apps/api/PROVIDER_VERIFICATION.md`](apps/api/PROVIDER_VERIFICATION.md). One open
   question there: whether a Whop checkout link pre-fills the code (the `promoCode`
   parameter appears in a Whop blog post, not in its API reference), so the docs tell
   Whop customers to type the code.
-- **The SDKs on npm.** `@gopaylocal/js` and `@gopaylocal/react` live in `packages/` and
-  are not on npm yet.
 - **End-to-end browser tests in CI.** The Playwright suite in `e2e/` covers signing in
   and connecting Dodo Payments in test mode, and runs only locally against a full local
   stack.

@@ -24,7 +24,7 @@ GoPayLocal works with nine payment providers. Once you connect one, a campaign l
 Every code is a percentage discount. GoPayLocal doesn't restrict codes to the campaign's product, set an expiry date or limit how many times a code can be used. On subscriptions, Stripe, Paddle, Chargebee, Polar and Creem codes keep applying to renewals.
 
 <Aside type="note">
-None of the nine integrations has been run against a live merchant account yet. Each one is built from the provider's API documentation and covered by tests that stand in for the provider's API.
+Each integration is built from the provider's API documentation and covered by tests that stand in for the provider's API. Stripe, Gumroad and Dodo Payments have also been checked against accounts kept for testing: creating, listing and deleting codes, and checkout links. WooCommerce is checked end to end every night against a real store started for the test. Paddle, Chargebee, Polar, Whop and Creem haven't been run against a real account yet, and none has been run against a merchant's live account. The record is [`PROVIDER_VERIFICATION.md`](https://github.com/RayLabsHQ/gopaylocal/blob/main/apps/api/PROVIDER_VERIFICATION.md).
 </Aside>
 
 ### Test mode

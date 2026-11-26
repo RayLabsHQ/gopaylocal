@@ -6,8 +6,10 @@
 // namespaces, constructor parameter properties): `erasableSyntaxOnly` in the
 // tsconfig files makes the typecheck refuse those. Node resolves imports the ESM
 // way, which requires file extensions. The API source uses bundler-style extensionless imports
-// ('./types', '../db'), so this hook retries a failed relative import with
-// `.ts` and `/index.ts`. Everything else resolves exactly as Node normally does.
+// ('./types', '../db'), and the shared package writes `.js` for a `.ts` file
+// ('./provider-key-access.js'), so this hook retries a failed relative import as
+// the `.ts` file it names, then with `.ts` and `/index.ts` added. Everything else
+// resolves exactly as Node normally does.
 //
 // Used as: node --import ./scripts/verify-provider/register-ts-resolve.mjs <entry.ts>
 
@@ -50,9 +52,11 @@ registerHooks({
       ) {
         throw err;
       }
-      for (const suffix of ['.ts', '/index.ts']) {
-        const candidate = new URL(specifier + suffix, parent);
-        if (isFile(candidate)) return nextResolve(candidate.href, context);
+      const candidates = [specifier + '.ts', specifier + '/index.ts'];
+      if (specifier.endsWith('.js')) candidates.unshift(specifier.slice(0, -3) + '.ts');
+      for (const candidate of candidates) {
+        const url = new URL(candidate, parent);
+        if (isFile(url)) return nextResolve(url.href, context);
       }
       throw err;
     }
