@@ -291,9 +291,9 @@ and an existing provider (for example
    and include the results (redacted) in your pull request.
 
 Please do not add a provider to marketing pages or claim support in the docs
-until its integration is implemented and tested, and record its live-verification
-status in `PROVIDER_VERIFICATION.md` so the README and docs can say which
-providers have been checked against a real account.
+until its integration is implemented and tested, and record what you checked in
+`PROVIDER_VERIFICATION.md`, the maintainers' record of which providers have been run
+against a real account. The README and the docs don't state verification status.
 
 ## Coding conventions
 

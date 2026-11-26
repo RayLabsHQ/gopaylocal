@@ -3,11 +3,7 @@ title: Creem
 description: Connect GoPayLocal to a Creem store for PPP discount codes and redemption tracking.
 ---
 
-import { Steps, Aside } from '@astrojs/starlight/components';
-
-<Aside type="caution" title="Status">
-The Creem integration is implemented and covered by automated tests against Creem's documented API. It has **not yet been verified against a live Creem account**.
-</Aside>
+import { Steps } from '@astrojs/starlight/components';
 
 [Creem](https://creem.io) is a merchant of record for SaaS and digital products: it sells to your customers and handles tax for you. GoPayLocal connects to your Creem store with an API key. It creates a percentage discount code in Creem for each country your campaign discounts, shows visitors the code for their country, and counts a redemption when a customer completes a Creem checkout with that code.
 

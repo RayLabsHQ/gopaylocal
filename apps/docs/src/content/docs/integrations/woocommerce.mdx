@@ -3,11 +3,7 @@ title: WooCommerce
 description: Connect GoPayLocal to your WooCommerce store for PPP coupons and redemption tracking.
 ---
 
-import { Steps, Aside } from '@astrojs/starlight/components';
-
-<Aside type="caution" title="Status">
-The WooCommerce integration is covered by automated tests against WooCommerce's documented REST API, and checked end to end every night: a GitHub Actions job starts a real WooCommerce store and checks the coupon, the checkout link, a paid order and the webhook that records the redemption. It has **not yet been run against a merchant's own store**.
-</Aside>
+import { Steps } from '@astrojs/starlight/components';
 
 WooCommerce runs on your own WordPress site, so GoPayLocal connects to your store's address with a REST API key that you create. It creates a percentage coupon in your store for each country your campaign discounts, shows visitors the code for their country, and counts a redemption when a paid order uses that code.
 

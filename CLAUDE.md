@@ -243,7 +243,9 @@ Besides `ci.yml` (typecheck, unit, integration and docs build on every push and 
 
 Guide for the first two: `apps/api/PROVIDER_VERIFICATION.md`. The status table there
 is the record of which integrations have been verified against a real account; do not
-describe an integration as verified beyond what it says.
+describe an integration as verified beyond what it says. Public pages (README, docs, the
+website) don't state verification status at all (decided by the founder, November 2026):
+problems come in as GitHub issues.
 
 ### Banner request path
 

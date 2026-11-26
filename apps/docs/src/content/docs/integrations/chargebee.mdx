@@ -3,7 +3,7 @@ title: Chargebee
 description: Connect Chargebee so GoPayLocal creates PPP coupons on your Chargebee site and counts their redemptions.
 ---
 
-import { Steps, Aside } from '@astrojs/starlight/components';
+import { Steps } from '@astrojs/starlight/components';
 
 GoPayLocal creates percentage coupons on your Chargebee site (Product Catalog 2.0) and counts the subscriptions and invoices that use them.
 
@@ -68,10 +68,6 @@ Chargebee's test site is `{site}-test.chargebee.com`. Connect its API key while 
 When you connect a key, GoPayLocal creates a webhook on that site for `payment_succeeded`. Chargebee doesn't sign webhooks, so GoPayLocal protects the endpoint with a username and password it generates and checks on every delivery.
 
 A redemption is counted for a subscription's first invoice, or for a one-off invoice, that uses a GoPayLocal coupon. Renewal invoices that keep the coupon aren't counted again.
-
-<Aside type="note">
-This integration has not yet been run against a live Chargebee site. It is built from Chargebee's API documentation and covered by tests that stand in for Chargebee's API.
-</Aside>
 
 ## Limitations
 

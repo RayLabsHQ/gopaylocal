@@ -68,13 +68,7 @@ management API for products, campaigns, A/B tests and analytics, called with a s
 
 Stripe, Paddle, Gumroad, Chargebee, Dodo Payments, Polar, Whop, Creem and WooCommerce.
 
-Each integration has unit tests and fixture-based contract tests. Stripe, Gumroad and Dodo Payments have also been checked against accounts kept for testing:
-creating, listing and deleting codes, and checkout links. A test purchase with a code and
-the redemption webhook are still to be checked live for them. WooCommerce is checked end to
-end every night against a real store that a GitHub Actions job starts. Paddle, Chargebee,
-Polar, Whop and Creem have not been run against a real account yet. The status
-of each provider, and the tool for checking one against your own sandbox account, are in
-[`apps/api/PROVIDER_VERIFICATION.md`](apps/api/PROVIDER_VERIFICATION.md).
+Something not working with your payment platform? [Open an issue](https://github.com/RayLabsHQ/gopaylocal/issues).
 
 ## Plans
 

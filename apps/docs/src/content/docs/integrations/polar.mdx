@@ -3,7 +3,7 @@ title: Polar
 description: Connect Polar so GoPayLocal creates PPP discounts in your Polar organization and counts their redemptions.
 ---
 
-import { Steps, Aside } from '@astrojs/starlight/components';
+import { Steps } from '@astrojs/starlight/components';
 
 GoPayLocal creates percentage discounts in your Polar organization and counts the orders that use them.
 
@@ -58,10 +58,6 @@ Polar's sandbox (`sandbox.polar.sh`) has its own organizations and tokens. Conne
 When you connect a token, GoPayLocal creates a webhook in that Polar organization for `order.paid`. Deliveries are checked with the webhook's signing secret.
 
 A redemption is counted for the order that first applied a GoPayLocal discount. Renewal orders that carry the discount aren't counted again.
-
-<Aside type="note">
-This integration has not yet been run against a live Polar organization. It is built from Polar's API documentation and covered by tests that stand in for Polar's API.
-</Aside>
 
 ## Limitations
 

@@ -102,10 +102,6 @@ This pre-fills the promotion code in the Payment Link checkout, so the visitor s
 
 [Managed Payments](https://docs.stripe.com/payments/managed-payments) makes Stripe the merchant of record for digital products: Stripe calculates, collects and remits sales tax, VAT and GST, and handles fraud and disputes. It is also where Stripe is moving Lemon Squeezy merchants; see [Moving from Lemon Squeezy](/guides/moving-from-lemon-squeezy/).
 
-<Aside type="caution">
-Status: **not yet verified live.** Everything below comes from Stripe's documentation and GoPayLocal's tests. Nobody has yet run it against a real Stripe account with Managed Payments turned on.
-</Aside>
-
 **There is no GoPayLocal setting for it.** You turn Managed Payments on in Stripe, and GoPayLocal works the same way either way:
 
 - **Your checkout opts in, not GoPayLocal.** Managed Payments is enabled per Checkout Session or Payment Link: `managed_payments: { enabled: true }` when you create a session, or **Enable Managed Payments** when you create a Payment Link. It has to be activated in your [Stripe Dashboard](https://dashboard.stripe.com/settings/managed-payments) first, and every product needs an [eligible tax code](https://docs.stripe.com/payments/managed-payments/eligibility#eligible-tax-codes) ([set up](https://docs.stripe.com/payments/managed-payments/set-up), [Payment Links](https://docs.stripe.com/payments/managed-payments/use-payment-links)). An existing Payment Link can't be switched over; you create a new one.

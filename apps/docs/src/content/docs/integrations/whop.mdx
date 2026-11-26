@@ -3,7 +3,7 @@ title: Whop
 description: Connect Whop so GoPayLocal creates PPP promo codes in your Whop account and counts their redemptions.
 ---
 
-import { Steps, Aside } from '@astrojs/starlight/components';
+import { Steps } from '@astrojs/starlight/components';
 
 GoPayLocal creates percentage promo codes in your Whop account and counts the payments that use them.
 
@@ -68,10 +68,6 @@ Whop has a separate sandbox (`sandbox.whop.com`) with its own accounts and keys.
 When you connect a key, GoPayLocal creates a webhook in that Whop account for `payment.succeeded`. Deliveries are checked with the webhook's signing secret.
 
 A redemption is counted for the payment that first applied a GoPayLocal code. Renewals and plan changes that carry the code aren't counted again.
-
-<Aside type="note">
-This integration has not yet been run against a live Whop account. It is built from Whop's API documentation and covered by tests that stand in for Whop's API.
-</Aside>
 
 ## Limitations
 

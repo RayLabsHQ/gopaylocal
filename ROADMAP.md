@@ -38,16 +38,9 @@ checked against it, and the README and the docs do not describe these as availab
   the permissions in [`packages/shared/src/permissions`](packages/shared/src/permissions).
   The dashboard can invite people, copy invitation links, set a member's product access
   and delete the workspace.
-- **Verification of every payment integration against a live merchant account.** Each of
-  the nine integrations has unit and contract tests. Stripe, Gumroad and Dodo Payments
-  have been checked against accounts kept for testing (creating, listing and deleting
-  codes, and checkout links), but not yet with a test purchase or a redemption webhook.
-  WooCommerce is checked end to end every night against a real store started in CI.
-  Paddle, Chargebee, Polar, Whop and Creem have not been run against a real account. Progress is recorded per provider in
-  [`apps/api/PROVIDER_VERIFICATION.md`](apps/api/PROVIDER_VERIFICATION.md). One open
-  question there: whether a Whop checkout link pre-fills the code (the `promoCode`
-  parameter appears in a Whop blog post, not in its API reference), so the docs tell
-  Whop customers to type the code.
+- **Whop checkout links that fill in the code.** Whop's API reference has no parameter for
+  it (`promoCode` appears only in a Whop blog post), so the docs tell Whop customers to type
+  the code.
 - **End-to-end browser tests in CI.** The Playwright suite in `e2e/` covers signing in
   and connecting Dodo Payments in test mode, and runs only locally against a full local
   stack.
